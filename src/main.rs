@@ -6,7 +6,7 @@ use llmgrep::output::{
     ErrorResponse, OutputFormat, ReferenceSearchResponse, SearchResponse,
 };
 use llmgrep::query::{search_calls, search_references, search_symbols};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // Custom value parser for ranged usize - needed because clap doesn't provide RangedUsizeValueParser
 fn ranged_usize(min: i64, max: i64) -> impl Clone + TypedValueParser<Value = usize> {
