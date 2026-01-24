@@ -4,11 +4,13 @@ use crate::output::{
     SpanContext, SymbolMatch,
 };
 use rusqlite::{params_from_iter, Connection, OpenFlags, ToSql};
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+const MAX_REGEX_SIZE: usize = 10_000; // 10KB limit to prevent memory exhaustion
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
