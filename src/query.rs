@@ -125,41 +125,24 @@ struct CallNodeData {
     end_col: u64,
 }
 
-pub fn search_symbols(
-    db_path: &Path,
-    query: &str,
-    path_filter: Option<&PathBuf>,
-    kind_filter: Option<&str>,
-    limit: usize,
-    use_regex: bool,
-    candidates: usize,
-    with_context: bool,
-    context_lines: usize,
-    max_context_lines: usize,
-    with_snippet: bool,
-    with_fqn: bool,
-    with_canonical_fqn: bool,
-    with_display_fqn: bool,
-    with_score: bool,
-    max_snippet_bytes: usize,
-) -> Result<(SearchResponse, bool), LlmError> {
-    let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), LlmError> {
+    let conn = Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
 
     let (sql, params) = build_search_query(
-        query,
-        path_filter,
-        kind_filter,
-        use_regex,
+        options.query,
+        options.path_filter,
+        options.kind_filter,
+        options.use_regex,
         false,
-        candidates,
+        options.candidates,
     );
     let mut stmt = conn.prepare_cached(&sql)?;
 
     let mut rows = stmt.query(params_from_iter(params))?;
     let mut results = Vec::new();
-    let regex = if use_regex {
+    let regex = if options.use_regex {
         Some(
-            RegexBuilder::new(query)
+            RegexBuilder::new(options.query)
                 .size_limit(MAX_REGEX_SIZE)
                 .build()
                 .map_err(|e| LlmError::RegexRejected {
@@ -186,20 +169,20 @@ pub fn search_symbols(
             }
         }
 
-        let (snippet, snippet_truncated) = if with_snippet {
+        let (snippet, snippet_truncated) = if options.snippet.include {
             snippet_from_file(
                 &file_path,
                 symbol.byte_start,
                 symbol.byte_end,
-                max_snippet_bytes,
+                options.snippet.max_bytes,
                 &mut file_cache,
             )
         } else {
             (None, None)
         };
-        let context = if with_context {
-            let capped = context_lines > max_context_lines;
-            let effective_lines = context_lines.min(max_context_lines);
+        let context = if options.context.include {
+            let capped = options.context.lines > options.context.max_lines;
+            let effective_lines = options.context.lines.min(options.context.max_lines);
             span_context_from_file(
                 &file_path,
                 symbol.start_line,
@@ -225,14 +208,14 @@ pub fn search_symbols(
         };
 
         let match_id = match_id(&file_path, symbol.byte_start, symbol.byte_end, &name);
-        let score = score_match(query, &name, &display_fqn, &fqn, regex.as_ref());
-        let fqn = if with_fqn { symbol.fqn } else { None };
-        let canonical_fqn = if with_canonical_fqn {
+        let score = score_match(options.query, &name, &display_fqn, &fqn, regex.as_ref());
+        let fqn = if options.fqn.fqn { symbol.fqn } else { None };
+        let canonical_fqn = if options.fqn.canonical_fqn {
             symbol.canonical_fqn
         } else {
             None
         };
-        let display_fqn = if with_display_fqn {
+        let display_fqn = if options.fqn.display_fqn {
             symbol.display_fqn
         } else {
             None
@@ -244,7 +227,7 @@ pub fn search_symbols(
             kind: symbol.kind,
             parent: None,
             symbol_id: symbol.symbol_id,
-            score: if with_score { Some(score) } else { None },
+            score: if options.include_score { Some(score) } else { None },
             fqn,
             canonical_fqn,
             display_fqn,
@@ -254,16 +237,16 @@ pub fn search_symbols(
     }
 
     let mut partial = false;
-    let total_count = if use_regex {
-        if results.len() >= candidates {
+    let total_count = if options.use_regex {
+        if results.len() >= options.candidates {
             partial = true;
         }
         results.len() as u64
     } else {
         let (count_sql, count_params) =
-            build_search_query(query, path_filter, kind_filter, use_regex, true, 0);
+            build_search_query(options.query, options.path_filter, options.kind_filter, options.use_regex, true, 0);
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
-        if candidates < count as usize {
+        if options.candidates < count as usize {
             partial = true;
         }
         count
@@ -277,14 +260,14 @@ pub fn search_symbols(
             .then_with(|| a.span.start_col.cmp(&b.span.start_col))
             .then_with(|| a.span.byte_start.cmp(&b.span.byte_start))
     });
-    results.truncate(limit);
+    results.truncate(options.limit);
 
     Ok((
         SearchResponse {
             results,
-            query: query.to_string(),
-            path_filter: path_filter.map(|path| path.to_string_lossy().to_string()),
-            kind_filter: kind_filter.map(|value| value.to_string()),
+            query: options.query.to_string(),
+            path_filter: options.path_filter.map(|path| path.to_string_lossy().to_string()),
+            kind_filter: options.kind_filter.map(|value| value.to_string()),
             total_count,
         },
         partial,
