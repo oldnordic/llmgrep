@@ -274,28 +274,15 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
     ))
 }
 
-pub fn search_references(
-    db_path: &Path,
-    query: &str,
-    path_filter: Option<&PathBuf>,
-    limit: usize,
-    use_regex: bool,
-    candidates: usize,
-    with_context: bool,
-    context_lines: usize,
-    max_context_lines: usize,
-    with_snippet: bool,
-    with_score: bool,
-    max_snippet_bytes: usize,
-) -> Result<(ReferenceSearchResponse, bool), LlmError> {
-    let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchResponse, bool), LlmError> {
+    let conn = Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let (sql, params) =
-        build_reference_query(query, path_filter, use_regex, false, candidates);
+        build_reference_query(options.query, options.path_filter, options.use_regex, false, options.candidates);
     let mut stmt = conn.prepare_cached(&sql)?;
     let mut rows = stmt.query(params_from_iter(params))?;
-    let regex = if use_regex {
+    let regex = if options.use_regex {
         Some(
-            RegexBuilder::new(query)
+            RegexBuilder::new(options.query)
                 .size_limit(MAX_REGEX_SIZE)
                 .build()
                 .map_err(|e| LlmError::RegexRejected {
@@ -319,14 +306,14 @@ pub fn search_references(
             if !pattern.is_match(&referenced_symbol) {
                 continue;
             }
-        } else if !referenced_symbol.contains(query) {
+        } else if !referenced_symbol.contains(options.query) {
             continue;
         }
 
-        let score = score_match(query, &referenced_symbol, "", "", regex.as_ref());
-        let context = if with_context {
-            let capped = context_lines > max_context_lines;
-            let effective_lines = context_lines.min(max_context_lines);
+        let score = score_match(options.query, &referenced_symbol, "", "", regex.as_ref());
+        let context = if options.context.include {
+            let capped = options.context.lines > options.context.max_lines;
+            let effective_lines = options.context.lines.min(options.context.max_lines);
             span_context_from_file(
                 &reference.file,
                 reference.start_line,
@@ -338,12 +325,12 @@ pub fn search_references(
         } else {
             None
         };
-        let (snippet, snippet_truncated) = if with_snippet {
+        let (snippet, snippet_truncated) = if options.snippet.include {
             snippet_from_file(
                 &reference.file,
                 reference.byte_start,
                 reference.byte_end,
-                max_snippet_bytes,
+                options.snippet.max_bytes,
                 &mut file_cache,
             )
         } else {
@@ -373,23 +360,23 @@ pub fn search_references(
             referenced_symbol,
             reference_kind: None,
             target_symbol_id,
-            score: if with_score { Some(score) } else { None },
+            score: if options.include_score { Some(score) } else { None },
             snippet,
             snippet_truncated,
         });
     }
 
     let mut partial = false;
-    let total_count = if use_regex {
-        if results.len() >= candidates {
+    let total_count = if options.use_regex {
+        if results.len() >= options.candidates {
             partial = true;
         }
         results.len() as u64
     } else {
         let (count_sql, count_params) =
-            build_reference_query(query, path_filter, use_regex, true, 0);
+            build_reference_query(options.query, options.path_filter, options.use_regex, true, 0);
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
-        if candidates < count as usize {
+        if options.candidates < count as usize {
             partial = true;
         }
         count
@@ -403,40 +390,27 @@ pub fn search_references(
             .then_with(|| a.span.start_col.cmp(&b.span.start_col))
             .then_with(|| a.span.byte_start.cmp(&b.span.byte_start))
     });
-    results.truncate(limit);
+    results.truncate(options.limit);
 
     Ok((
         ReferenceSearchResponse {
             results,
-            query: query.to_string(),
-            path_filter: path_filter.map(|path| path.to_string_lossy().to_string()),
+            query: options.query.to_string(),
+            path_filter: options.path_filter.map(|path| path.to_string_lossy().to_string()),
             total_count,
         },
         partial,
     ))
 }
 
-pub fn search_calls(
-    db_path: &Path,
-    query: &str,
-    path_filter: Option<&PathBuf>,
-    limit: usize,
-    use_regex: bool,
-    candidates: usize,
-    with_context: bool,
-    context_lines: usize,
-    max_context_lines: usize,
-    with_snippet: bool,
-    with_score: bool,
-    max_snippet_bytes: usize,
-) -> Result<(CallSearchResponse, bool), LlmError> {
-    let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    let (sql, params) = build_call_query(query, path_filter, use_regex, false, candidates);
+pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool), LlmError> {
+    let conn = Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let (sql, params) = build_call_query(options.query, options.path_filter, options.use_regex, false, options.candidates);
     let mut stmt = conn.prepare_cached(&sql)?;
     let mut rows = stmt.query(params_from_iter(params))?;
-    let regex = if use_regex {
+    let regex = if options.use_regex {
         Some(
-            RegexBuilder::new(query)
+            RegexBuilder::new(options.query)
                 .size_limit(MAX_REGEX_SIZE)
                 .build()
                 .map_err(|e| LlmError::RegexRejected {
@@ -457,17 +431,17 @@ pub fn search_calls(
             if !pattern.is_match(&call.caller) && !pattern.is_match(&call.callee) {
                 continue;
             }
-        } else if !call.caller.contains(query) && !call.callee.contains(query) {
+        } else if !call.caller.contains(options.query) && !call.callee.contains(options.query) {
             continue;
         }
 
-        let caller_score = score_match(query, &call.caller, "", "", regex.as_ref());
-        let callee_score = score_match(query, &call.callee, "", "", regex.as_ref());
+        let caller_score = score_match(options.query, &call.caller, "", "", regex.as_ref());
+        let callee_score = score_match(options.query, &call.callee, "", "", regex.as_ref());
         let score = caller_score.max(callee_score);
 
-        let context = if with_context {
-            let capped = context_lines > max_context_lines;
-            let effective_lines = context_lines.min(max_context_lines);
+        let context = if options.context.include {
+            let capped = options.context.lines > options.context.max_lines;
+            let effective_lines = options.context.lines.min(options.context.max_lines);
             span_context_from_file(
                 &call.file,
                 call.start_line,
@@ -479,12 +453,12 @@ pub fn search_calls(
         } else {
             None
         };
-        let (snippet, snippet_truncated) = if with_snippet {
+        let (snippet, snippet_truncated) = if options.snippet.include {
             snippet_from_file(
                 &call.file,
                 call.byte_start,
                 call.byte_end,
-                max_snippet_bytes,
+                options.snippet.max_bytes,
                 &mut file_cache,
             )
         } else {
@@ -511,23 +485,23 @@ pub fn search_calls(
             callee: call.callee,
             caller_symbol_id: call.caller_symbol_id,
             callee_symbol_id: call.callee_symbol_id,
-            score: if with_score { Some(score) } else { None },
+            score: if options.include_score { Some(score) } else { None },
             snippet,
             snippet_truncated,
         });
     }
 
     let mut partial = false;
-    let total_count = if use_regex {
-        if results.len() >= candidates {
+    let total_count = if options.use_regex {
+        if results.len() >= options.candidates {
             partial = true;
         }
         results.len() as u64
     } else {
         let (count_sql, count_params) =
-            build_call_query(query, path_filter, use_regex, true, 0);
+            build_call_query(options.query, options.path_filter, options.use_regex, true, 0);
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
-        if candidates < count as usize {
+        if options.candidates < count as usize {
             partial = true;
         }
         count
@@ -541,13 +515,13 @@ pub fn search_calls(
             .then_with(|| a.span.start_col.cmp(&b.span.start_col))
             .then_with(|| a.span.byte_start.cmp(&b.span.byte_start))
     });
-    results.truncate(limit);
+    results.truncate(options.limit);
 
     Ok((
         CallSearchResponse {
             results,
-            query: query.to_string(),
-            path_filter: path_filter.map(|path| path.to_string_lossy().to_string()),
+            query: options.query.to_string(),
+            path_filter: options.path_filter.map(|path| path.to_string_lossy().to_string()),
             total_count,
         },
         partial,
