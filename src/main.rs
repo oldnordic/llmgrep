@@ -6,11 +6,11 @@ use llmgrep::output::{
     ErrorResponse, OutputFormat, ReferenceSearchResponse, SearchResponse,
 };
 use llmgrep::output_common::{format_partial_footer, format_total_header, render_json_response};
-use llmgrep::query::{search_calls, search_references, search_symbols};
-use std::path::PathBuf;
+use llmgrep::query::{search_calls, search_references, search_symbols, ContextOptions, FqnOptions, SearchOptions, SnippetOptions};
+use std::path::{Path, PathBuf};
 
 // Custom value parser for ranged usize - needed because clap doesn't provide RangedUsizeValueParser
-fn ranged_usize(min: i64, max: i64) -> impl Clone + TypedValueParser<Value = usize> {
+fn ranged_usize(min: i64, max: i64) -> impl TypedValueParser<Value = usize> {
     let inner = RangedI64ValueParser::new().range(min..=max);
     // Map i64 to usize - this is safe because the range ensures valid values
     inner.map(|v: i64| v as usize)
@@ -93,7 +93,7 @@ enum AutoLimitMode {
     Global,
 }
 
-fn validate_path(path: &PathBuf, is_database: bool) -> Result<PathBuf, LlmError> {
+fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
     // Canonicalize the path to resolve symlinks and .. components
     let canonical = path
         .canonicalize()
@@ -194,6 +194,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_search(
     cli: &Cli,
     query: &str,
@@ -244,7 +245,7 @@ fn run_search(
     let include_context = wants_json && fields.as_ref().map_or(with_context, |f| f.context);
     let include_snippet = wants_json && fields.as_ref().map_or(with_snippet, |f| f.snippet);
     let include_score = if wants_json {
-        fields.as_ref().map_or(true, |f| f.score)
+        fields.as_ref().is_none_or(|f| f.score)
     } else {
         true
     };
@@ -257,58 +258,79 @@ fn run_search(
 
     match mode {
         SearchMode::Symbols => {
-            let (response, partial) = search_symbols(
+            let options = SearchOptions {
                 db_path,
                 query,
-                validated_path.as_ref(),
-                kind.as_deref(),
+                path_filter: validated_path.as_ref(),
+                kind_filter: kind.as_deref(),
                 limit,
-                regex,
+                use_regex: regex,
                 candidates,
-                include_context,
-                context_lines,
-                max_context_lines,
-                include_snippet,
-                include_fqn,
-                include_canonical_fqn,
-                include_display_fqn,
+                context: ContextOptions {
+                    include: include_context,
+                    lines: context_lines,
+                    max_lines: max_context_lines,
+                },
+                snippet: SnippetOptions {
+                    include: include_snippet,
+                    max_bytes: max_snippet_bytes,
+                },
+                fqn: FqnOptions {
+                    fqn: include_fqn,
+                    canonical_fqn: include_canonical_fqn,
+                    display_fqn: include_display_fqn,
+                },
                 include_score,
-                max_snippet_bytes,
-            )?;
+            };
+            let (response, partial) = search_symbols(options)?;
             output_symbols(cli, response, partial)?;
         }
         SearchMode::References => {
-            let (response, partial) = search_references(
+            let options = SearchOptions {
                 db_path,
                 query,
-                validated_path.as_ref(),
+                path_filter: validated_path.as_ref(),
+                kind_filter: None,
                 limit,
-                regex,
+                use_regex: regex,
                 candidates,
-                include_context,
-                context_lines,
-                max_context_lines,
-                include_snippet,
+                context: ContextOptions {
+                    include: include_context,
+                    lines: context_lines,
+                    max_lines: max_context_lines,
+                },
+                snippet: SnippetOptions {
+                    include: include_snippet,
+                    max_bytes: max_snippet_bytes,
+                },
+                fqn: FqnOptions::default(),
                 include_score,
-                max_snippet_bytes,
-            )?;
+            };
+            let (response, partial) = search_references(options)?;
             output_references(cli, response, partial)?;
         }
         SearchMode::Calls => {
-            let (response, partial) = search_calls(
+            let options = SearchOptions {
                 db_path,
                 query,
-                validated_path.as_ref(),
+                path_filter: validated_path.as_ref(),
+                kind_filter: None,
                 limit,
-                regex,
+                use_regex: regex,
                 candidates,
-                include_context,
-                context_lines,
-                max_context_lines,
-                include_snippet,
+                context: ContextOptions {
+                    include: include_context,
+                    lines: context_lines,
+                    max_lines: max_context_lines,
+                },
+                snippet: SnippetOptions {
+                    include: include_snippet,
+                    max_bytes: max_snippet_bytes,
+                },
+                fqn: FqnOptions::default(),
                 include_score,
-                max_snippet_bytes,
-            )?;
+            };
+            let (response, partial) = search_calls(options)?;
             output_calls(cli, response, partial)?;
         }
         SearchMode::Auto => {
@@ -322,52 +344,70 @@ fn run_search(
                 AutoLimitMode::Global => split_auto_limit(limit),
             };
 
-            let (symbols, symbols_partial) = search_symbols(
+            let (symbols, symbols_partial) = search_symbols(SearchOptions {
                 db_path,
                 query,
-                validated_path.as_ref(),
-                kind.as_deref(),
-                symbols_limit,
-                regex,
+                path_filter: validated_path.as_ref(),
+                kind_filter: kind.as_deref(),
+                limit: symbols_limit,
+                use_regex: regex,
                 candidates,
-                include_context,
-                context_lines,
-                max_context_lines,
-                include_snippet,
-                include_fqn,
-                include_canonical_fqn,
-                include_display_fqn,
+                context: ContextOptions {
+                    include: include_context,
+                    lines: context_lines,
+                    max_lines: max_context_lines,
+                },
+                snippet: SnippetOptions {
+                    include: include_snippet,
+                    max_bytes: max_snippet_bytes,
+                },
+                fqn: FqnOptions {
+                    fqn: include_fqn,
+                    canonical_fqn: include_canonical_fqn,
+                    display_fqn: include_display_fqn,
+                },
                 include_score,
-                max_snippet_bytes,
-            )?;
-            let (references, refs_partial) = search_references(
+            })?;
+            let (references, refs_partial) = search_references(SearchOptions {
                 db_path,
                 query,
-                validated_path.as_ref(),
-                references_limit,
-                regex,
+                path_filter: validated_path.as_ref(),
+                kind_filter: None,
+                limit: references_limit,
+                use_regex: regex,
                 candidates,
-                include_context,
-                context_lines,
-                max_context_lines,
-                include_snippet,
+                context: ContextOptions {
+                    include: include_context,
+                    lines: context_lines,
+                    max_lines: max_context_lines,
+                },
+                snippet: SnippetOptions {
+                    include: include_snippet,
+                    max_bytes: max_snippet_bytes,
+                },
+                fqn: FqnOptions::default(),
                 include_score,
-                max_snippet_bytes,
-            )?;
-            let (calls, calls_partial) = search_calls(
+            })?;
+            let (calls, calls_partial) = search_calls(SearchOptions {
                 db_path,
                 query,
-                validated_path.as_ref(),
-                calls_limit,
-                regex,
+                path_filter: validated_path.as_ref(),
+                kind_filter: None,
+                limit: calls_limit,
+                use_regex: regex,
                 candidates,
-                include_context,
-                context_lines,
-                max_context_lines,
-                include_snippet,
+                context: ContextOptions {
+                    include: include_context,
+                    lines: context_lines,
+                    max_lines: max_context_lines,
+                },
+                snippet: SnippetOptions {
+                    include: include_snippet,
+                    max_bytes: max_snippet_bytes,
+                },
+                fqn: FqnOptions::default(),
                 include_score,
-                max_snippet_bytes,
-            )?;
+            })?;
             let total_count = symbols.total_count + references.total_count + calls.total_count;
             let combined = CombinedSearchResponse {
                 query: query.to_string(),

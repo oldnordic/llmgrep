@@ -1,7 +1,7 @@
 //! Shared output formatting utilities for all response types.
 
 use crate::error::LlmError;
-use crate::output::{JsonResponse, OutputFormat};
+use crate::output::OutputFormat;
 use serde::Serialize;
 
 /// Render any serializable response as JSON with partial result wrapper
