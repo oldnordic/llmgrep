@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, ValueEnum, value_parser};
+use clap::{Parser, Subcommand, ValueEnum};
 use llmgrep::error::LlmError;
 use llmgrep::output::{
     json_response, json_response_with_partial, CallSearchResponse, CombinedSearchResponse,
@@ -35,22 +35,22 @@ enum Command {
         #[arg(long)]
         kind: Option<String>,
 
-        #[arg(long, default_value_t = 50, value_parser = value_parser!(usize).range(1..=1000))]
+        #[arg(long, default_value_t = 50)]
         limit: usize,
 
         #[arg(long)]
         regex: bool,
 
-        #[arg(long, default_value_t = 500, value_parser = value_parser!(usize).range(1..=10000))]
+        #[arg(long, default_value_t = 500)]
         candidates: usize,
 
         #[arg(long)]
         with_context: bool,
 
-        #[arg(long, default_value_t = 3, value_parser = value_parser!(usize).range(1..=100))]
+        #[arg(long, default_value_t = 3)]
         context_lines: usize,
 
-        #[arg(long, default_value_t = 20, value_parser = value_parser!(usize).range(1..=500))]
+        #[arg(long, default_value_t = 20)]
         max_context_lines: usize,
 
         #[arg(long)]
@@ -59,7 +59,7 @@ enum Command {
         #[arg(long)]
         with_fqn: bool,
 
-        #[arg(long, default_value_t = 200, value_parser = value_parser!(usize).range(1..=1_048_576))]
+        #[arg(long, default_value_t = 200)]
         max_snippet_bytes: usize,
 
         #[arg(long)]
