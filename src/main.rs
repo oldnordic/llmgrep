@@ -41,7 +41,7 @@ enum Command {
         #[arg(long)]
         regex: bool,
 
-        #[arg(long, default_value_t = 500)]
+        #[arg(long, default_value_t = 500, value_parser = value_parser!(usize).range(1..=10000))]
         candidates: usize,
 
         #[arg(long)]
