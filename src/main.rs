@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand, ValueEnum};
+use clap::builder::{RangedI64ValueParser, TypedValueParser};
 use llmgrep::error::LlmError;
 use llmgrep::output::{
     json_response, json_response_with_partial, CallSearchResponse, CombinedSearchResponse,
@@ -6,6 +7,13 @@ use llmgrep::output::{
 };
 use llmgrep::query::{search_calls, search_references, search_symbols};
 use std::path::PathBuf;
+
+// Custom value parser for ranged usize - needed because clap doesn't provide RangedUsizeValueParser
+fn ranged_usize(min: i64, max: i64) -> impl Clone + TypedValueParser<Value = usize> {
+    let inner = RangedI64ValueParser::new().range(min..=max);
+    // Map i64 to usize - this is safe because the range ensures valid values
+    inner.map(|v: i64| v as usize)
+}
 
 #[derive(Parser)]
 #[command(name = "llmgrep", version, about = "Smart grep backed by a Magellan code map")]
@@ -35,22 +43,22 @@ enum Command {
         #[arg(long)]
         kind: Option<String>,
 
-        #[arg(long, default_value_t = 50)]
+        #[arg(long, default_value_t = 50, value_parser = ranged_usize(1, 1000))]
         limit: usize,
 
         #[arg(long)]
         regex: bool,
 
-        #[arg(long, default_value_t = 500)]
+        #[arg(long, default_value_t = 500, value_parser = ranged_usize(1, 10000))]
         candidates: usize,
 
         #[arg(long)]
         with_context: bool,
 
-        #[arg(long, default_value_t = 3)]
+        #[arg(long, default_value_t = 3, value_parser = ranged_usize(1, 100))]
         context_lines: usize,
 
-        #[arg(long, default_value_t = 20)]
+        #[arg(long, default_value_t = 20, value_parser = ranged_usize(1, 500))]
         max_context_lines: usize,
 
         #[arg(long)]
@@ -59,7 +67,7 @@ enum Command {
         #[arg(long)]
         with_fqn: bool,
 
-        #[arg(long, default_value_t = 200)]
+        #[arg(long, default_value_t = 200, value_parser = ranged_usize(1, 1_048_576))]
         max_snippet_bytes: usize,
 
         #[arg(long)]
