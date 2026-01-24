@@ -2,6 +2,11 @@
 name = "llmgrep"
 version = "0.1.0"
 edition = "2021"
+description = "Smart grep over Magellan code maps with schema-aligned JSON output"
+license = "GPL-3.0-only"
+repository = "https://github.com/oldnordic/llmgrep"
+documentation = "https://docs.rs/llmgrep"
+readme = "README.md"
 
 [dependencies]
 anyhow = "1.0"
