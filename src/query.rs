@@ -12,6 +12,64 @@ use std::path::{Path, PathBuf};
 
 const MAX_REGEX_SIZE: usize = 10_000; // 10KB limit to prevent memory exhaustion
 
+/// Options for all search functions
+#[derive(Debug, Clone, Copy)]
+pub struct SearchOptions<'a> {
+    /// Database path
+    pub db_path: &'a Path,
+    /// Search query string
+    pub query: &'a str,
+    /// Optional path filter
+    pub path_filter: Option<&'a PathBuf>,
+    /// Optional kind filter (symbols only)
+    pub kind_filter: Option<&'a str>,
+    /// Maximum results to return
+    pub limit: usize,
+    /// Use regex matching
+    pub use_regex: bool,
+    /// Candidate limit for filtering
+    pub candidates: usize,
+    /// Context options
+    pub context: ContextOptions,
+    /// Snippet options
+    pub snippet: SnippetOptions,
+    /// FQN options (symbols only)
+    pub fqn: FqnOptions,
+    /// Include score in results
+    pub include_score: bool,
+}
+
+/// Context extraction options
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ContextOptions {
+    /// Include context
+    pub include: bool,
+    /// Lines of context before/after
+    pub lines: usize,
+    /// Maximum context lines
+    pub max_lines: usize,
+}
+
+/// Snippet extraction options
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SnippetOptions {
+    /// Include snippet
+    pub include: bool,
+    /// Maximum snippet bytes
+    pub max_bytes: usize,
+}
+
+/// FQN inclusion options (symbols only)
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FqnOptions {
+    /// Include basic FQN
+    pub fqn: bool,
+    /// Include canonical FQN
+    pub canonical_fqn: bool,
+    /// Include display FQN
+    pub display_fqn: bool,
+}
+
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct SymbolNodeData {
