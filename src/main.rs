@@ -5,6 +5,7 @@ use llmgrep::output::{
     json_response, json_response_with_partial, CallSearchResponse, CombinedSearchResponse,
     ErrorResponse, OutputFormat, ReferenceSearchResponse, SearchResponse,
 };
+use llmgrep::output_common::{format_partial_footer, format_total_header, render_json_response};
 use llmgrep::query::{search_calls, search_references, search_symbols};
 use std::path::PathBuf;
 
@@ -397,7 +398,7 @@ fn run_search(
 fn output_symbols(cli: &Cli, response: SearchResponse, partial: bool) -> Result<(), LlmError> {
     match cli.output {
         OutputFormat::Human => {
-            println!("total: {}", response.total_count);
+            println!("{}", format_total_header(response.total_count));
             for item in response.results {
                 println!(
                     "{}:{}:{} {} {} score={}",
@@ -410,17 +411,11 @@ fn output_symbols(cli: &Cli, response: SearchResponse, partial: bool) -> Result<
                 );
             }
             if partial {
-                println!("partial: true");
+                println!("{}", format_partial_footer());
             }
         }
         OutputFormat::Json | OutputFormat::Pretty => {
-            let payload = json_response_with_partial(response, partial);
-            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
-                serde_json::to_string_pretty(&payload)
-            } else {
-                serde_json::to_string(&payload)
-            }?;
-            println!("{}", rendered);
+            println!("{}", render_json_response(&response, partial, cli.output)?);
         }
     }
     Ok(())
