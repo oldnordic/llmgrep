@@ -211,16 +211,20 @@ fn run_search(
     fields: Option<&String>,
     auto_limit: AutoLimitMode,
 ) -> Result<(), LlmError> {
-    if cli.db.is_none() {
-        return Err(LlmError::DatabaseNotFound {
-            path: "none".to_string(),
-        });
-    }
     if query.trim().is_empty() {
         return Err(LlmError::EmptyQuery);
     }
 
-    let db_path = cli.db.as_ref().expect("db path missing");
+    // Validate database path before any operations
+    let validated_db = if let Some(db_path) = &cli.db {
+        Some(validate_path(db_path, true)?)
+    } else {
+        return Err(LlmError::DatabaseNotFound {
+            path: "none".to_string(),
+        });
+    };
+
+    let db_path = validated_db.as_ref().expect("validated db path missing");
     let wants_json = matches!(cli.output, OutputFormat::Json | OutputFormat::Pretty);
     let candidates = candidates.max(limit);
     let fields = if wants_json {
