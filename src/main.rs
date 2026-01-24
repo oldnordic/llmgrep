@@ -424,7 +424,7 @@ fn output_symbols(cli: &Cli, response: SearchResponse, partial: bool) -> Result<
 fn output_references(cli: &Cli, response: ReferenceSearchResponse, partial: bool) -> Result<(), LlmError> {
     match cli.output {
         OutputFormat::Human => {
-            println!("total: {}", response.total_count);
+            println!("{}", format_total_header(response.total_count));
             for item in response.results {
                 println!(
                     "{}:{}:{} {} score={}",
@@ -436,17 +436,11 @@ fn output_references(cli: &Cli, response: ReferenceSearchResponse, partial: bool
                 );
             }
             if partial {
-                println!("partial: true");
+                println!("{}", format_partial_footer());
             }
         }
         OutputFormat::Json | OutputFormat::Pretty => {
-            let payload = json_response_with_partial(response, partial);
-            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
-                serde_json::to_string_pretty(&payload)
-            } else {
-                serde_json::to_string(&payload)
-            }?;
-            println!("{}", rendered);
+            println!("{}", render_json_response(&response, partial, cli.output)?);
         }
     }
     Ok(())
@@ -455,7 +449,7 @@ fn output_references(cli: &Cli, response: ReferenceSearchResponse, partial: bool
 fn output_calls(cli: &Cli, response: CallSearchResponse, partial: bool) -> Result<(), LlmError> {
     match cli.output {
         OutputFormat::Human => {
-            println!("total: {}", response.total_count);
+            println!("{}", format_total_header(response.total_count));
             for item in response.results {
                 println!(
                     "{}:{}:{} {} -> {} score={}",
@@ -468,17 +462,11 @@ fn output_calls(cli: &Cli, response: CallSearchResponse, partial: bool) -> Resul
                 );
             }
             if partial {
-                println!("partial: true");
+                println!("{}", format_partial_footer());
             }
         }
         OutputFormat::Json | OutputFormat::Pretty => {
-            let payload = json_response_with_partial(response, partial);
-            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
-                serde_json::to_string_pretty(&payload)
-            } else {
-                serde_json::to_string(&payload)
-            }?;
-            println!("{}", rendered);
+            println!("{}", render_json_response(&response, partial, cli.output)?);
         }
     }
     Ok(())
