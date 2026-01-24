@@ -1,4 +1,4 @@
-use llmgrep::query::{search_calls, search_references, search_symbols};
+use llmgrep::query::{search_calls, search_references, search_symbols, SearchOptions, ContextOptions, SnippetOptions, FqnOptions};
 use rusqlite::{params, Connection};
 use serde_json::json;
 use std::path::PathBuf;
@@ -143,25 +143,31 @@ fn test_search_symbols_with_path_filter() {
     let other_symbol_id = insert_symbol(&conn, "main", "Function", "fn", (10, 14));
     insert_define_edge(&conn, other_file_id, other_symbol_id);
 
-    let response = search_symbols(
-        &db_path,
-        "main",
-        Some(&PathBuf::from("src/")),
-        None,
-        10,
-        false,
-        100,
-        false,
-        0,
-        20,
-        false,
-        false,
-        false,
-        false,
-        true,
-        0,
-    )
-    .expect("search");
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "main",
+        path_filter: Some(&PathBuf::from("src/")),
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions {
+            include: false,
+            lines: 0,
+            max_lines: 20,
+        },
+        snippet: SnippetOptions {
+            include: false,
+            max_bytes: 0,
+        },
+        fqn: FqnOptions {
+            fqn: false,
+            canonical_fqn: false,
+            display_fqn: false,
+        },
+        include_score: true,
+    };
+    let response = search_symbols(options).expect("search");
 
     assert_eq!(response.0.results.len(), 1);
     assert_eq!(response.0.total_count, 1);
@@ -181,25 +187,31 @@ fn test_search_symbols_with_kind_filter() {
     let type_symbol_id = insert_symbol(&conn, "thing", "TypeAlias", "type", (10, 15));
     insert_define_edge(&conn, file_id, type_symbol_id);
 
-    let response = search_symbols(
-        &db_path,
-        "thing",
-        None,
-        Some("fn"),
-        10,
-        false,
-        100,
-        false,
-        0,
-        20,
-        false,
-        false,
-        false,
-        false,
-        true,
-        0,
-    )
-    .expect("search");
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "thing",
+        path_filter: None,
+        kind_filter: Some("fn"),
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions {
+            include: false,
+            lines: 0,
+            max_lines: 20,
+        },
+        snippet: SnippetOptions {
+            include: false,
+            max_bytes: 0,
+        },
+        fqn: FqnOptions {
+            fqn: false,
+            canonical_fqn: false,
+            display_fqn: false,
+        },
+        include_score: true,
+    };
+    let response = search_symbols(options).expect("search");
 
     assert_eq!(response.0.results.len(), 1);
     assert_eq!(response.0.results[0].kind, "Function");
@@ -218,25 +230,31 @@ fn test_search_symbols_rank_exact_match_first() {
     let prefix_id = insert_symbol(&conn, "alphabet", "Function", "fn", (10, 18));
     insert_define_edge(&conn, file_id, prefix_id);
 
-    let response = search_symbols(
-        &db_path,
-        "alpha",
-        None,
-        None,
-        10,
-        false,
-        100,
-        false,
-        0,
-        20,
-        false,
-        false,
-        false,
-        false,
-        true,
-        0,
-    )
-    .expect("search");
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "alpha",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions {
+            include: false,
+            lines: 0,
+            max_lines: 20,
+        },
+        snippet: SnippetOptions {
+            include: false,
+            max_bytes: 0,
+        },
+        fqn: FqnOptions {
+            fqn: false,
+            canonical_fqn: false,
+            display_fqn: false,
+        },
+        include_score: true,
+    };
+    let response = search_symbols(options).expect("search");
 
     assert_eq!(response.0.results[0].name, "alpha");
 }
@@ -254,25 +272,31 @@ fn test_search_symbols_regex_filters() {
     let other_id = insert_symbol(&conn, "mainly", "Function", "fn", (10, 16));
     insert_define_edge(&conn, file_id, other_id);
 
-    let response = search_symbols(
-        &db_path,
-        "^main$",
-        None,
-        None,
-        10,
-        true,
-        100,
-        false,
-        0,
-        20,
-        false,
-        false,
-        false,
-        false,
-        true,
-        0,
-    )
-    .expect("search");
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "^main$",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: true,
+        candidates: 100,
+        context: ContextOptions {
+            include: false,
+            lines: 0,
+            max_lines: 20,
+        },
+        snippet: SnippetOptions {
+            include: false,
+            max_bytes: 0,
+        },
+        fqn: FqnOptions {
+            fqn: false,
+            canonical_fqn: false,
+            display_fqn: false,
+        },
+        include_score: true,
+    };
+    let response = search_symbols(options).expect("search");
 
     assert_eq!(response.0.results.len(), 1);
     assert_eq!(response.0.results[0].name, "main");
@@ -292,25 +316,31 @@ fn test_search_symbols_with_context_and_snippet() {
     let symbol_id = insert_symbol(&conn, "hello", "Function", "fn", (3, 8));
     insert_define_edge(&conn, file_id, symbol_id);
 
-    let response = search_symbols(
-        &db_path,
-        "hello",
-        None,
-        None,
-        10,
-        false,
-        100,
-        true,
-        0,
-        20,
-        true,
-        false,
-        false,
-        false,
-        true,
-        200,
-    )
-    .expect("search");
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "hello",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions {
+            include: true,
+            lines: 0,
+            max_lines: 20,
+        },
+        snippet: SnippetOptions {
+            include: true,
+            max_bytes: 200,
+        },
+        fqn: FqnOptions {
+            fqn: false,
+            canonical_fqn: false,
+            display_fqn: false,
+        },
+        include_score: true,
+    };
+    let response = search_symbols(options).expect("search");
 
     let result = &response.0.results[0];
     assert!(result.snippet.as_deref() == Some("hello"));
@@ -332,25 +362,31 @@ fn test_search_symbols_context_truncated_at_file_edges() {
     let symbol_id = insert_symbol(&conn, "hello", "Function", "fn", (3, 8));
     insert_define_edge(&conn, file_id, symbol_id);
 
-    let response = search_symbols(
-        &db_path,
-        "hello",
-        None,
-        None,
-        10,
-        false,
-        100,
-        true,
-        3,
-        20,
-        true,
-        false,
-        false,
-        false,
-        true,
-        200,
-    )
-    .expect("search");
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "hello",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions {
+            include: true,
+            lines: 3,
+            max_lines: 20,
+        },
+        snippet: SnippetOptions {
+            include: true,
+            max_bytes: 200,
+        },
+        fqn: FqnOptions {
+            fqn: false,
+            canonical_fqn: false,
+            display_fqn: false,
+        },
+        include_score: true,
+    };
+    let response = search_symbols(options).expect("search");
 
     let context = response.0.results[0]
         .span
@@ -378,25 +414,31 @@ fn test_search_symbols_context_truncated_by_cap() {
     let symbol_id = insert_symbol(&conn, "hello", "Function", "fn", (6, 11));
     insert_define_edge(&conn, file_id, symbol_id);
 
-    let response = search_symbols(
-        &db_path,
-        "hello",
-        None,
-        None,
-        10,
-        false,
-        100,
-        true,
-        5,
-        1,
-        true,
-        false,
-        false,
-        false,
-        true,
-        200,
-    )
-    .expect("search");
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "hello",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions {
+            include: true,
+            lines: 5,
+            max_lines: 1,
+        },
+        snippet: SnippetOptions {
+            include: true,
+            max_bytes: 200,
+        },
+        fqn: FqnOptions {
+            fqn: false,
+            canonical_fqn: false,
+            display_fqn: false,
+        },
+        include_score: true,
+    };
+    let response = search_symbols(options).expect("search");
 
     let context = response.0.results[0]
         .span
@@ -416,48 +458,62 @@ fn test_search_symbols_with_fqn_toggle() {
     let symbol_id = insert_symbol(&conn, "hello", "Function", "fn", (3, 8));
     insert_define_edge(&conn, file_id, symbol_id);
 
-    let response = search_symbols(
-        &db_path,
-        "hello",
-        None,
-        None,
-        10,
-        false,
-        100,
-        false,
-        0,
-        20,
-        false,
-        false,
-        false,
-        false,
-        true,
-        0,
-    )
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "hello",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions {
+            include: false,
+            lines: 0,
+            max_lines: 20,
+        },
+        snippet: SnippetOptions {
+            include: false,
+            max_bytes: 0,
+        },
+        fqn: FqnOptions {
+            fqn: false,
+            canonical_fqn: false,
+            display_fqn: false,
+        },
+        include_score: true,
+    };
+    let response = search_symbols(options)
     .expect("search");
     let result = &response.0.results[0];
     assert!(result.fqn.is_none());
     assert!(result.canonical_fqn.is_none());
     assert!(result.display_fqn.is_none());
 
-    let response = search_symbols(
-        &db_path,
-        "hello",
-        None,
-        None,
-        10,
-        false,
-        100,
-        false,
-        0,
-        20,
-        false,
-        true,
-        true,
-        true,
-        true,
-        0,
-    )
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "hello",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions {
+            include: false,
+            lines: 0,
+            max_lines: 20,
+        },
+        snippet: SnippetOptions {
+            include: false,
+            max_bytes: 0,
+        },
+        fqn: FqnOptions {
+            fqn: true,
+            canonical_fqn: true,
+            display_fqn: true,
+        },
+        include_score: true,
+    };
+    let response = search_symbols(options)
     .expect("search");
     let result = &response.0.results[0];
     assert!(result.fqn.is_some() || result.display_fqn.is_some() || result.canonical_fqn.is_some());
@@ -476,21 +532,27 @@ fn test_search_references_basic() {
     let ref_id = insert_reference(&conn, "src/lib.rs", "target", (10, 16));
     insert_reference_edge(&conn, ref_id, symbol_id);
 
-    let response = search_references(
-        &db_path,
-        "target",
-        None,
-        10,
-        false,
-        100,
-        false,
-        0,
-        20,
-        false,
-        true,
-        0,
-    )
-    .expect("search");
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "target",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions {
+            include: false,
+            lines: 0,
+            max_lines: 20,
+        },
+        snippet: SnippetOptions {
+            include: false,
+            max_bytes: 0,
+        },
+        fqn: FqnOptions::default(),
+        include_score: true,
+    };
+    let response = search_references(options).expect("search");
 
     assert_eq!(response.0.results.len(), 1);
     assert_eq!(response.0.results[0].referenced_symbol, "target");
@@ -505,21 +567,27 @@ fn test_search_calls_basic() {
 
     insert_call(&conn, "src/lib.rs", "caller_fn", "callee_fn", (3, 12));
 
-    let response = search_calls(
-        &db_path,
-        "caller_fn",
-        None,
-        10,
-        false,
-        100,
-        false,
-        0,
-        20,
-        false,
-        true,
-        0,
-    )
-    .expect("search");
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "caller_fn",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions {
+            include: false,
+            lines: 0,
+            max_lines: 20,
+        },
+        snippet: SnippetOptions {
+            include: false,
+            max_bytes: 0,
+        },
+        fqn: FqnOptions::default(),
+        include_score: true,
+    };
+    let response = search_calls(options).expect("search");
 
     assert_eq!(response.0.results.len(), 1);
     assert_eq!(response.0.results[0].caller, "caller_fn");
@@ -541,57 +609,81 @@ fn test_combined_response_counts_match() {
 
     insert_call(&conn, "src/lib.rs", "caller_fn", "callee_fn", (3, 12));
 
-    let (symbols, _) = search_symbols(
-        &db_path,
-        "target",
-        None,
-        None,
-        10,
-        false,
-        100,
-        false,
-        0,
-        20,
-        false,
-        false,
-        false,
-        false,
-        true,
-        0,
-    )
-    .expect("symbols");
+    let (symbols, _) = {
+        let options = SearchOptions {
+            db_path: &db_path,
+            query: "target",
+            path_filter: None,
+            kind_filter: None,
+            limit: 10,
+            use_regex: false,
+            candidates: 100,
+            context: ContextOptions {
+                include: false,
+                lines: 0,
+                max_lines: 20,
+            },
+            snippet: SnippetOptions {
+                include: false,
+                max_bytes: 0,
+            },
+            fqn: FqnOptions {
+                fqn: false,
+                canonical_fqn: false,
+                display_fqn: false,
+            },
+            include_score: true,
+        };
+        search_symbols(options).expect("symbols")
+    };
 
-    let (refs, _) = search_references(
-        &db_path,
-        "target",
-        None,
-        10,
-        false,
-        100,
-        false,
-        0,
-        20,
-        false,
-        true,
-        0,
-    )
-    .expect("refs");
+    let (refs, _) = {
+        let options = SearchOptions {
+            db_path: &db_path,
+            query: "target",
+            path_filter: None,
+            kind_filter: None,
+            limit: 10,
+            use_regex: false,
+            candidates: 100,
+            context: ContextOptions {
+                include: false,
+                lines: 0,
+                max_lines: 20,
+            },
+            snippet: SnippetOptions {
+                include: false,
+                max_bytes: 0,
+            },
+            fqn: FqnOptions::default(),
+            include_score: true,
+        };
+        search_references(options).expect("refs")
+    };
 
-    let (calls, _) = search_calls(
-        &db_path,
-        "caller_fn",
-        None,
-        10,
-        false,
-        100,
-        false,
-        0,
-        20,
-        false,
-        true,
-        0,
-    )
-    .expect("calls");
+    let (calls, _) = {
+        let options = SearchOptions {
+            db_path: &db_path,
+            query: "caller_fn",
+            path_filter: None,
+            kind_filter: None,
+            limit: 10,
+            use_regex: false,
+            candidates: 100,
+            context: ContextOptions {
+                include: false,
+                lines: 0,
+                max_lines: 20,
+            },
+            snippet: SnippetOptions {
+                include: false,
+                max_bytes: 0,
+            },
+            fqn: FqnOptions::default(),
+            include_score: true,
+        };
+        search_calls(options).expect("calls")
+    };
 
     let total = symbols.total_count + refs.total_count + calls.total_count;
     assert!(total >= 3);
