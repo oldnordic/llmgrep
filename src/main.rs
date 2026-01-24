@@ -59,7 +59,7 @@ enum Command {
         #[arg(long)]
         with_fqn: bool,
 
-        #[arg(long, default_value_t = 200)]
+        #[arg(long, default_value_t = 200, value_parser = value_parser!(usize).range(1..=1_048_576))]
         max_snippet_bytes: usize,
 
         #[arg(long)]
