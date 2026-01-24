@@ -4,6 +4,9 @@
 //!
 //! - **LLM-E001 to LLM-E099**: Database and file I/O errors
 //! - **LLM-E100 to LLM-E199**: Query and parsing errors
+//!   - LLM-E101: Regex pattern rejection (ReDoS prevention)
+//!   - LLM-E102: Resource limit exceeded
+//!   - LLM-E103: Path validation failure
 //! - **LLM-E200 to LLM-E299**: Search execution errors
 //! - **LLM-E300 to LLM-E399**: Path and argument validation errors
 //! - **LLM-E900 to LLM-E999**: Internal and miscellaneous errors
@@ -28,6 +31,18 @@ pub enum LlmError {
     /// Empty query string provided.
     #[error("Query cannot be empty")]
     EmptyQuery,
+
+    /// Regex pattern rejected for security reasons.
+    #[error("Regex pattern rejected: {reason}")]
+    RegexRejected { reason: String },
+
+    /// Resource limit exceeded.
+    #[error("Resource limit exceeded: {resource} (max: {limit}, provided: {provided})")]
+    ResourceLimitExceeded { resource: String, limit: usize, provided: usize },
+
+    /// Path validation failed.
+    #[error("Path validation failed: {path} - {reason}")]
+    PathValidationFailed { path: String, reason: String },
 
     /// Search operation failed.
     #[error("Search failed: {reason}")]
@@ -66,6 +81,9 @@ impl LlmError {
             LlmError::DatabaseCorrupted { .. } => "LLM-E002",
             LlmError::InvalidQuery { .. } => "LLM-E011",
             LlmError::EmptyQuery => "LLM-E012",
+            LlmError::RegexRejected { .. } => "LLM-E101",
+            LlmError::ResourceLimitExceeded { .. } => "LLM-E102",
+            LlmError::PathValidationFailed { .. } => "LLM-E103",
             LlmError::SearchFailed { .. } => "LLM-E021",
             LlmError::InvalidPath { .. } => "LLM-E031",
             LlmError::InvalidField { .. } => "LLM-E032",
@@ -81,6 +99,9 @@ impl LlmError {
         match self {
             LlmError::InvalidField { .. } => "warning",
             LlmError::JsonError(_) | LlmError::RegexError(_) => "error",
+            LlmError::RegexRejected { .. } => "error",
+            LlmError::ResourceLimitExceeded { .. } => "error",
+            LlmError::PathValidationFailed { .. } => "error",
             _ => "error",
         }
     }
@@ -120,6 +141,15 @@ impl LlmError {
             }
             LlmError::RegexError(_) => {
                 Some("Invalid regular expression. Check your query syntax.")
+            }
+            LlmError::RegexRejected { .. } => {
+                Some("Simplify the regex pattern or avoid nested quantifiers and excessive alternation")
+            }
+            LlmError::ResourceLimitExceeded { .. } => {
+                Some("Reduce the resource value to within the allowed maximum")
+            }
+            LlmError::PathValidationFailed { .. } => {
+                Some("Check that the path exists and is within the allowed directory structure")
             }
         }
     }
