@@ -1,5 +1,5 @@
-use anyhow::{bail, Result};
 use clap::{Parser, Subcommand, ValueEnum};
+use llmgrep::error::LlmError;
 use llmgrep::output::{
     json_response, json_response_with_partial, CallSearchResponse, CombinedSearchResponse,
     ErrorResponse, OutputFormat, ReferenceSearchResponse, SearchResponse,
@@ -87,12 +87,12 @@ enum AutoLimitMode {
 fn main() {
     let cli = Cli::parse();
     if let Err(err) = dispatch(&cli) {
-        emit_error(&cli, err);
+        emit_error(&cli, &err);
         std::process::exit(1);
     }
 }
 
-fn dispatch(cli: &Cli) -> Result<()> {
+fn dispatch(cli: &Cli) -> Result<(), LlmError> {
     match &cli.command {
         Command::Search {
             query,
@@ -148,12 +148,14 @@ fn run_search(
     max_snippet_bytes: usize,
     fields: Option<&String>,
     auto_limit: AutoLimitMode,
-) -> Result<()> {
+) -> Result<(), LlmError> {
     if cli.db.is_none() {
-        bail!("--db is required");
+        return Err(LlmError::DatabaseNotFound {
+            path: "none".to_string(),
+        });
     }
     if query.trim().is_empty() {
-        bail!("--query cannot be empty");
+        return Err(LlmError::EmptyQuery);
     }
 
     let db_path = cli.db.as_ref().expect("db path missing");
@@ -237,7 +239,9 @@ fn run_search(
         }
         SearchMode::Auto => {
             if !wants_json {
-                bail!("--mode auto requires JSON output");
+                return Err(LlmError::InvalidQuery {
+                    query: "auto mode requires JSON output".to_string(),
+                });
             }
             let (symbols_limit, references_limit, calls_limit) = match auto_limit {
                 AutoLimitMode::PerMode => (limit, limit, limit),
@@ -317,7 +321,7 @@ fn run_search(
     Ok(())
 }
 
-fn output_symbols(cli: &Cli, response: SearchResponse, partial: bool) -> Result<()> {
+fn output_symbols(cli: &Cli, response: SearchResponse, partial: bool) -> Result<(), LlmError> {
     match cli.output {
         OutputFormat::Human => {
             println!("total: {}", response.total_count);
@@ -349,7 +353,7 @@ fn output_symbols(cli: &Cli, response: SearchResponse, partial: bool) -> Result<
     Ok(())
 }
 
-fn output_references(cli: &Cli, response: ReferenceSearchResponse, partial: bool) -> Result<()> {
+fn output_references(cli: &Cli, response: ReferenceSearchResponse, partial: bool) -> Result<(), LlmError> {
     match cli.output {
         OutputFormat::Human => {
             println!("total: {}", response.total_count);
@@ -380,7 +384,7 @@ fn output_references(cli: &Cli, response: ReferenceSearchResponse, partial: bool
     Ok(())
 }
 
-fn output_calls(cli: &Cli, response: CallSearchResponse, partial: bool) -> Result<()> {
+fn output_calls(cli: &Cli, response: CallSearchResponse, partial: bool) -> Result<(), LlmError> {
     match cli.output {
         OutputFormat::Human => {
             println!("total: {}", response.total_count);
@@ -422,7 +426,7 @@ struct FieldFlags {
     display_fqn: bool,
 }
 
-fn parse_fields(value: &str) -> Result<FieldFlags> {
+fn parse_fields(value: &str) -> Result<FieldFlags, LlmError> {
     let mut flags = FieldFlags::default();
     let mut seen_any = false;
     for raw in value.split(',') {
@@ -446,12 +450,18 @@ fn parse_fields(value: &str) -> Result<FieldFlags> {
             "fqn" => flags.fqn = true,
             "canonical_fqn" => flags.canonical_fqn = true,
             "display_fqn" => flags.display_fqn = true,
-            _ => bail!("unknown field '{}'", field),
+            _ => {
+                return Err(LlmError::InvalidField {
+                    field: field.to_string(),
+                })
+            }
         }
     }
 
     if !seen_any {
-        bail!("--fields must include at least one field");
+        return Err(LlmError::InvalidQuery {
+            query: "fields must include at least one field".to_string(),
+        });
     }
 
     Ok(flags)
@@ -469,18 +479,21 @@ fn split_auto_limit(limit: usize) -> (usize, usize, usize) {
     (symbols, references, calls)
 }
 
-fn emit_error(cli: &Cli, err: anyhow::Error) {
+fn emit_error(cli: &Cli, err: &LlmError) {
     match cli.output {
         OutputFormat::Human => {
-            eprintln!("ERROR: {}", err);
+            eprintln!("ERROR [{}]: {}", err.error_code(), err);
+            if let Some(hint) = err.remediation() {
+                eprintln!("Hint: {}", hint);
+            }
         }
         OutputFormat::Json | OutputFormat::Pretty => {
             let error = ErrorResponse {
-                code: "LLM-CLI-001".to_string(),
-                error: "not_implemented".to_string(),
+                code: err.error_code().to_string(),
+                error: err.severity().to_string(),
                 message: err.to_string(),
                 span: None,
-                remediation: None,
+                remediation: err.remediation().map(|s| s.to_string()),
             };
             let response = json_response(error);
             let result = if matches!(cli.output, OutputFormat::Pretty) {

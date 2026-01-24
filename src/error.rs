@@ -48,6 +48,14 @@ pub enum LlmError {
     /// SQLite error occurred.
     #[error("SQLite error: {0}")]
     SqliteError(#[from] rusqlite::Error),
+
+    /// JSON serialization/deserialization error occurred.
+    #[error("JSON error: {0}")]
+    JsonError(#[from] serde_json::Error),
+
+    /// Regex compilation error occurred.
+    #[error("Regex error: {0}")]
+    RegexError(#[from] regex::Error),
 }
 
 impl LlmError {
@@ -63,6 +71,8 @@ impl LlmError {
             LlmError::InvalidField { .. } => "LLM-E032",
             LlmError::IoError(_) => "LLM-E901",
             LlmError::SqliteError(_) => "LLM-E902",
+            LlmError::JsonError(_) => "LLM-E903",
+            LlmError::RegexError(_) => "LLM-E904",
         }
     }
 
@@ -103,6 +113,12 @@ impl LlmError {
             }
             LlmError::SqliteError(_) => {
                 Some("The database may be locked or corrupted. Try reopening the database.")
+            }
+            LlmError::JsonError(_) => {
+                Some("JSON serialization error. This may indicate corrupted data.")
+            }
+            LlmError::RegexError(_) => {
+                Some("Invalid regular expression. Check your query syntax.")
             }
         }
     }

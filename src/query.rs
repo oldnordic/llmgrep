@@ -1,8 +1,8 @@
+use crate::error::LlmError;
 use crate::output::{
     CallMatch, CallSearchResponse, ReferenceMatch, ReferenceSearchResponse, SearchResponse,
     SpanContext, SymbolMatch,
 };
-use anyhow::Result;
 use rusqlite::{params_from_iter, Connection, OpenFlags, ToSql};
 use regex::Regex;
 use serde::Deserialize;
@@ -82,7 +82,7 @@ pub fn search_symbols(
     with_display_fqn: bool,
     with_score: bool,
     max_snippet_bytes: usize,
-) -> Result<(SearchResponse, bool)> {
+) -> Result<(SearchResponse, bool), LlmError> {
     let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
 
     let (sql, params) = build_search_query(
@@ -237,7 +237,7 @@ pub fn search_references(
     with_snippet: bool,
     with_score: bool,
     max_snippet_bytes: usize,
-) -> Result<(ReferenceSearchResponse, bool)> {
+) -> Result<(ReferenceSearchResponse, bool), LlmError> {
     let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let (sql, params) =
         build_reference_query(query, path_filter, use_regex, false, candidates);
@@ -372,7 +372,7 @@ pub fn search_calls(
     with_snippet: bool,
     with_score: bool,
     max_snippet_bytes: usize,
-) -> Result<(CallSearchResponse, bool)> {
+) -> Result<(CallSearchResponse, bool), LlmError> {
     let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let (sql, params) = build_call_query(query, path_filter, use_regex, false, candidates);
     let mut stmt = conn.prepare_cached(&sql)?;
