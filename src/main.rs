@@ -50,7 +50,7 @@ enum Command {
         #[arg(long, default_value_t = 3, value_parser = value_parser!(usize).range(1..=100))]
         context_lines: usize,
 
-        #[arg(long, default_value_t = 20)]
+        #[arg(long, default_value_t = 20, value_parser = value_parser!(usize).range(1..=500))]
         max_context_lines: usize,
 
         #[arg(long)]
