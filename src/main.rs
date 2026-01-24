@@ -92,6 +92,60 @@ enum AutoLimitMode {
     Global,
 }
 
+fn validate_path(path: &PathBuf, is_database: bool) -> Result<PathBuf, LlmError> {
+    // Canonicalize the path to resolve symlinks and .. components
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| LlmError::PathValidationFailed {
+            path: path.display().to_string(),
+            reason: format!("Cannot resolve path: {}", e),
+        })?;
+
+    // For database paths, verify the file exists and is a regular file
+    if is_database {
+        if !canonical.exists() {
+            return Err(LlmError::DatabaseNotFound {
+                path: path.display().to_string(),
+            });
+        }
+        if !canonical.is_file() {
+            return Err(LlmError::PathValidationFailed {
+                path: path.display().to_string(),
+                reason: "Database path must be a file, not a directory".to_string(),
+            });
+        }
+    }
+
+    // Block access to sensitive system directories
+    let sensitive_dirs = [
+        "/etc", "/root", "/boot", "/sys", "/proc", "/dev",
+        "/run", "/var/run", "/var/tmp",
+    ];
+    for sensitive in sensitive_dirs {
+        if canonical.starts_with(sensitive) {
+            return Err(LlmError::PathValidationFailed {
+                path: path.display().to_string(),
+                reason: format!("Access to {} is not allowed", sensitive),
+            });
+        }
+    }
+
+    // Block access to SSH/config directories
+    if let Some(home) = std::env::var_os("HOME") {
+        let home_path = PathBuf::from(&home);
+        let ssh_dir = home_path.join(".ssh");
+        let config_dir = home_path.join(".config");
+        if canonical.starts_with(&ssh_dir) || canonical.starts_with(&config_dir) {
+            return Err(LlmError::PathValidationFailed {
+                path: path.display().to_string(),
+                reason: "Access to sensitive home directories is not allowed".to_string(),
+            });
+        }
+    }
+
+    Ok(canonical)
+}
+
 fn main() {
     let cli = Cli::parse();
     if let Err(err) = dispatch(&cli) {
