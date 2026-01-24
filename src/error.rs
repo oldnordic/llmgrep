@@ -80,6 +80,7 @@ impl LlmError {
     pub const fn severity(&self) -> &'static str {
         match self {
             LlmError::InvalidField { .. } => "warning",
+            LlmError::JsonError(_) | LlmError::RegexError(_) => "error",
             _ => "error",
         }
     }
