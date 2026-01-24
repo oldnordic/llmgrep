@@ -6,7 +6,7 @@ use llmgrep::output::{
     ErrorResponse, OutputFormat, ReferenceSearchResponse, SearchResponse,
 };
 use llmgrep::query::{search_calls, search_references, search_symbols};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 // Custom value parser for ranged usize - needed because clap doesn't provide RangedUsizeValueParser
 fn ranged_usize(min: i64, max: i64) -> impl Clone + TypedValueParser<Value = usize> {
@@ -225,6 +225,13 @@ fn run_search(
     };
 
     let db_path = validated_db.as_ref().expect("validated db path missing");
+
+    // Validate path filter if provided
+    let validated_path = if let Some(p) = path {
+        Some(validate_path(p, false)?)
+    } else {
+        None
+    };
     let wants_json = matches!(cli.output, OutputFormat::Json | OutputFormat::Pretty);
     let candidates = candidates.max(limit);
     let fields = if wants_json {
@@ -252,7 +259,7 @@ fn run_search(
             let (response, partial) = search_symbols(
                 db_path,
                 query,
-                path.as_ref(),
+                validated_path.as_ref(),
                 kind.as_deref(),
                 limit,
                 regex,
@@ -273,7 +280,7 @@ fn run_search(
             let (response, partial) = search_references(
                 db_path,
                 query,
-                path.as_ref(),
+                validated_path.as_ref(),
                 limit,
                 regex,
                 candidates,
@@ -290,7 +297,7 @@ fn run_search(
             let (response, partial) = search_calls(
                 db_path,
                 query,
-                path.as_ref(),
+                validated_path.as_ref(),
                 limit,
                 regex,
                 candidates,
@@ -317,7 +324,7 @@ fn run_search(
             let (symbols, symbols_partial) = search_symbols(
                 db_path,
                 query,
-                path.as_ref(),
+                validated_path.as_ref(),
                 kind.as_deref(),
                 symbols_limit,
                 regex,
@@ -335,7 +342,7 @@ fn run_search(
             let (references, refs_partial) = search_references(
                 db_path,
                 query,
-                path.as_ref(),
+                validated_path.as_ref(),
                 references_limit,
                 regex,
                 candidates,
@@ -349,7 +356,7 @@ fn run_search(
             let (calls, calls_partial) = search_calls(
                 db_path,
                 query,
-                path.as_ref(),
+                validated_path.as_ref(),
                 calls_limit,
                 regex,
                 candidates,
@@ -363,7 +370,7 @@ fn run_search(
             let total_count = symbols.total_count + references.total_count + calls.total_count;
             let combined = CombinedSearchResponse {
                 query: query.to_string(),
-                path_filter: path.as_ref().map(|p| p.to_string_lossy().to_string()),
+                path_filter: validated_path.as_ref().map(|p| p.to_string_lossy().to_string()),
                 symbols,
                 references,
                 calls,
