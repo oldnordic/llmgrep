@@ -47,7 +47,7 @@ enum Command {
         #[arg(long)]
         with_context: bool,
 
-        #[arg(long, default_value_t = 3)]
+        #[arg(long, default_value_t = 3, value_parser = value_parser!(usize).range(1..=100))]
         context_lines: usize,
 
         #[arg(long, default_value_t = 20)]
