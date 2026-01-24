@@ -35,7 +35,7 @@ enum Command {
         #[arg(long)]
         kind: Option<String>,
 
-        #[arg(long, default_value_t = 50)]
+        #[arg(long, default_value_t = 50, value_parser = value_parser!(usize).range(1..=1000))]
         limit: usize,
 
         #[arg(long)]
