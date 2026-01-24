@@ -394,7 +394,14 @@ pub fn search_calls(
     let mut stmt = conn.prepare_cached(&sql)?;
     let mut rows = stmt.query(params_from_iter(params))?;
     let regex = if use_regex {
-        Some(Regex::new(query)?)
+        Some(
+            RegexBuilder::new(query)
+                .size_limit(MAX_REGEX_SIZE)
+                .build()
+                .map_err(|e| LlmError::RegexRejected {
+                    reason: format!("Regex too complex or invalid: {}", e),
+                })?,
+        )
     } else {
         None
     };
