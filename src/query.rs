@@ -3,7 +3,7 @@ use crate::output::{
     CallMatch, CallSearchResponse, ReferenceMatch, ReferenceSearchResponse, SearchResponse,
     SpanContext, SymbolMatch,
 };
-use rusqlite::{params_from_iter, Connection, OpenFlags, ToSql};
+use rusqlite::{params_from_iter, Connection, ErrorCode, OpenFlags, ToSql};
 use regex::{Regex, RegexBuilder};
 use serde::Deserialize;
 use serde_json::json;
@@ -127,7 +127,23 @@ struct CallNodeData {
 }
 
 pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), LlmError> {
-    let conn = Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+        Ok(conn) => conn,
+        Err(rusqlite::Error::SqliteFailure(err, msg)) => match err.code {
+            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
+                return Err(LlmError::DatabaseCorrupted {
+                    reason: msg.unwrap_or_else(|| "Database file is invalid or corrupted".to_string()),
+                });
+            }
+            ErrorCode::CannotOpen => {
+                return Err(LlmError::DatabaseNotFound {
+                    path: options.db_path.display().to_string(),
+                });
+            }
+            _ => return Err(LlmError::from(rusqlite::Error::SqliteFailure(err, msg))),
+        },
+        Err(e) => return Err(LlmError::from(e)),
+    };
 
     let (sql, params) = build_search_query(
         options.query,
@@ -2524,5 +2540,35 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_load_file_returns_none_on_missing_file() {
+        let mut cache = HashMap::new();
+        let result = load_file("/nonexistent/path/to/file.rs", &mut cache);
+        assert!(result.is_none());
+        assert!(!cache.contains_key("/nonexistent/path/to/file.rs"));
+    }
+
+    #[test]
+    fn test_load_file_caches_successful_reads() {
+        use std::io::Write;
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("llmgrep_test_load_file.txt");
+        let mut file = std::fs::File::create(&temp_file).unwrap();
+        file.write_all(b"line1\nline2\nline3").unwrap();
+
+        let mut cache = HashMap::new();
+        let path_str = temp_file.to_str().unwrap();
+
+        let result1 = load_file(path_str, &mut cache);
+        assert!(result1.is_some());
+        assert_eq!(result1.unwrap().lines.len(), 3);
+
+        let result2 = load_file(path_str, &mut cache);
+        assert!(result2.is_some());
+        assert_eq!(cache.len(), 1);
+
+        std::fs::remove_file(&temp_file).ok();
     }
 }
