@@ -1,23 +1,107 @@
 # llmgrep Manual
 
-llmgrep is a read-only query tool for Magellan's code map. It does not build or modify the database; Magellan owns indexing and freshness.
+**v1.0 Production-Ready CLI** (shipped 2026-01-25)
 
-Tested locally: search modes (symbols/references/calls/auto) with JSON output, context, snippets, and scores on a Magellan DB built from this repo.
+llmgrep is a read-only query tool for Magellan's code map. It does not build or modify the database — Magellan owns indexing and freshness.
+
+**Magellen repository:** https://github.com/oldnordic/magellan
+**Magellen crate:** https://crates.io/crates/magellan
 
 ## Core command
 
-```
-llmgrep search --db <FILE> --query <STRING> [--mode symbols|references|calls|auto] [--output human|json|pretty]
+```bash
+llmgrep search --db <FILE> --query <STRING> [OPTIONS]
 ```
 
-Key options:
-- `--db`: Required. Path to Magellan SQLite database.
-- `--mode`: Search mode (symbols, references, calls, auto).
-- `--regex`: Treat query as regex.
-- `--limit`: Max results per mode (auto mode uses `--auto-limit`).
-- `--with-context` / `--context-lines` / `--max-context-lines`: Add context in JSON.
-- `--with-snippet` / `--max-snippet-bytes`: Add snippet in JSON.
-- `--with-fqn`: Include FQN fields in JSON.
-- `--fields`: JSON-only field selector (overrides `--with-*`).
+### Search modes
 
-See `docs/USAGE.md` for full usage examples.
+| Mode | Description |
+|------|-------------|
+| `symbols` | Search symbol definitions (default) |
+| `references` | Search references to symbols |
+| `calls` | Search function calls |
+| `auto` | Run all three modes and combine results |
+
+### Key options
+
+| Option | Description |
+|--------|-------------|
+| `--db <FILE>` | Path to Magellan SQLite database (required) |
+| `--query <STRING>` | Search query string (required) |
+| `--mode` | Search mode: symbols, references, calls, auto (default: symbols) |
+| `--regex` | Treat query as regex pattern |
+| `--path <PATH>` | Filter results by path prefix |
+| `--kind <KIND>` | Filter by symbol kind (Function, Struct, etc.) |
+| `--sort-by` | Sort mode: relevance (default) or position (faster, no scoring) |
+| `--limit <N>` | Max results per mode (default: 50) |
+| `--output` | Output format: human, json, pretty (default: human) |
+| `--with-context` | Include context lines in JSON output |
+| `--with-snippet` | Include code snippets in JSON output |
+| `--with-fqn` | Include fully-qualified names in JSON output |
+| `--fields` | JSON-only field selector (overrides `--with-*` flags) |
+
+### Filtering flags
+
+| Flag | Description |
+|-----|-------------|
+| `--candidates` | Candidate limit for filtering (default: 500) |
+| `--regex` | Enable regex matching mode |
+| `--auto-limit` | Auto mode behavior: per-mode (default) or global |
+
+### Context options
+
+| Flag | Description | Default |
+|-----|-------------|---------|
+| `--with-context` | Enable context extraction | - |
+| `--context-lines` | Context lines before/after | 3 |
+| `--max-context-lines` | Maximum context lines | 100 |
+
+### Snippet options
+
+| Flag | Description | Default |
+|-----|-------------|---------|
+| `--with-snippet` | Enable snippet extraction | - |
+| `--max-snippet-bytes` | Max snippet size in bytes | 200 |
+
+## Output formats
+
+### Human (default)
+Human-readable text with color-coded results when output is a terminal.
+
+### JSON
+Schema-aligned JSON with the following structure:
+- `results`: Array of search results
+- `total_count`: Total matching results
+- `partial`: Whether results were truncated (limit hit)
+
+### Pretty
+Formatted JSON with indentation for readability.
+
+## Error handling
+
+llmgrep uses structured error codes (LLM-E###) with:
+- **Severity**: error, warning, info
+- **Remediation hints**: Actionable guidance for each error type
+- **Dual-mode output**: Human-friendly text or structured JSON
+
+Error codes include:
+- `LLM-E001`: Database not found
+- `LLM-E002`: Database corrupted
+- `LLM-E101`: Regex rejected (too complex or invalid)
+- `LLM-E102`: Resource limit exceeded
+- `LLM-E103`: Path validation failed
+
+## Examples
+
+See `llmgrep search --help` for comprehensive usage examples including:
+- Basic symbol search
+- Regex pattern matching
+- JSON output for LLM consumption
+- Path filtering
+- Reference search
+- Position-only sorting for performance
+- Combined filters
+
+## Version history
+
+See `CHANGELOG.md` for detailed version history.
