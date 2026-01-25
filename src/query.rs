@@ -6,10 +6,12 @@ use crate::output::{
 use rusqlite::{params_from_iter, Connection, ErrorCode, OpenFlags, ToSql};
 use regex::{Regex, RegexBuilder};
 use serde::Deserialize;
-use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+#[allow(unused_imports)]
+use serde_json::json;
 
 const MAX_REGEX_SIZE: usize = 10_000; // 10KB limit to prevent memory exhaustion
 
