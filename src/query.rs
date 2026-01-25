@@ -881,3 +881,461 @@ fn match_id(file_path: &str, byte_start: u64, byte_end: u64, name: &str) -> Stri
     let digest = hasher.finalize();
     hex::encode(&digest[..8])
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_score_match_empty_query() {
+        // Empty query matches everything via starts_with (every string starts with "")
+        // This is the current behavior - every name starts with empty string
+        let score = score_match("", "any_name", "any_display_fqn", "any_fqn", None);
+        assert_eq!(score, 80, "Empty query matches via name.starts_with('')");
+    }
+
+    #[test]
+    fn test_score_match_exact_name() {
+        let score = score_match("foo", "foo", "", "", None);
+        assert_eq!(score, 100, "Exact name match should return score 100");
+    }
+
+    #[test]
+    fn test_score_match_exact_display_fqn() {
+        let score = score_match("foo", "", "foo", "", None);
+        assert_eq!(score, 95, "Exact display_fqn match should return score 95");
+    }
+
+    #[test]
+    fn test_score_match_exact_fqn() {
+        let score = score_match("foo", "", "", "foo", None);
+        assert_eq!(score, 90, "Exact fqn match should return score 90");
+    }
+
+    #[test]
+    fn test_score_match_name_prefix() {
+        let score = score_match("foo", "foobar", "", "", None);
+        assert_eq!(score, 80, "Name prefix match should return score 80");
+    }
+
+    #[test]
+    fn test_score_match_display_fqn_prefix() {
+        let score = score_match("foo", "", "foobar", "", None);
+        assert_eq!(score, 70, "Display_fqn prefix match should return score 70");
+    }
+
+    #[test]
+    fn test_score_match_name_contains() {
+        let score = score_match("foo", "barfoobar", "", "", None);
+        assert_eq!(score, 60, "Name contains match should return score 60");
+    }
+
+    #[test]
+    fn test_score_match_display_fqn_contains() {
+        let score = score_match("foo", "", "barfoobar", "", None);
+        assert_eq!(score, 50, "Display_fqn contains match should return score 50");
+    }
+
+    #[test]
+    fn test_score_match_fqn_contains() {
+        let score = score_match("foo", "", "", "barfoobar", None);
+        assert_eq!(score, 40, "Fqn contains match should return score 40");
+    }
+
+    #[test]
+    fn test_score_match_tie_handling() {
+        // Same query against equivalent names should produce equal scores
+        let score1 = score_match("test", "test_value", "", "", None);
+        let score2 = score_match("test", "test_another", "", "", None);
+        assert_eq!(
+            score1, score2,
+            "Equivalent matches should produce equal scores"
+        );
+    }
+
+    #[test]
+    fn test_score_match_regex_name() {
+        let regex = Regex::new("foo.*").ok();
+        let score = score_match("foo.*", "foobar", "", "", regex.as_ref());
+        assert_eq!(score, 70, "Regex match on name should return score 70");
+    }
+
+    #[test]
+    fn test_score_match_regex_display_fqn() {
+        let regex = Regex::new("foo.*").ok();
+        let score = score_match("foo.*", "", "foobar", "", regex.as_ref());
+        assert_eq!(
+            score,
+            60,
+            "Regex match on display_fqn should return score 60"
+        );
+    }
+
+    #[test]
+    fn test_score_match_regex_fqn() {
+        let regex = Regex::new("foo.*").ok();
+        let score = score_match("foo.*", "", "", "foobar", regex.as_ref());
+        assert_eq!(score, 50, "Regex match on fqn should return score 50");
+    }
+
+    #[test]
+    fn test_score_match_boundary_max() {
+        // Exact name match should cap at 100
+        let score = score_match("test", "test", "test", "test", None);
+        assert_eq!(score, 100, "Score should never exceed 100");
+    }
+
+    #[test]
+    fn test_score_match_no_match() {
+        let score = score_match("xyz", "abc", "def", "ghi", None);
+        assert_eq!(score, 0, "No match should return score 0");
+    }
+
+    #[test]
+    fn test_score_match_regex_no_match() {
+        let regex = Regex::new("xyz.*").ok();
+        let score = score_match("xyz.*", "abc", "def", "ghi", regex.as_ref());
+        assert_eq!(score, 0, "Regex no match should return score 0");
+    }
+
+    #[test]
+    fn test_score_match_priority_exact_over_prefix() {
+        // Exact match should take priority over prefix match
+        let score = score_match("foo", "foo", "foobar", "", None);
+        assert_eq!(
+            score, 100,
+            "Exact name match should take priority over prefix"
+        );
+    }
+
+    #[test]
+    fn test_score_match_priority_prefix_over_contains() {
+        // Prefix match should take priority over contains match
+        let score = score_match("foo", "foobar", "barfoobar", "", None);
+        assert_eq!(
+            score, 80,
+            "Prefix match should take priority over contains"
+        );
+    }
+
+    #[test]
+    fn test_score_match_multiple_matches_highest_score() {
+        // When multiple matches exist, highest score should be returned
+        let score = score_match("foo", "foo", "foobar", "barfoobar", None);
+        assert_eq!(score, 100, "Should return highest score from all matches");
+    }
+
+    #[test]
+    fn test_score_match_case_sensitive() {
+        // Matching should be case-sensitive
+        let score1 = score_match("foo", "foo", "", "", None);
+        let score2 = score_match("foo", "Foo", "", "", None);
+        assert_eq!(score1, 100, "Exact case match should return 100");
+        // "Foo" doesn't start with or contain "foo" (case-sensitive)
+        assert_eq!(score2, 0, "Different case should not match");
+    }
+
+    #[test]
+    fn test_score_match_empty_name_field() {
+        // Empty fields should be handled correctly
+        let score = score_match("foo", "", "", "", None);
+        assert_eq!(score, 0, "All empty fields with non-empty query should return 0");
+    }
+
+    // Helper to count parameter placeholders in SQL
+    fn count_params(sql: &str) -> usize {
+        sql.matches('?').count()
+    }
+
+    #[test]
+    fn test_build_search_query_basic() {
+        let (sql, params) = build_search_query("test", None, None, false, false, 100);
+
+        // Should have LIKE clauses for name, display_fqn, fqn
+        assert!(sql.contains("s.name LIKE ? ESCAPE '\\'"));
+        assert!(sql.contains("s.display_fqn LIKE ? ESCAPE '\\'"));
+        assert!(sql.contains("s.fqn LIKE ? ESCAPE '\\'"));
+
+        // Should have LIMIT clause
+        assert!(sql.contains("LIMIT ?"));
+
+        // Should have 3 LIKE params + 1 LIMIT param
+        assert_eq!(params.len(), 4);
+        assert_eq!(count_params(&sql), 4);
+    }
+
+    #[test]
+    fn test_build_search_query_with_kind_filter() {
+        let (sql, params) = build_search_query("test", None, Some("Function"), false, false, 100);
+
+        // Should add kind filter
+        assert!(sql.contains("s.kind_normalized = ? OR s.kind = ?"));
+
+        // Should have 3 LIKE params + 2 kind params + 1 LIMIT param
+        assert_eq!(params.len(), 6);
+        assert_eq!(count_params(&sql), 6);
+    }
+
+    #[test]
+    fn test_build_search_query_with_path_filter() {
+        let path = PathBuf::from("/src/module");
+        let (sql, params) = build_search_query("test", Some(&path), None, false, false, 100);
+
+        // Should add file path filter
+        assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));
+
+        // Should have 3 LIKE params + 1 path param + 1 LIMIT param
+        assert_eq!(params.len(), 5);
+        assert_eq!(count_params(&sql), 5);
+    }
+
+    #[test]
+    fn test_build_search_query_regex_mode() {
+        let (sql, params) = build_search_query("test.*", None, None, true, false, 100);
+
+        // Should NOT have LIKE clauses in regex mode
+        assert!(!sql.contains("LIKE ? ESCAPE '\\'"));
+
+        // Should have LIMIT clause
+        assert!(sql.contains("LIMIT ?"));
+
+        // Should only have LIMIT param (no LIKE params)
+        assert_eq!(params.len(), 1);
+        assert_eq!(count_params(&sql), 1);
+    }
+
+    #[test]
+    fn test_build_search_query_count_only() {
+        let (sql, params) = build_search_query("test", None, None, false, true, 0);
+
+        // Should start with COUNT
+        assert!(sql.starts_with("SELECT COUNT(*)"));
+
+        // Should NOT have LIMIT clause
+        assert!(!sql.contains("LIMIT"));
+
+        // Should have 3 LIKE params (no LIMIT param)
+        assert_eq!(params.len(), 3);
+        assert_eq!(count_params(&sql), 3);
+    }
+
+    #[test]
+    fn test_build_search_query_regular_query() {
+        let (sql, params) = build_search_query("test", None, None, false, false, 100);
+
+        // Should have ORDER BY
+        assert!(sql.contains("ORDER BY"));
+
+        // Should have LIMIT clause
+        assert!(sql.contains("LIMIT ?"));
+
+        // Should have params
+        assert!(!params.is_empty());
+    }
+
+    #[test]
+    fn test_build_reference_query_basic() {
+        let (sql, params) = build_reference_query("test", None, false, false, 100);
+
+        // Should have kind filter
+        assert!(sql.contains("r.kind = 'Reference'"));
+
+        // Should join with graph_edges
+        assert!(sql.contains("LEFT JOIN graph_edges e"));
+
+        // Should have LIKE clause
+        assert!(sql.contains("r.name LIKE ? ESCAPE '\\'"));
+
+        // Should have LIMIT clause
+        assert!(sql.contains("LIMIT ?"));
+
+        // Should have 1 LIKE param + 1 LIMIT param
+        assert_eq!(params.len(), 2);
+        assert_eq!(count_params(&sql), 2);
+    }
+
+    #[test]
+    fn test_build_reference_query_with_path_filter() {
+        let path = PathBuf::from("/src/module");
+        let (sql, params) = build_reference_query("test", Some(&path), false, false, 100);
+
+        // Should add file path filter
+        assert!(sql.contains("json_extract(r.data, '$.file') LIKE ? ESCAPE '\\'"));
+
+        // Should have 1 LIKE param + 1 path param + 1 LIMIT param
+        assert_eq!(params.len(), 3);
+        assert_eq!(count_params(&sql), 3);
+    }
+
+    #[test]
+    fn test_build_reference_query_count_only() {
+        let (sql, params) = build_reference_query("test", None, false, true, 0);
+
+        // Should start with COUNT
+        assert!(sql.starts_with("SELECT COUNT(*)"));
+
+        // Should NOT have LIMIT clause
+        assert!(!sql.contains("LIMIT"));
+
+        // Should have 1 LIKE param (no LIMIT param)
+        assert_eq!(params.len(), 1);
+        assert_eq!(count_params(&sql), 1);
+    }
+
+    #[test]
+    fn test_build_call_query_basic() {
+        let (sql, params) = build_call_query("test", None, false, false, 100);
+
+        // Should have kind filter
+        assert!(sql.contains("c.kind = 'Call'"));
+
+        // Should have json_extract for caller/callee
+        assert!(sql.contains("json_extract(c.data, '$.caller')"));
+        assert!(sql.contains("json_extract(c.data, '$.callee')"));
+
+        // Should have LIKE clauses for caller/callee
+        assert!(sql.contains("json_extract(c.data, '$.caller') LIKE ? ESCAPE '\\'"));
+        assert!(sql.contains("json_extract(c.data, '$.callee') LIKE ? ESCAPE '\\'"));
+
+        // Should have LIMIT clause
+        assert!(sql.contains("LIMIT ?"));
+
+        // Should have 2 LIKE params + 1 LIMIT param
+        assert_eq!(params.len(), 3);
+        assert_eq!(count_params(&sql), 3);
+    }
+
+    #[test]
+    fn test_build_call_query_with_path_filter() {
+        let path = PathBuf::from("/src/module");
+        let (sql, params) = build_call_query("test", Some(&path), false, false, 100);
+
+        // Should add file path filter
+        assert!(sql.contains("json_extract(c.data, '$.file') LIKE ? ESCAPE '\\'"));
+
+        // Should have 2 LIKE params + 1 path param + 1 LIMIT param
+        assert_eq!(params.len(), 4);
+        assert_eq!(count_params(&sql), 4);
+    }
+
+    #[test]
+    fn test_build_call_query_count_only() {
+        let (sql, params) = build_call_query("test", None, false, true, 0);
+
+        // Should start with COUNT
+        assert!(sql.starts_with("SELECT COUNT(*)"));
+
+        // Should NOT have LIMIT clause
+        assert!(!sql.contains("LIMIT"));
+
+        // Should have 2 LIKE params (no LIMIT param)
+        assert_eq!(params.len(), 2);
+        assert_eq!(count_params(&sql), 2);
+    }
+
+    #[test]
+    fn test_like_pattern_percent_escaping() {
+        let result = like_pattern("test%value");
+        assert_eq!(result, "%test\\%value%");
+    }
+
+    #[test]
+    fn test_like_pattern_underscore_escaping() {
+        let result = like_pattern("test_value");
+        assert_eq!(result, "%test\\_value%");
+    }
+
+    #[test]
+    fn test_like_pattern_backslash_escaping() {
+        let result = like_pattern("test\\value");
+        assert_eq!(result, "%test\\\\value%");
+    }
+
+    #[test]
+    fn test_like_pattern_multiple_special_chars() {
+        let result = like_pattern("test%value_\\more");
+        assert_eq!(result, "%test\\%value\\_\\\\more%");
+    }
+
+    #[test]
+    fn test_like_pattern_empty_string() {
+        let result = like_pattern("");
+        assert_eq!(result, "%%");
+    }
+
+    #[test]
+    fn test_like_prefix_path() {
+        let path = PathBuf::from("/src/path");
+        let result = like_prefix(&path);
+        assert_eq!(result, "/src/path%");
+    }
+
+    #[test]
+    fn test_like_prefix_with_percent() {
+        let path = PathBuf::from("/src/path%test");
+        let result = like_prefix(&path);
+        // Should escape the % in the path
+        assert_eq!(result, "/src/path\\%test%");
+    }
+
+    #[test]
+    fn test_like_prefix_with_underscore() {
+        let path = PathBuf::from("/src/path_test");
+        let result = like_prefix(&path);
+        // Should escape the _ in the path
+        assert_eq!(result, "/src/path\\_test%");
+    }
+
+    #[test]
+    fn test_like_prefix_with_backslash() {
+        let path = PathBuf::from("C:\\src\\path");
+        let result = like_prefix(&path);
+        // Should escape backslashes
+        assert_eq!(result, "C:\\\\src\\\\path%");
+    }
+
+    #[test]
+    fn test_build_search_query_combined_filters() {
+        let path = PathBuf::from("/src/module");
+        let (sql, params) = build_search_query("test", Some(&path), Some("Function"), false, false, 100);
+
+        // Should have all filters
+        assert!(sql.contains("s.name LIKE ? ESCAPE '\\'"));
+        assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));
+        assert!(sql.contains("s.kind_normalized = ? OR s.kind = ?"));
+
+        // Should have 3 LIKE params + 1 path param + 2 kind params + 1 LIMIT param
+        assert_eq!(params.len(), 7);
+        assert_eq!(count_params(&sql), 7);
+    }
+
+    #[test]
+    fn test_build_reference_query_regex_mode() {
+        let (sql, params) = build_reference_query("test.*", None, true, false, 100);
+
+        // Should NOT have LIKE clauses in regex mode
+        assert!(!sql.contains("LIKE ? ESCAPE '\\'"));
+
+        // Should have LIMIT clause
+        assert!(sql.contains("LIMIT ?"));
+
+        // Should only have LIMIT param (no LIKE params)
+        assert_eq!(params.len(), 1);
+        assert_eq!(count_params(&sql), 1);
+    }
+
+    #[test]
+    fn test_build_call_query_regex_mode() {
+        let (sql, params) = build_call_query("test.*", None, true, false, 100);
+
+        // Should NOT have LIKE clauses in regex mode
+        assert!(!sql.contains("LIKE ? ESCAPE '\\'"));
+
+        // Should have LIMIT clause
+        assert!(sql.contains("LIMIT ?"));
+
+        // Should only have LIMIT param (no LIKE params)
+        assert_eq!(params.len(), 1);
+        assert_eq!(count_params(&sql), 1);
+    }
+}
