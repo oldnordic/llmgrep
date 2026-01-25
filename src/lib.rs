@@ -6,7 +6,7 @@ pub mod query;
 use clap::ValueEnum;
 
 /// Sorting mode for search results
-#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, ValueEnum)]
 pub enum SortMode {
     /// Relevance-based scoring (default, LLM-friendly)
     #[default]

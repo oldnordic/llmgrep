@@ -166,6 +166,7 @@ fn test_search_symbols_with_path_filter() {
             display_fqn: false,
         },
         include_score: true,
+        sort_by: llmgrep::SortMode::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -210,6 +211,7 @@ fn test_search_symbols_with_kind_filter() {
             display_fqn: false,
         },
         include_score: true,
+        sort_by: llmgrep::SortMode::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -253,6 +255,7 @@ fn test_search_symbols_rank_exact_match_first() {
             display_fqn: false,
         },
         include_score: true,
+        sort_by: llmgrep::SortMode::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -295,6 +298,7 @@ fn test_search_symbols_regex_filters() {
             display_fqn: false,
         },
         include_score: true,
+        sort_by: llmgrep::SortMode::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -339,6 +343,7 @@ fn test_search_symbols_with_context_and_snippet() {
             display_fqn: false,
         },
         include_score: true,
+        sort_by: llmgrep::SortMode::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -385,6 +390,7 @@ fn test_search_symbols_context_truncated_at_file_edges() {
             display_fqn: false,
         },
         include_score: true,
+        sort_by: llmgrep::SortMode::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -437,6 +443,7 @@ fn test_search_symbols_context_truncated_by_cap() {
             display_fqn: false,
         },
         include_score: true,
+        sort_by: llmgrep::SortMode::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -481,6 +488,7 @@ fn test_search_symbols_with_fqn_toggle() {
             display_fqn: false,
         },
         include_score: true,
+        sort_by: llmgrep::SortMode::default(),
     };
     let response = search_symbols(options)
     .expect("search");
@@ -512,6 +520,7 @@ fn test_search_symbols_with_fqn_toggle() {
             display_fqn: true,
         },
         include_score: true,
+        sort_by: llmgrep::SortMode::default(),
     };
     let response = search_symbols(options)
     .expect("search");
@@ -551,6 +560,7 @@ fn test_search_references_basic() {
         },
         fqn: FqnOptions::default(),
         include_score: true,
+        sort_by: llmgrep::SortMode::default(),
     };
     let response = search_references(options).expect("search");
 
@@ -586,6 +596,7 @@ fn test_search_calls_basic() {
         },
         fqn: FqnOptions::default(),
         include_score: true,
+        sort_by: llmgrep::SortMode::default(),
     };
     let response = search_calls(options).expect("search");
 
@@ -633,6 +644,7 @@ fn test_combined_response_counts_match() {
                 display_fqn: false,
             },
             include_score: true,
+            sort_by: llmgrep::SortMode::default(),
         };
         search_symbols(options).expect("symbols")
     };
@@ -657,6 +669,7 @@ fn test_combined_response_counts_match() {
             },
             fqn: FqnOptions::default(),
             include_score: true,
+            sort_by: llmgrep::SortMode::default(),
         };
         search_references(options).expect("refs")
     };
@@ -681,6 +694,7 @@ fn test_combined_response_counts_match() {
             },
             fqn: FqnOptions::default(),
             include_score: true,
+            sort_by: llmgrep::SortMode::default(),
         };
         search_calls(options).expect("calls")
     };

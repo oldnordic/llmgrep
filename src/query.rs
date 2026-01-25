@@ -1546,6 +1546,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1571,6 +1572,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1595,6 +1597,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1623,6 +1626,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1648,6 +1652,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1674,6 +1679,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1698,6 +1704,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1723,6 +1730,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1747,6 +1755,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1772,6 +1781,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1802,6 +1812,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1826,6 +1837,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1850,6 +1862,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1879,6 +1892,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1909,6 +1923,7 @@ mod tests {
                     display_fqn: false,
                 },
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1973,6 +1988,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2004,6 +2020,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2034,6 +2051,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2059,6 +2077,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2089,6 +2108,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2114,6 +2134,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2145,6 +2166,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2176,6 +2198,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2202,6 +2225,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2227,6 +2251,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2255,6 +2280,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2282,6 +2308,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2410,6 +2437,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2434,6 +2462,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2456,6 +2485,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2479,6 +2509,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2502,6 +2533,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2524,6 +2556,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2547,6 +2580,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2569,6 +2603,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2592,6 +2627,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
+                sort_by: SortMode::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2615,6 +2651,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2641,6 +2678,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: true,
+                sort_by: SortMode::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2708,6 +2746,7 @@ mod tests {
             snippet: SnippetOptions::default(),
             fqn: FqnOptions::default(),
             include_score: true,
+            sort_by: SortMode::default(),
         });
 
         match result {
