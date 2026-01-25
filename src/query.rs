@@ -145,6 +145,20 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         Err(e) => return Err(LlmError::from(e)),
     };
 
+    // Force database validation by checking if schema exists
+    // This catches "not a database" errors that occur lazily
+    conn.query_row("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1", [], |_| Ok(())).map_err(|e| match e {
+        rusqlite::Error::SqliteFailure(err, ref msg) => match err.code {
+            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
+                LlmError::DatabaseCorrupted {
+                    reason: msg.as_ref().map(|s| s.as_str()).unwrap_or("Database file is invalid or corrupted").to_string(),
+                }
+            }
+            _ => LlmError::from(e),
+        },
+        other => LlmError::from(other),
+    })?;
+
     let (sql, params) = build_search_query(
         options.query,
         options.path_filter,
@@ -309,6 +323,21 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
         },
         Err(e) => return Err(LlmError::from(e)),
     };
+
+    // Force database validation by checking if schema exists
+    // This catches "not a database" errors that occur lazily
+    conn.query_row("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1", [], |_| Ok(())).map_err(|e| match e {
+        rusqlite::Error::SqliteFailure(err, ref msg) => match err.code {
+            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
+                LlmError::DatabaseCorrupted {
+                    reason: msg.as_ref().map(|s| s.as_str()).unwrap_or("Database file is invalid or corrupted").to_string(),
+                }
+            }
+            _ => LlmError::from(e),
+        },
+        other => LlmError::from(other),
+    })?;
+
     let (sql, params) =
         build_reference_query(options.query, options.path_filter, options.use_regex, false, options.candidates);
     let mut stmt = conn.prepare_cached(&sql)?;
@@ -454,6 +483,21 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
         },
         Err(e) => return Err(LlmError::from(e)),
     };
+
+    // Force database validation by checking if schema exists
+    // This catches "not a database" errors that occur lazily
+    conn.query_row("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1", [], |_| Ok(())).map_err(|e| match e {
+        rusqlite::Error::SqliteFailure(err, ref msg) => match err.code {
+            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
+                LlmError::DatabaseCorrupted {
+                    reason: msg.as_ref().map(|s| s.as_str()).unwrap_or("Database file is invalid or corrupted").to_string(),
+                }
+            }
+            _ => LlmError::from(e),
+        },
+        other => LlmError::from(other),
+    })?;
+
     let (sql, params) = build_call_query(options.query, options.path_filter, options.use_regex, false, options.candidates);
     let mut stmt = conn.prepare_cached(&sql)?;
     let mut rows = stmt.query(params_from_iter(params))?;
@@ -2602,5 +2646,38 @@ mod tests {
         assert_eq!(cache.len(), 1);
 
         std::fs::remove_file(&temp_file).ok();
+    }
+
+    #[test]
+    fn test_search_symbols_corrupted_database() {
+        use std::io::Write;
+        let temp_dir = std::env::temp_dir();
+        let fake_db = temp_dir.join("llmgrep_test_corrupt.db");
+        {
+            let mut file = std::fs::File::create(&fake_db).unwrap();
+            file.write_all(b"This is not a SQLite database").unwrap();
+        }
+
+        let result = search_symbols(SearchOptions {
+            db_path: &fake_db,
+            query: "test",
+            path_filter: None,
+            kind_filter: None,
+            limit: 10,
+            use_regex: false,
+            candidates: 50,
+            context: ContextOptions::default(),
+            snippet: SnippetOptions::default(),
+            fqn: FqnOptions::default(),
+            include_score: true,
+        });
+
+        match result {
+            Err(LlmError::DatabaseCorrupted { .. }) => {}
+            Err(other) => panic!("Expected DatabaseCorrupted error, got: {:?}", other),
+            Ok(_) => panic!("Expected error for corrupted database"),
+        }
+
+        std::fs::remove_file(&fake_db).ok();
     }
 }
