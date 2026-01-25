@@ -3,6 +3,7 @@ use crate::output::{
     CallMatch, CallSearchResponse, ReferenceMatch, ReferenceSearchResponse, SearchResponse,
     SpanContext, SymbolMatch,
 };
+use crate::SortMode;
 use rusqlite::{params_from_iter, Connection, ErrorCode, OpenFlags, ToSql};
 use regex::{Regex, RegexBuilder};
 use serde::Deserialize;
@@ -40,6 +41,8 @@ pub struct SearchOptions<'a> {
     pub fqn: FqnOptions,
     /// Include score in results
     pub include_score: bool,
+    /// Sorting mode for results
+    pub sort_by: SortMode,
 }
 
 /// Context extraction options
@@ -187,6 +190,9 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
     };
     let mut file_cache = HashMap::new();
 
+    // Only compute scores for Relevance mode (Position mode skips scoring for performance)
+    let compute_scores = options.sort_by == SortMode::Relevance;
+
     while let Some(row) = rows.next()? {
         let data: String = row.get(0)?;
         let file_path: String = row.get(1)?;
@@ -241,7 +247,12 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         };
 
         let match_id = match_id(&file_path, symbol.byte_start, symbol.byte_end, &name);
-        let score = score_match(options.query, &name, &display_fqn, &fqn, regex.as_ref());
+        // Only compute scores in Relevance mode (Position mode skips scoring for performance)
+        let score = if compute_scores {
+            score_match(options.query, &name, &display_fqn, &fqn, regex.as_ref())
+        } else {
+            0
+        };
         let fqn = if options.fqn.fqn { symbol.fqn } else { None };
         let canonical_fqn = if options.fqn.canonical_fqn {
             symbol.canonical_fqn
@@ -285,14 +296,17 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         count
     };
 
-    results.sort_by(|a, b| {
-        b.score
-            .unwrap_or(0)
-            .cmp(&a.score.unwrap_or(0))
-            .then_with(|| a.span.start_line.cmp(&b.span.start_line))
-            .then_with(|| a.span.start_col.cmp(&b.span.start_col))
-            .then_with(|| a.span.byte_start.cmp(&b.span.byte_start))
-    });
+    // Only sort by score in Relevance mode (Position mode relies on SQL ORDER BY)
+    if compute_scores {
+        results.sort_by(|a, b| {
+            b.score
+                .unwrap_or(0)
+                .cmp(&a.score.unwrap_or(0))
+                .then_with(|| a.span.start_line.cmp(&b.span.start_line))
+                .then_with(|| a.span.start_col.cmp(&b.span.start_col))
+                .then_with(|| a.span.byte_start.cmp(&b.span.byte_start))
+        });
+    }
     results.truncate(options.limit);
 
     Ok((
@@ -359,6 +373,9 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
     let mut file_cache = HashMap::new();
     let mut results = Vec::new();
 
+    // Only compute scores for Relevance mode (Position mode skips scoring for performance)
+    let compute_scores = options.sort_by == SortMode::Relevance;
+
     while let Some(row) = rows.next()? {
         let data: String = row.get(0)?;
         let name: String = row.get(1)?;
@@ -374,7 +391,12 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
             continue;
         }
 
-        let score = score_match(options.query, &referenced_symbol, "", "", regex.as_ref());
+        // Only compute scores in Relevance mode (Position mode skips scoring for performance)
+        let score = if compute_scores {
+            score_match(options.query, &referenced_symbol, "", "", regex.as_ref())
+        } else {
+            0
+        };
         let context = if options.context.include {
             let capped = options.context.lines > options.context.max_lines;
             let effective_lines = options.context.lines.min(options.context.max_lines);
@@ -446,14 +468,17 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
         count
     };
 
-    results.sort_by(|a, b| {
-        b.score
-            .unwrap_or(0)
-            .cmp(&a.score.unwrap_or(0))
-            .then_with(|| a.span.start_line.cmp(&b.span.start_line))
-            .then_with(|| a.span.start_col.cmp(&b.span.start_col))
-            .then_with(|| a.span.byte_start.cmp(&b.span.byte_start))
-    });
+    // Only sort by score in Relevance mode (Position mode relies on SQL ORDER BY)
+    if compute_scores {
+        results.sort_by(|a, b| {
+            b.score
+                .unwrap_or(0)
+                .cmp(&a.score.unwrap_or(0))
+                .then_with(|| a.span.start_line.cmp(&b.span.start_line))
+                .then_with(|| a.span.start_col.cmp(&b.span.start_col))
+                .then_with(|| a.span.byte_start.cmp(&b.span.byte_start))
+        });
+    }
     results.truncate(options.limit);
 
     Ok((
@@ -518,6 +543,9 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
     let mut file_cache = HashMap::new();
     let mut results = Vec::new();
 
+    // Only compute scores for Relevance mode (Position mode skips scoring for performance)
+    let compute_scores = options.sort_by == SortMode::Relevance;
+
     while let Some(row) = rows.next()? {
         let data: String = row.get(0)?;
         let call: CallNodeData = serde_json::from_str(&data)?;
@@ -530,9 +558,14 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
             continue;
         }
 
-        let caller_score = score_match(options.query, &call.caller, "", "", regex.as_ref());
-        let callee_score = score_match(options.query, &call.callee, "", "", regex.as_ref());
-        let score = caller_score.max(callee_score);
+        // Only compute scores in Relevance mode (Position mode skips scoring for performance)
+        let score = if compute_scores {
+            let caller_score = score_match(options.query, &call.caller, "", "", regex.as_ref());
+            let callee_score = score_match(options.query, &call.callee, "", "", regex.as_ref());
+            caller_score.max(callee_score)
+        } else {
+            0
+        };
 
         let context = if options.context.include {
             let capped = options.context.lines > options.context.max_lines;
@@ -602,14 +635,17 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
         count
     };
 
-    results.sort_by(|a, b| {
-        b.score
-            .unwrap_or(0)
-            .cmp(&a.score.unwrap_or(0))
-            .then_with(|| a.span.start_line.cmp(&b.span.start_line))
-            .then_with(|| a.span.start_col.cmp(&b.span.start_col))
-            .then_with(|| a.span.byte_start.cmp(&b.span.byte_start))
-    });
+    // Only sort by score in Relevance mode (Position mode relies on SQL ORDER BY)
+    if compute_scores {
+        results.sort_by(|a, b| {
+            b.score
+                .unwrap_or(0)
+                .cmp(&a.score.unwrap_or(0))
+                .then_with(|| a.span.start_line.cmp(&b.span.start_line))
+                .then_with(|| a.span.start_col.cmp(&b.span.start_col))
+                .then_with(|| a.span.byte_start.cmp(&b.span.byte_start))
+        });
+    }
     results.truncate(options.limit);
 
     Ok((
