@@ -437,7 +437,23 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
 }
 
 pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool), LlmError> {
-    let conn = Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+        Ok(conn) => conn,
+        Err(rusqlite::Error::SqliteFailure(err, msg)) => match err.code {
+            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
+                return Err(LlmError::DatabaseCorrupted {
+                    reason: msg.unwrap_or_else(|| "Database file is invalid or corrupted".to_string()),
+                });
+            }
+            ErrorCode::CannotOpen => {
+                return Err(LlmError::DatabaseNotFound {
+                    path: options.db_path.display().to_string(),
+                });
+            }
+            _ => return Err(LlmError::from(rusqlite::Error::SqliteFailure(err, msg))),
+        },
+        Err(e) => return Err(LlmError::from(e)),
+    };
     let (sql, params) = build_call_query(options.query, options.path_filter, options.use_regex, false, options.candidates);
     let mut stmt = conn.prepare_cached(&sql)?;
     let mut rows = stmt.query(params_from_iter(params))?;
