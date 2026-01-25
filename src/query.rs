@@ -740,7 +740,13 @@ fn load_file<'a>(
     cache: &'a mut HashMap<String, FileCache>,
 ) -> Option<&'a FileCache> {
     if !cache.contains_key(path) {
-        let bytes = std::fs::read(path).ok()?;
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                eprintln!("Warning: Failed to read file '{}': {}", path, e);
+                return None;
+            }
+        };
         let text = String::from_utf8_lossy(&bytes);
         let lines = text.split('\n').map(|line| line.to_string()).collect();
         cache.insert(
