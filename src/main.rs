@@ -31,6 +31,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    #[command(after_help = SEARCH_EXAMPLES)]
     Search {
         #[arg(long)]
         query: String,
@@ -92,6 +93,33 @@ enum AutoLimitMode {
     PerMode,
     Global,
 }
+
+const SEARCH_EXAMPLES: &str = r#"
+EXAMPLES:
+  # Basic symbol search
+  llmgrep --db code.db search --query "parse"
+
+  # Regex search for pattern matching
+  llmgrep --db code.db search --query "^main" --regex
+
+  # JSON output for programmatic use
+  llmgrep --db code.db search --query "Parser" --output json
+
+  # Search with path filter
+  llmgrep --db code.db search --query "Error" --path src/
+
+  # Reference search
+  llmgrep --db code.db search --query "Token" --mode references
+
+  # Calls search
+  llmgrep --db code.db search --query "parse" --mode calls
+
+  # Auto mode (all search modes combined, requires JSON output)
+  llmgrep --db code.db search --query "parse" --mode auto --output json
+
+  # Combined filters with regex
+  llmgrep --db code.db search --query "^[A-Z]" --regex --kind Function --output pretty
+"#;
 
 fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
     // Canonicalize the path to resolve symlinks and .. components
