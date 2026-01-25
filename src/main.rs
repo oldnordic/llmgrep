@@ -7,6 +7,7 @@ use llmgrep::output::{
 };
 use llmgrep::output_common::{format_partial_footer, format_total_header, render_json_response};
 use llmgrep::query::{search_calls, search_references, search_symbols, ContextOptions, FqnOptions, SearchOptions, SnippetOptions};
+use llmgrep::SortMode;
 use std::path::{Path, PathBuf};
 
 // Custom value parser for ranged usize - needed because clap doesn't provide RangedUsizeValueParser
@@ -74,6 +75,9 @@ enum Command {
 
         #[arg(long)]
         fields: Option<String>,
+
+        #[arg(long, value_enum, default_value = "relevance")]
+        sort_by: SortMode,
 
         #[arg(long, value_enum, default_value = "per-mode")]
         auto_limit: AutoLimitMode,
@@ -200,6 +204,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             with_fqn,
             max_snippet_bytes,
             fields,
+            sort_by,
             auto_limit,
         } => run_search(
             cli,
@@ -217,6 +222,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             *with_fqn,
             *max_snippet_bytes,
             fields.as_ref(),
+            *sort_by,
             *auto_limit,
         ),
     }
@@ -239,6 +245,7 @@ fn run_search(
     with_fqn: bool,
     max_snippet_bytes: usize,
     fields: Option<&String>,
+    sort_by: SortMode,
     auto_limit: AutoLimitMode,
 ) -> Result<(), LlmError> {
     if query.trim().is_empty() {
@@ -309,6 +316,7 @@ fn run_search(
                     display_fqn: include_display_fqn,
                 },
                 include_score,
+                sort_by,
             };
             let (response, partial) = search_symbols(options)?;
             output_symbols(cli, response, partial)?;
@@ -333,6 +341,7 @@ fn run_search(
                 },
                 fqn: FqnOptions::default(),
                 include_score,
+                sort_by,
             };
             let (response, partial) = search_references(options)?;
             output_references(cli, response, partial)?;
@@ -357,6 +366,7 @@ fn run_search(
                 },
                 fqn: FqnOptions::default(),
                 include_score,
+                sort_by,
             };
             let (response, partial) = search_calls(options)?;
             output_calls(cli, response, partial)?;
@@ -395,6 +405,7 @@ fn run_search(
                     display_fqn: include_display_fqn,
                 },
                 include_score,
+                sort_by,
             })?;
             let (references, refs_partial) = search_references(SearchOptions {
                 db_path,
@@ -415,6 +426,7 @@ fn run_search(
                 },
                 fqn: FqnOptions::default(),
                 include_score,
+                sort_by,
             })?;
             let (calls, calls_partial) = search_calls(SearchOptions {
                 db_path,
@@ -435,6 +447,7 @@ fn run_search(
                 },
                 fqn: FqnOptions::default(),
                 include_score,
+                sort_by,
             })?;
             let total_count = symbols.total_count + references.total_count + calls.total_count;
             let combined = CombinedSearchResponse {
