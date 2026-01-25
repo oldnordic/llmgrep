@@ -1,0 +1,3 @@
+[build]
+# Disable sccache due to missing binary
+target-dir = "target"
