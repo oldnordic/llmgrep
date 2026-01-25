@@ -1338,4 +1338,381 @@ mod tests {
         assert_eq!(params.len(), 1);
         assert_eq!(count_params(&sql), 1);
     }
+
+    // Public API tests for search_calls()
+    mod pub_api_tests {
+        use super::*;
+        use rusqlite::Connection;
+        use tempfile::NamedTempFile;
+
+        fn create_test_db_with_calls() -> (NamedTempFile, Connection) {
+            let db_file = NamedTempFile::new().unwrap();
+            let conn = Connection::open(db_file.path()).unwrap();
+
+            // Create schema
+            conn.execute(
+                "CREATE TABLE graph_entities (
+                    id INTEGER PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    data TEXT NOT NULL
+                )",
+                [],
+            ).unwrap();
+
+            // Insert test Call entities
+            conn.execute(
+                "INSERT INTO graph_entities (id, kind, data) VALUES
+                    (10, 'Call', '{\"file\":\"/test/file.rs\",\"caller\":\"main\",\"callee\":\"test_func\",\"caller_symbol_id\":\"sym1\",\"callee_symbol_id\":\"sym2\",\"byte_start\":50,\"byte_end\":70,\"start_line\":5,\"start_col\":4,\"end_line\":5,\"end_col\":24}'),
+                    (11, 'Call', '{\"file\":\"/test/file.rs\",\"caller\":\"main\",\"callee\":\"helper\",\"caller_symbol_id\":\"sym1\",\"callee_symbol_id\":\"sym3\",\"byte_start\":100,\"byte_end\":115,\"start_line\":10,\"start_col\":4,\"end_line\":10,\"end_col\":19}'),
+                    (12, 'Call', '{\"file\":\"/test/other.rs\",\"caller\":\"process\",\"callee\":\"test_func\",\"caller_symbol_id\":\"sym4\",\"callee_symbol_id\":\"sym2\",\"byte_start\":200,\"byte_end\":220,\"start_line\":20,\"start_col\":0,\"end_line\":20,\"end_col\":20}')",
+                [],
+            ).unwrap();
+
+            (db_file, conn)
+        }
+
+        #[test]
+        fn test_search_calls_basic() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "test_func",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // Should find 2 calls where callee is "test_func"
+            assert_eq!(response.results.len(), 2);
+            assert_eq!(response.total_count, 2);
+            assert_eq!(response.query, "test_func");
+
+            // Both results should have callee "test_func"
+            for result in &response.results {
+                assert_eq!(result.callee, "test_func");
+            }
+        }
+
+        #[test]
+        fn test_search_calls_caller_match() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "main",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // Should find 2 calls where caller is "main"
+            assert_eq!(response.results.len(), 2);
+            assert_eq!(response.total_count, 2);
+
+            // Both results should have caller "main"
+            for result in &response.results {
+                assert_eq!(result.caller, "main");
+            }
+        }
+
+        #[test]
+        fn test_search_calls_empty_results() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "nonexistent",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // Should find 0 results
+            assert_eq!(response.results.len(), 0);
+            assert_eq!(response.total_count, 0);
+        }
+
+        #[test]
+        fn test_search_calls_regex_mode() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "test.*",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: true,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // Should find 2 calls matching "test.*" pattern (callee is "test_func")
+            assert_eq!(response.results.len(), 2);
+            assert_eq!(response.total_count, 2);
+
+            // Both should match because callee is "test_func" which matches "test.*"
+            for result in &response.results {
+                assert_eq!(result.callee, "test_func");
+            }
+        }
+
+        #[test]
+        fn test_search_calls_regex_no_match() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "xyz.*",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: true,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // Should find 0 results - nothing matches "xyz.*"
+            assert_eq!(response.results.len(), 0);
+            assert_eq!(response.total_count, 0);
+        }
+
+        #[test]
+        fn test_search_calls_score_callee_match() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "test_func",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // Should find results with scores
+            assert!(!response.results.is_empty());
+
+            // All results should have scores
+            for result in &response.results {
+                assert!(result.score.is_some());
+                // Exact match on callee should give score 100
+                assert_eq!(result.score.unwrap(), 100);
+            }
+        }
+
+        #[test]
+        fn test_search_calls_score_caller_match() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "main",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // Should find results with scores
+            assert!(!response.results.is_empty());
+
+            // All results should have scores
+            for result in &response.results {
+                assert!(result.score.is_some());
+                // Exact match on caller should give score 100
+                assert_eq!(result.score.unwrap(), 100);
+            }
+        }
+
+        #[test]
+        fn test_search_calls_limit() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "test_func",
+                path_filter: None,
+                kind_filter: None,
+                limit: 1,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // Should return only 1 result due to limit
+            assert_eq!(response.results.len(), 1);
+            // But total_count should reflect all matches
+            assert_eq!(response.total_count, 2);
+        }
+
+        #[test]
+        fn test_search_calls_total_count() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "test_func",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // total_count should accurately reflect all matching results
+            assert_eq!(response.total_count, 2);
+        }
+
+        #[test]
+        fn test_search_calls_path_filter() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let path = PathBuf::from("/test/file.rs");
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "test_func",
+                path_filter: Some(&path),
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // Should only find calls in /test/file.rs
+            assert_eq!(response.results.len(), 1);
+            assert_eq!(response.total_count, 1);
+
+            // Result should be from the filtered path
+            assert_eq!(response.results[0].span.file_path, "/test/file.rs");
+        }
+
+        #[test]
+        fn test_search_calls_include_score() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "test_func",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // All results should include scores when include_score is true
+            for result in &response.results {
+                assert!(result.score.is_some());
+                assert!(result.score.unwrap() > 0);
+            }
+        }
+
+        #[test]
+        fn test_search_calls_ordering() {
+            let (_db_file, _conn) = create_test_db_with_calls();
+
+            let options = SearchOptions {
+                db_path: _db_file.path(),
+                query: "test_func",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: true,
+            };
+
+            let (response, _partial) = search_calls(options).unwrap();
+
+            // Results should be sorted by score (all same here), then by start_line
+            if response.results.len() > 1 {
+                for i in 1..response.results.len() {
+                    let prev = &response.results[i - 1];
+                    let curr = &response.results[i];
+                    // Scores should be non-increasing
+                    assert!(prev.score.unwrap() >= curr.score.unwrap());
+                    // Within same score, sorted by start_line
+                    if prev.score == curr.score {
+                        assert!(prev.span.start_line <= curr.span.start_line);
+                    }
+                }
+            }
+        }
+    }
 }
