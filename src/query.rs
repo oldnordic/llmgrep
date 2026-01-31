@@ -280,6 +280,8 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         options.use_regex,
         false,
         options.candidates,
+        options.metrics,
+        options.sort_by,
     );
     let mut stmt = conn.prepare_cached(&sql)?;
 
@@ -305,6 +307,10 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
     while let Some(row) = rows.next()? {
         let data: String = row.get(0)?;
         let file_path: String = row.get(1)?;
+        // Read metrics columns (may be NULL)
+        let fan_in: Option<i64> = row.get(2).ok();
+        let fan_out: Option<i64> = row.get(3).ok();
+        let cyclomatic_complexity: Option<i64> = row.get(4).ok();
         let symbol: SymbolNodeData = serde_json::from_str(&data)?;
         let name = symbol.name.clone().unwrap_or_else(|| "<unknown>".to_string());
         let display_fqn = symbol.display_fqn.clone().unwrap_or_default();
@@ -421,6 +427,13 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         } else {
             None
         };
+
+        // Convert metrics from Option<i64> to Option<u64>
+        let complexity_score = None; // Not available in symbol_metrics
+        let fan_in = fan_in.and_then(|v| if v >= 0 { Some(v as u64) } else { None });
+        let fan_out = fan_out.and_then(|v| if v >= 0 { Some(v as u64) } else { None });
+        let cyclomatic_complexity = cyclomatic_complexity.and_then(|v| if v >= 0 { Some(v as u64) } else { None });
+
         results.push(SymbolMatch {
             match_id,
             span,
@@ -436,6 +449,10 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             symbol_kind_from_chunk,
             snippet,
             snippet_truncated,
+            complexity_score,
+            fan_in,
+            fan_out,
+            cyclomatic_complexity,
         });
     }
 
@@ -447,7 +464,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         results.len() as u64
     } else {
         let (count_sql, count_params) =
-            build_search_query(options.query, options.path_filter, options.kind_filter, options.use_regex, true, 0);
+            build_search_query(options.query, options.path_filter, options.kind_filter, options.use_regex, true, 0, options.metrics, options.sort_by);
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {
             partial = true;
@@ -883,6 +900,8 @@ fn build_search_query(
     use_regex: bool,
     count_only: bool,
     limit: usize,
+    metrics: MetricsOptions,
+    sort_by: SortMode,
 ) -> (String, Vec<Box<dyn ToSql>>) {
     let mut params: Vec<Box<dyn ToSql>> = Vec::new();
     let mut where_clauses = Vec::new();
@@ -909,10 +928,29 @@ fn build_search_query(
         params.push(Box::new(kind.to_string()));
     }
 
+    // Add metrics filter WHERE clauses
+    // For filters, we use IS NOT NULL to ensure symbols have metrics
+    if let Some(min_cc) = metrics.min_complexity {
+        where_clauses.push("(sm.cyclomatic_complexity IS NOT NULL AND sm.cyclomatic_complexity >= ?)".to_string());
+        params.push(Box::new(min_cc as i64));
+    }
+    if let Some(max_cc) = metrics.max_complexity {
+        where_clauses.push("(sm.cyclomatic_complexity IS NOT NULL AND sm.cyclomatic_complexity <= ?)".to_string());
+        params.push(Box::new(max_cc as i64));
+    }
+    if let Some(min_fi) = metrics.min_fan_in {
+        where_clauses.push("(sm.fan_in IS NOT NULL AND sm.fan_in >= ?)".to_string());
+        params.push(Box::new(min_fi as i64));
+    }
+    if let Some(min_fo) = metrics.min_fan_out {
+        where_clauses.push("(sm.fan_out IS NOT NULL AND sm.fan_out >= ?)".to_string());
+        params.push(Box::new(min_fo as i64));
+    }
+
     let select_clause = if count_only {
         "SELECT COUNT(*)"
     } else {
-        "SELECT s.data, f.file_path"
+        "SELECT s.data, f.file_path, sm.fan_in, sm.fan_out, sm.cyclomatic_complexity"
     };
 
     let mut sql = format!(
@@ -938,6 +976,7 @@ JOIN (
     FROM graph_entities
     WHERE kind = 'File'
 ) f ON f.id = e.from_id
+LEFT JOIN symbol_metrics sm ON json_extract(s.data, '$.symbol_id') = sm.symbol_id
 WHERE {where_clause}",
         select_clause = select_clause,
         where_clause = if where_clauses.is_empty() {
@@ -948,9 +987,30 @@ WHERE {where_clause}",
     );
 
     if !count_only {
-        sql.push_str(
-            "\nORDER BY s.start_line, s.start_col, s.byte_start, s.byte_end, s.id\n",
-        );
+        // Determine ORDER BY clause based on sort mode
+        let order_by = match sort_by {
+            SortMode::FanIn => {
+                // Sort by fan_in descending, NULLs last
+                "COALESCE(sm.fan_in, 0) DESC, s.start_line, s.start_col, s.byte_start, s.byte_end, s.id"
+            }
+            SortMode::FanOut => {
+                // Sort by fan_out descending, NULLs last
+                "COALESCE(sm.fan_out, 0) DESC, s.start_line, s.start_col, s.byte_start, s.byte_end, s.id"
+            }
+            SortMode::Complexity => {
+                // Sort by cyclomatic_complexity descending, NULLs last
+                "COALESCE(sm.cyclomatic_complexity, 0) DESC, s.start_line, s.start_col, s.byte_start, s.byte_end, s.id"
+            }
+            SortMode::Position => {
+                // Position-based ordering (faster, pure SQL)
+                "s.start_line, s.start_col, s.byte_start, s.byte_end, s.id"
+            }
+            SortMode::Relevance => {
+                // Relevance ordering happens in-memory after scoring
+                "s.start_line, s.start_col, s.byte_start, s.byte_end, s.id"
+            }
+        };
+        sql.push_str(&format!("\nORDER BY {}\n", order_by));
         sql.push_str("LIMIT ?");
         params.push(Box::new(limit as u64));
     }
