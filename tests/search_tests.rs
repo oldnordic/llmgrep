@@ -22,10 +22,17 @@ fn setup_db(path: &std::path::Path) -> Connection {
             edge_type TEXT NOT NULL
         );
         CREATE TABLE symbol_metrics (
-            symbol_id TEXT PRIMARY KEY,
-            fan_in INTEGER DEFAULT 0,
-            fan_out INTEGER DEFAULT 0,
-            cyclomatic_complexity INTEGER DEFAULT 0
+            symbol_id INTEGER PRIMARY KEY,
+            symbol_name TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            loc INTEGER NOT NULL DEFAULT 0,
+            estimated_loc REAL NOT NULL DEFAULT 0.0,
+            fan_in INTEGER NOT NULL DEFAULT 0,
+            fan_out INTEGER NOT NULL DEFAULT 0,
+            cyclomatic_complexity INTEGER NOT NULL DEFAULT 1,
+            last_updated INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (symbol_id) REFERENCES graph_entities(id) ON DELETE CASCADE
         );",
     )
     .expect("create tables");

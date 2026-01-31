@@ -1234,7 +1234,7 @@ JOIN (
     FROM graph_entities
     WHERE kind = 'File'
 ) f ON f.id = e.from_id
-LEFT JOIN symbol_metrics sm ON json_extract(s.data, '$.symbol_id') = sm.symbol_id
+LEFT JOIN symbol_metrics sm ON s.id = sm.symbol_id
 WHERE {where_clause}",
         select_clause = select_clause,
         where_clause = if where_clauses.is_empty() {
@@ -2350,11 +2350,17 @@ mod tests {
         // Create symbol_metrics table (required for LEFT JOIN in queries)
         conn.execute(
             "CREATE TABLE symbol_metrics (
-                symbol_id TEXT PRIMARY KEY,
-                fan_in INTEGER,
-                fan_out INTEGER,
-                cyclomatic_complexity INTEGER,
-                loc INTEGER
+                symbol_id INTEGER PRIMARY KEY,
+                symbol_name TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                loc INTEGER NOT NULL DEFAULT 0,
+                estimated_loc REAL NOT NULL DEFAULT 0.0,
+                fan_in INTEGER NOT NULL DEFAULT 0,
+                fan_out INTEGER NOT NULL DEFAULT 0,
+                cyclomatic_complexity INTEGER NOT NULL DEFAULT 1,
+                last_updated INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (symbol_id) REFERENCES graph_entities(id) ON DELETE CASCADE
             )",
             [],
         )
@@ -4121,14 +4127,17 @@ mod tests {
             .unwrap();
             conn.execute(
                 "CREATE TABLE symbol_metrics (
-                    symbol_id TEXT PRIMARY KEY,
+                    symbol_id INTEGER PRIMARY KEY,
                     symbol_name TEXT NOT NULL,
                     kind TEXT NOT NULL,
                     file_path TEXT NOT NULL,
-                    loc INTEGER NOT NULL,
-                    fan_in INTEGER,
-                    fan_out INTEGER,
-                    cyclomatic_complexity INTEGER
+                    loc INTEGER NOT NULL DEFAULT 0,
+                    estimated_loc REAL NOT NULL DEFAULT 0.0,
+                    fan_in INTEGER NOT NULL DEFAULT 0,
+                    fan_out INTEGER NOT NULL DEFAULT 0,
+                    cyclomatic_complexity INTEGER NOT NULL DEFAULT 1,
+                    last_updated INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY (symbol_id) REFERENCES graph_entities(id) ON DELETE CASCADE
                 )",
                 [],
             )
@@ -4158,12 +4167,12 @@ mod tests {
                 [],
             ).unwrap();
 
-            // Insert metrics
+            // Insert metrics - symbol_id now references graph_entities.id (INTEGER)
             conn.execute(
-                "INSERT INTO symbol_metrics (symbol_id, symbol_name, kind, file_path, loc, fan_in, fan_out, cyclomatic_complexity) VALUES
-                    ('sym1', 'low_complexity', 'Function', '/test/file.rs', 50, 10, 2, 5),
-                    ('sym2', 'med_complexity', 'Function', '/test/file.rs', 100, 5, 8, 15),
-                    ('sym3', 'high_complexity', 'Function', '/test/file.rs', 150, 2, 15, 25)",
+                "INSERT INTO symbol_metrics (symbol_id, symbol_name, kind, file_path, loc, estimated_loc, fan_in, fan_out, cyclomatic_complexity, last_updated) VALUES
+                    (10, 'low_complexity', 'Function', '/test/file.rs', 50, 0.0, 10, 2, 5, 0),
+                    (11, 'med_complexity', 'Function', '/test/file.rs', 100, 0.0, 5, 8, 15, 0),
+                    (12, 'high_complexity', 'Function', '/test/file.rs', 150, 0.0, 2, 15, 25, 0)",
                 [],
             ).unwrap();
 
@@ -4611,14 +4620,17 @@ mod tests {
             .unwrap();
             conn.execute(
                 "CREATE TABLE symbol_metrics (
-                    symbol_id TEXT PRIMARY KEY,
+                    symbol_id INTEGER PRIMARY KEY,
                     symbol_name TEXT NOT NULL,
                     kind TEXT NOT NULL,
                     file_path TEXT NOT NULL,
-                    loc INTEGER NOT NULL,
-                    fan_in INTEGER,
-                    fan_out INTEGER,
-                    cyclomatic_complexity INTEGER
+                    loc INTEGER NOT NULL DEFAULT 0,
+                    estimated_loc REAL NOT NULL DEFAULT 0.0,
+                    fan_in INTEGER NOT NULL DEFAULT 0,
+                    fan_out INTEGER NOT NULL DEFAULT 0,
+                    cyclomatic_complexity INTEGER NOT NULL DEFAULT 1,
+                    last_updated INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY (symbol_id) REFERENCES graph_entities(id) ON DELETE CASCADE
                 )",
                 [],
             )
@@ -4643,10 +4655,10 @@ mod tests {
                 [],
             ).unwrap();
 
-            // Only sym1 has metrics
+            // Only sym1 has metrics - symbol_id now references graph_entities.id (INTEGER)
             conn.execute(
-                "INSERT INTO symbol_metrics (symbol_id, symbol_name, kind, file_path, loc, fan_in, fan_out, cyclomatic_complexity) VALUES
-                    ('sym1', 'with_metrics', 'Function', '/test/file.rs', 50, 10, 2, 5)",
+                "INSERT INTO symbol_metrics (symbol_id, symbol_name, kind, file_path, loc, estimated_loc, fan_in, fan_out, cyclomatic_complexity, last_updated) VALUES
+                    (10, 'with_metrics', 'Function', '/test/file.rs', 50, 0.0, 10, 2, 5, 0)",
                 [],
             ).unwrap();
 

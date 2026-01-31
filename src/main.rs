@@ -23,7 +23,7 @@ fn ranged_usize(min: i64, max: i64) -> impl TypedValueParser<Value = usize> {
 #[derive(Parser)]
 #[command(
     name = "llmgrep",
-    version,
+    version = env!("CARGO_PKG_VERSION"),
     about = "Smart grep backed by a Magellan code map"
 )]
 struct Cli {

@@ -37,10 +37,17 @@ fn setup_db(path: &std::path::Path) -> Connection {
             symbol_kind TEXT
         );
         CREATE TABLE symbol_metrics (
-            symbol_id TEXT PRIMARY KEY,
-            fan_in INTEGER DEFAULT 0,
-            fan_out INTEGER DEFAULT 0,
-            cyclomatic_complexity INTEGER DEFAULT 0
+            symbol_id INTEGER PRIMARY KEY,
+            symbol_name TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            loc INTEGER NOT NULL DEFAULT 0,
+            estimated_loc REAL NOT NULL DEFAULT 0.0,
+            fan_in INTEGER NOT NULL DEFAULT 0,
+            fan_out INTEGER NOT NULL DEFAULT 0,
+            cyclomatic_complexity INTEGER NOT NULL DEFAULT 1,
+            last_updated INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (symbol_id) REFERENCES graph_entities(id) ON DELETE CASCADE
         );",
     )
     .expect("create tables");
@@ -102,11 +109,11 @@ fn insert_define_edge(conn: &Connection, file_id: i64, symbol_id: i64) {
     .expect("insert edge");
 }
 
-fn insert_metrics(conn: &Connection, symbol_id: &str, fan_in: i64, fan_out: i64, complexity: i64) {
+fn insert_metrics(conn: &Connection, symbol_row_id: i64, symbol_name: &str, kind: &str, file_path: &str, fan_in: i64, fan_out: i64, complexity: i64) {
     conn.execute(
-        "INSERT INTO symbol_metrics (symbol_id, fan_in, fan_out, cyclomatic_complexity)
-         VALUES (?1, ?2, ?3, ?4)",
-        params![symbol_id, fan_in, fan_out, complexity],
+        "INSERT INTO symbol_metrics (symbol_id, symbol_name, kind, file_path, loc, estimated_loc, fan_in, fan_out, cyclomatic_complexity, last_updated)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![symbol_row_id, symbol_name, kind, file_path, 0i64, 0.0f64, fan_in, fan_out, complexity, 0i64],
     )
     .expect("insert metrics");
 }
@@ -200,12 +207,12 @@ fn test_api_metrics_filtering() {
     let low_name = "low_complexity";
     let low_id = insert_symbol(&conn, low_name, "Function", "fn", (0, 15));
     insert_define_edge(&conn, file_id, low_id);
-    insert_metrics(&conn, &format!("{}-id", low_name), 1, 1, 1);
+    insert_metrics(&conn, low_id, low_name, "Function", file_path, 1, 1, 1);
 
     let high_name = "high_complexity";
     let high_id = insert_symbol(&conn, high_name, "Function", "fn", (20, 40));
     insert_define_edge(&conn, file_id, high_id);
-    insert_metrics(&conn, &format!("{}-id", high_name), 10, 5, 20);
+    insert_metrics(&conn, high_id, high_name, "Function", file_path, 10, 5, 20);
 
     // Test min_complexity filter
     let options = SearchOptions {
@@ -252,12 +259,12 @@ fn test_api_metrics_sorting() {
     let low_name = "low_fan";
     let low_id = insert_symbol(&conn, low_name, "Function", "fn", (0, 10));
     insert_define_edge(&conn, file_id, low_id);
-    insert_metrics(&conn, &format!("{}-id", low_name), 1, 0, 1);
+    insert_metrics(&conn, low_id, low_name, "Function", file_path, 1, 0, 1);
 
     let high_name = "high_fan";
     let high_id = insert_symbol(&conn, high_name, "Function", "fn", (20, 30));
     insert_define_edge(&conn, file_id, high_id);
-    insert_metrics(&conn, &format!("{}-id", high_name), 100, 0, 1);
+    insert_metrics(&conn, high_id, high_name, "Function", file_path, 100, 0, 1);
 
     // Test sort by fan-in (highest first)
     let options = SearchOptions {
@@ -473,16 +480,11 @@ fn test_api_symbol_id_lookup() {
         params!["Symbol", symbol_name, data],
     )
     .expect("insert symbol");
-    let symbol_id = conn.last_insert_rowid();
-    insert_define_edge(&conn, file_id, symbol_id);
+    let symbol_row_id = conn.last_insert_rowid();
+    insert_define_edge(&conn, file_id, symbol_row_id);
 
-    // Insert metrics for the symbol
-    conn.execute(
-        "INSERT INTO symbol_metrics (symbol_id, fan_in, fan_out, cyclomatic_complexity)
-         VALUES (?1, 5, 3, 2)",
-        params![known_symbol_id],
-    )
-    .expect("insert metrics");
+    // Insert metrics for the symbol - using row ID reference
+    insert_metrics(&conn, symbol_row_id, symbol_name, "Function", file_path, 5, 3, 2);
 
     // Search by SymbolId
     let options = SearchOptions {
