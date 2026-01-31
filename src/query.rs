@@ -302,7 +302,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             }
         }
 
-        let (snippet, snippet_truncated) = if options.snippet.include {
+        let (snippet, snippet_truncated, content_hash, symbol_kind_from_chunk) = if options.snippet.include {
             // Try chunks table first for faster, pre-validated content
             match search_chunks_by_span(&conn, &file_path, symbol.byte_start, symbol.byte_end) {
                 Ok(Some(chunk)) => {
@@ -325,7 +325,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
                         chunk.content.clone()
                     };
 
-                    (Some(snippet_content), Some(truncated))
+                    (Some(snippet_content), Some(truncated), Some(chunk.content_hash), chunk.symbol_kind)
                 }
                 Ok(None) => {
                     // Chunk not found, log fallback and use file I/O
@@ -333,13 +333,14 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
                         "Chunk fallback: {}:{}-{}",
                         file_path, symbol.byte_start, symbol.byte_end
                     );
-                    snippet_from_file(
+                    let (snippet, truncated) = snippet_from_file(
                         &file_path,
                         symbol.byte_start,
                         symbol.byte_end,
                         options.snippet.max_bytes,
                         &mut file_cache,
-                    )
+                    );
+                    (snippet, truncated, None, None)
                 }
                 Err(e) => {
                     // Error querying chunks, fall back to file I/O
@@ -347,17 +348,18 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
                         "Chunk query error for {}:{}-{}: {}, using file I/O",
                         file_path, symbol.byte_start, symbol.byte_end, e
                     );
-                    snippet_from_file(
+                    let (snippet, truncated) = snippet_from_file(
                         &file_path,
                         symbol.byte_start,
                         symbol.byte_end,
                         options.snippet.max_bytes,
                         &mut file_cache,
-                    )
+                    );
+                    (snippet, truncated, None, None)
                 }
             }
         } else {
-            (None, None)
+            (None, None, None, None)
         };
         let context = if options.context.include {
             let capped = options.context.lines > options.context.max_lines;
@@ -415,6 +417,8 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             fqn,
             canonical_fqn,
             display_fqn,
+            content_hash,
+            symbol_kind_from_chunk,
             snippet,
             snippet_truncated,
         });
@@ -551,7 +555,7 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
         } else {
             None
         };
-        let (snippet, snippet_truncated) = if options.snippet.include {
+        let (snippet, snippet_truncated, content_hash, symbol_kind_from_chunk) = if options.snippet.include {
             // Try chunks table first for faster, pre-validated content
             match search_chunks_by_span(&conn, &reference.file, reference.byte_start, reference.byte_end) {
                 Ok(Some(chunk)) => {
@@ -572,21 +576,22 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
                         chunk.content.clone()
                     };
 
-                    (Some(snippet_content), Some(truncated))
+                    (Some(snippet_content), Some(truncated), Some(chunk.content_hash), chunk.symbol_kind)
                 }
                 Ok(None) | Err(_) => {
                     // Chunk not found or error, fall back to file I/O
-                    snippet_from_file(
+                    let (snippet, truncated) = snippet_from_file(
                         &reference.file,
                         reference.byte_start,
                         reference.byte_end,
                         options.snippet.max_bytes,
                         &mut file_cache,
-                    )
+                    );
+                    (snippet, truncated, None, None)
                 }
             }
         } else {
-            (None, None)
+            (None, None, None, None)
         };
 
         let span = crate::output::Span {
@@ -613,6 +618,8 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
             reference_kind: None,
             target_symbol_id,
             score: if options.include_score { Some(score) } else { None },
+            content_hash,
+            symbol_kind_from_chunk,
             snippet,
             snippet_truncated,
         });
@@ -747,7 +754,7 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
         } else {
             None
         };
-        let (snippet, snippet_truncated) = if options.snippet.include {
+        let (snippet, snippet_truncated, content_hash, symbol_kind_from_chunk) = if options.snippet.include {
             // Try chunks table first for faster, pre-validated content
             match search_chunks_by_span(&conn, &call.file, call.byte_start, call.byte_end) {
                 Ok(Some(chunk)) => {
@@ -768,21 +775,22 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
                         chunk.content.clone()
                     };
 
-                    (Some(snippet_content), Some(truncated))
+                    (Some(snippet_content), Some(truncated), Some(chunk.content_hash), chunk.symbol_kind)
                 }
                 Ok(None) | Err(_) => {
                     // Chunk not found or error, fall back to file I/O
-                    snippet_from_file(
+                    let (snippet, truncated) = snippet_from_file(
                         &call.file,
                         call.byte_start,
                         call.byte_end,
                         options.snippet.max_bytes,
                         &mut file_cache,
-                    )
+                    );
+                    (snippet, truncated, None, None)
                 }
             }
         } else {
-            (None, None)
+            (None, None, None, None)
         };
 
         let span = crate::output::Span {
@@ -806,6 +814,8 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
             caller_symbol_id: call.caller_symbol_id,
             callee_symbol_id: call.callee_symbol_id,
             score: if options.include_score { Some(score) } else { None },
+            content_hash,
+            symbol_kind_from_chunk,
             snippet,
             snippet_truncated,
         });
