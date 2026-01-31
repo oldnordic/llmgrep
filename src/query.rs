@@ -303,13 +303,59 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         }
 
         let (snippet, snippet_truncated) = if options.snippet.include {
-            snippet_from_file(
-                &file_path,
-                symbol.byte_start,
-                symbol.byte_end,
-                options.snippet.max_bytes,
-                &mut file_cache,
-            )
+            // Try chunks table first for faster, pre-validated content
+            match search_chunks_by_span(&conn, &file_path, symbol.byte_start, symbol.byte_end) {
+                Ok(Some(chunk)) => {
+                    // Apply max_bytes limit to chunk content
+                    let content_bytes = chunk.content.as_bytes();
+                    let capped_end = content_bytes.len().min(options.snippet.max_bytes);
+                    let truncated = capped_end < content_bytes.len();
+
+                    // Safe UTF-8 slice at character boundary
+                    let snippet_content = if capped_end < content_bytes.len() {
+                        // Use safe extraction to avoid splitting multi-byte characters
+                        match extract_symbol_content_safe(content_bytes, 0, capped_end) {
+                            Some(s) => s,
+                            None => {
+                                // Fallback to chunk content if safe extraction fails
+                                chunk.content.chars().take(capped_end).collect()
+                            }
+                        }
+                    } else {
+                        chunk.content.clone()
+                    };
+
+                    (Some(snippet_content), Some(truncated))
+                }
+                Ok(None) => {
+                    // Chunk not found, log fallback and use file I/O
+                    eprintln!(
+                        "Chunk fallback: {}:{}-{}",
+                        file_path, symbol.byte_start, symbol.byte_end
+                    );
+                    snippet_from_file(
+                        &file_path,
+                        symbol.byte_start,
+                        symbol.byte_end,
+                        options.snippet.max_bytes,
+                        &mut file_cache,
+                    )
+                }
+                Err(e) => {
+                    // Error querying chunks, fall back to file I/O
+                    eprintln!(
+                        "Chunk query error for {}:{}-{}: {}, using file I/O",
+                        file_path, symbol.byte_start, symbol.byte_end, e
+                    );
+                    snippet_from_file(
+                        &file_path,
+                        symbol.byte_start,
+                        symbol.byte_end,
+                        options.snippet.max_bytes,
+                        &mut file_cache,
+                    )
+                }
+            }
         } else {
             (None, None)
         };
@@ -506,13 +552,39 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
             None
         };
         let (snippet, snippet_truncated) = if options.snippet.include {
-            snippet_from_file(
-                &reference.file,
-                reference.byte_start,
-                reference.byte_end,
-                options.snippet.max_bytes,
-                &mut file_cache,
-            )
+            // Try chunks table first for faster, pre-validated content
+            match search_chunks_by_span(&conn, &reference.file, reference.byte_start, reference.byte_end) {
+                Ok(Some(chunk)) => {
+                    // Apply max_bytes limit to chunk content
+                    let content_bytes = chunk.content.as_bytes();
+                    let capped_end = content_bytes.len().min(options.snippet.max_bytes);
+                    let truncated = capped_end < content_bytes.len();
+
+                    // Safe UTF-8 slice at character boundary
+                    let snippet_content = if capped_end < content_bytes.len() {
+                        match extract_symbol_content_safe(content_bytes, 0, capped_end) {
+                            Some(s) => s,
+                            None => {
+                                chunk.content.chars().take(capped_end).collect()
+                            }
+                        }
+                    } else {
+                        chunk.content.clone()
+                    };
+
+                    (Some(snippet_content), Some(truncated))
+                }
+                Ok(None) | Err(_) => {
+                    // Chunk not found or error, fall back to file I/O
+                    snippet_from_file(
+                        &reference.file,
+                        reference.byte_start,
+                        reference.byte_end,
+                        options.snippet.max_bytes,
+                        &mut file_cache,
+                    )
+                }
+            }
         } else {
             (None, None)
         };
@@ -676,13 +748,39 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
             None
         };
         let (snippet, snippet_truncated) = if options.snippet.include {
-            snippet_from_file(
-                &call.file,
-                call.byte_start,
-                call.byte_end,
-                options.snippet.max_bytes,
-                &mut file_cache,
-            )
+            // Try chunks table first for faster, pre-validated content
+            match search_chunks_by_span(&conn, &call.file, call.byte_start, call.byte_end) {
+                Ok(Some(chunk)) => {
+                    // Apply max_bytes limit to chunk content
+                    let content_bytes = chunk.content.as_bytes();
+                    let capped_end = content_bytes.len().min(options.snippet.max_bytes);
+                    let truncated = capped_end < content_bytes.len();
+
+                    // Safe UTF-8 slice at character boundary
+                    let snippet_content = if capped_end < content_bytes.len() {
+                        match extract_symbol_content_safe(content_bytes, 0, capped_end) {
+                            Some(s) => s,
+                            None => {
+                                chunk.content.chars().take(capped_end).collect()
+                            }
+                        }
+                    } else {
+                        chunk.content.clone()
+                    };
+
+                    (Some(snippet_content), Some(truncated))
+                }
+                Ok(None) | Err(_) => {
+                    // Chunk not found or error, fall back to file I/O
+                    snippet_from_file(
+                        &call.file,
+                        call.byte_start,
+                        call.byte_end,
+                        options.snippet.max_bytes,
+                        &mut file_cache,
+                    )
+                }
+            }
         } else {
             (None, None)
         };
