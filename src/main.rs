@@ -46,6 +46,9 @@ enum Command {
         #[arg(long)]
         kind: Option<String>,
 
+        #[arg(long)]
+        language: Option<String>,
+
         #[arg(long, default_value_t = 50, value_parser = ranged_usize(1, 1000))]
         limit: usize,
 
@@ -217,6 +220,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             mode,
             path,
             kind,
+            language,
             limit,
             regex,
             candidates,
@@ -242,6 +246,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             *mode,
             path,
             kind,
+            language,
             *limit,
             *regex,
             *candidates,
@@ -272,6 +277,7 @@ fn run_search(
     mode: SearchMode,
     path: &Option<PathBuf>,
     kind: &Option<String>,
+    language: &Option<String>,
     limit: usize,
     regex: bool,
     candidates: usize,
@@ -306,6 +312,14 @@ fn run_search(
             });
         }
     }
+
+    // Normalize and validate language filter
+    let normalized_language = language.as_ref().map(|lang| normalize_language(lang));
+
+    // Parse comma-separated kind values and normalize
+    let parsed_kinds: Vec<String> = kind.as_ref()
+        .map(|k| parse_kinds(k))
+        .unwrap_or_default();
 
     // Validate mutual exclusivity of --fqn and --exact-fqn
     if fqn.is_some() && exact_fqn.is_some() {
@@ -719,6 +733,54 @@ fn split_auto_limit(limit: usize) -> (usize, usize, usize) {
     let references = base + if remainder > 1 { 1 } else { 0 };
     let calls = base;
     (symbols, references, calls)
+}
+
+/// Normalize language input to standard label names
+///
+/// Accepts common language names (case-insensitive) and maps to
+/// Magellan's standard label names.
+fn normalize_language(lang: &str) -> String {
+    match lang.to_lowercase().as_str() {
+        "rust" | "rs" => "rust".to_string(),
+        "python" | "py" => "python".to_string(),
+        "javascript" | "js" | "ecmascript" => "javascript".to_string(),
+        "typescript" | "ts" => "typescript".to_string(),
+        "c" => "c".to_string(),
+        "c++" | "cpp" | "cxx" | "cc" => "cpp".to_string(),
+        "java" => "java".to_string(),
+        "go" | "golang" => "go".to_string(),
+        other => other.to_string(), // Pass through unknown values for future compatibility
+    }
+}
+
+/// Parse comma-separated kind values and normalize them
+///
+/// Converts "Function,Struct" to ["function", "struct"]
+fn parse_kinds(kind: &str) -> Vec<String> {
+    kind.split(',')
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty())
+        .map(|k| normalize_kind(&k))
+        .collect()
+}
+
+/// Normalize kind value to standard label name
+///
+/// Maps common variants to standard names: "function" -> "fn", etc.
+fn normalize_kind(kind: &str) -> String {
+    match kind.to_lowercase().as_str() {
+        "function" | "fn" | "func" => "fn".to_string(),
+        "method" => "method".to_string(),
+        "struct" | "class" => "struct".to_string(), // Map class to struct for now
+        "enum" | "enumeration" => "enum".to_string(),
+        "interface" => "interface".to_string(),
+        "module" | "namespace" | "package" => "module".to_string(),
+        "union" => "union".to_string(),
+        "typealias" | "type" | "alias" => "typealias".to_string(),
+        "constant" | "const" => "constant".to_string(),
+        "variable" | "var" | "field" => "variable".to_string(),
+        other => other.to_string(),
+    }
 }
 
 fn emit_error(cli: &Cli, err: &LlmError) {
