@@ -9,7 +9,7 @@ use rusqlite::{params_from_iter, Connection, ErrorCode, OpenFlags, ToSql};
 use regex::{Regex, RegexBuilder};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 #[allow(unused_imports)]
@@ -499,6 +499,37 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         });
     }
     results.truncate(options.limit);
+
+    // Ambiguity detection: warn if multiple symbols have the same name
+    // Only warn in human mode and when not using symbol_id lookup
+    if options.symbol_id.is_none() && !options.use_regex && total_count > 1 {
+        // Group results by name to find collisions
+        let mut name_groups: std::collections::HashMap<&str, Vec<&SymbolMatch>> = std::collections::HashMap::new();
+        for result in &results {
+            name_groups.entry(&result.name).or_default().push(result);
+        }
+
+        // Find names with multiple different canonical_fqns
+        for (name, group) in &name_groups {
+            let unique_fqns: HashSet<_> = group.iter()
+                .filter_map(|r| r.canonical_fqn.as_ref())
+                .collect();
+
+            if unique_fqns.len() > 1 {
+                // Multiple symbols with same name but different FQNs
+                eprintln!("Warning: Ambiguous symbol \"{}\" ({} candidates across database)", name, total_count);
+                eprintln!("Top {} candidates:", group.len().min(5));
+                for result in group.iter().take(5) {
+                    if let Some(symbol_id) = &result.symbol_id {
+                        let fqn = result.canonical_fqn.as_deref().unwrap_or("<unknown FQN>");
+                        eprintln!("  - {} (use --symbol-id {})", fqn, symbol_id);
+                    }
+                }
+                eprintln!("Use --symbol-id <id> for precise lookup");
+                break; // Only warn once per query
+            }
+        }
+    }
 
     Ok((
         SearchResponse {
@@ -4069,6 +4100,328 @@ mod tests {
             let (response_filter, _) = search_symbols(options_filter).unwrap();
             assert_eq!(response_filter.results.len(), 1, "Should find only 1 symbol with fan_in >= 5");
             assert_eq!(response_filter.results[0].name, "with_metrics");
+        }
+    }
+
+    // Tests for SymbolId lookup and ambiguity detection
+    mod symbol_id_tests {
+        use super::*;
+
+        #[test]
+        fn test_symbol_id_lookup_returns_single_result() {
+            let (_db_file, conn) = create_test_db();
+            let db_path = _db_file.path();
+
+            // Lookup by exact symbol_id
+            let options = SearchOptions {
+                db_path,
+                query: "unused",  // Query is ignored when symbol_id is provided
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
+                symbol_id: Some("sym1"),
+                fqn_pattern: None,
+                exact_fqn: None,
+            };
+
+            let (response, partial) = search_symbols(options).unwrap();
+            assert!(!partial, "Should not be partial");
+            assert_eq!(response.results.len(), 1, "Should find exactly 1 result by symbol_id");
+            assert_eq!(response.results[0].name, "test_func");
+            assert_eq!(response.results[0].symbol_id.as_deref(), Some("sym1"));
+        }
+
+        #[test]
+        fn test_fqn_pattern_filter() {
+            let (_db_file, conn) = create_test_db();
+            let db_path = _db_file.path();
+
+            // Filter by FQN pattern
+            let options = SearchOptions {
+                db_path,
+                query: "test",  // Query still applies
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
+                symbol_id: None,
+                fqn_pattern: Some("/test/file.rs%"),
+                exact_fqn: None,
+            };
+
+            let (response, _partial) = search_symbols(options).unwrap();
+            // All test symbols are in /test/file.rs
+            assert!(response.results.len() >= 1, "Should find symbols matching FQN pattern");
+        }
+
+        #[test]
+        fn test_exact_fqn_filter() {
+            let (_db_file, conn) = create_test_db();
+            let db_path = _db_file.path();
+
+            // Filter by exact FQN
+            let options = SearchOptions {
+                db_path,
+                query: "",  // Empty query with exact_fqn should work
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions {
+                    fqn: false,
+                    canonical_fqn: true,  // Enable to see canonical_fqn in results
+                    display_fqn: false,
+                },
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
+                symbol_id: None,
+                fqn_pattern: None,
+                exact_fqn: Some("/test/file.rs::test_func"),
+            };
+
+            let (response, _partial) = search_symbols(options).unwrap();
+            assert_eq!(response.results.len(), 1, "Should find exactly 1 result by exact FQN");
+            assert_eq!(response.results[0].name, "test_func");
+            assert_eq!(response.results[0].canonical_fqn.as_deref(), Some("/test/file.rs::test_func"));
+        }
+
+        #[test]
+        fn test_symbol_id_included_in_json_output() {
+            let (_db_file, conn) = create_test_db();
+            let db_path = _db_file.path();
+
+            let options = SearchOptions {
+                db_path,
+                query: "test",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions {
+                    fqn: false,
+                    canonical_fqn: true,
+                    display_fqn: true,
+                },
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
+                symbol_id: None,
+                fqn_pattern: None,
+                exact_fqn: None,
+            };
+
+            let (response, _partial) = search_symbols(options).unwrap();
+            // All test symbols have symbol_id
+            for result in &response.results {
+                assert!(result.symbol_id.is_some(), "symbol_id should be present in results");
+                assert!(result.canonical_fqn.is_some(), "canonical_fqn should be present when requested");
+                assert!(result.display_fqn.is_some(), "display_fqn should be present when requested");
+            }
+        }
+
+        #[test]
+        fn test_ambiguity_detection_with_duplicate_names() {
+            // Create a database with duplicate symbol names
+            let db_file = tempfile::NamedTempFile::new().unwrap();
+            let conn = Connection::open(db_file.path()).unwrap();
+
+            // Create schema
+            conn.execute(
+                "CREATE TABLE graph_entities (
+                    id INTEGER PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    data TEXT NOT NULL
+                )",
+                [],
+            ).unwrap();
+            conn.execute(
+                "CREATE TABLE graph_edges (
+                    id INTEGER PRIMARY KEY,
+                    from_id INTEGER NOT NULL,
+                    to_id INTEGER NOT NULL,
+                    edge_type TEXT NOT NULL
+                )",
+                [],
+            ).unwrap();
+            conn.execute(
+                "CREATE TABLE symbol_metrics (
+                    symbol_id TEXT PRIMARY KEY,
+                    fan_in INTEGER,
+                    fan_out INTEGER,
+                    cyclomatic_complexity INTEGER,
+                    loc INTEGER
+                )",
+                [],
+            ).unwrap();
+
+            // Insert file
+            conn.execute(
+                "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"/test/a.rs\"}')",
+                [],
+            ).unwrap();
+            conn.execute(
+                "INSERT INTO graph_entities (id, kind, data) VALUES (2, 'File', '{\"path\":\"/test/b.rs\"}')",
+                [],
+            ).unwrap();
+
+            // Insert two symbols with same name "parse" in different modules
+            conn.execute(
+                "INSERT INTO graph_entities (id, kind, data) VALUES
+                    (10, 'Symbol', '{\"name\":\"parse\",\"kind\":\"Function\",\"display_fqn\":\"parse\",\"fqn\":\"a::parse\",\"canonical_fqn\":\"/test/a.rs::parse\",\"symbol_id\":\"parse_a\",\"byte_start\":100,\"byte_end\":200,\"start_line\":5,\"start_col\":0,\"end_line\":10,\"end_col\":1}'),
+                    (11, 'Symbol', '{\"name\":\"parse\",\"kind\":\"Function\",\"display_fqn\":\"parse\",\"fqn\":\"b::parse\",\"canonical_fqn\":\"/test/b.rs::parse\",\"symbol_id\":\"parse_b\",\"byte_start\":300,\"byte_end\":400,\"start_line\":15,\"start_col\":0,\"end_line\":20,\"end_col\":1}')",
+                [],
+            ).unwrap();
+
+            // Insert edges
+            conn.execute(
+                "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES'), (2, 11, 'DEFINES')",
+                [],
+            ).unwrap();
+
+            let db_path = db_file.path();
+
+            // Query for "parse" - should trigger ambiguity warning
+            let options = SearchOptions {
+                db_path,
+                query: "parse",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions {
+                    fqn: false,
+                    canonical_fqn: true,  // Enable to see canonical_fqn in results
+                    display_fqn: false,
+                },
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
+                symbol_id: None,
+                fqn_pattern: None,
+                exact_fqn: None,
+            };
+
+            // Capture stderr to check for warning
+            let (response, _partial) = search_symbols(options).unwrap();
+            // Should find both symbols
+            assert_eq!(response.results.len(), 2, "Should find both 'parse' symbols");
+            // Both should have different canonical_fqns
+            let fqns: Vec<_> = response.results.iter()
+                .filter_map(|r| r.canonical_fqn.as_ref())
+                .collect();
+            assert_eq!(fqns.len(), 2, "Should have 2 different FQNs");
+        }
+
+        #[test]
+        fn test_symbol_id_bypasses_ambiguity() {
+            // Create a database with duplicate symbol names
+            let db_file = tempfile::NamedTempFile::new().unwrap();
+            let conn = Connection::open(db_file.path()).unwrap();
+
+            // Create schema
+            conn.execute(
+                "CREATE TABLE graph_entities (
+                    id INTEGER PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    data TEXT NOT NULL
+                )",
+                [],
+            ).unwrap();
+            conn.execute(
+                "CREATE TABLE graph_edges (
+                    id INTEGER PRIMARY KEY,
+                    from_id INTEGER NOT NULL,
+                    to_id INTEGER NOT NULL,
+                    edge_type TEXT NOT NULL
+                )",
+                [],
+            ).unwrap();
+            conn.execute(
+                "CREATE TABLE symbol_metrics (
+                    symbol_id TEXT PRIMARY KEY,
+                    fan_in INTEGER,
+                    fan_out INTEGER,
+                    cyclomatic_complexity INTEGER,
+                    loc INTEGER
+                )",
+                [],
+            ).unwrap();
+
+            // Insert file
+            conn.execute(
+                "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"/test/a.rs\"}')",
+                [],
+            ).unwrap();
+
+            // Insert two symbols with same name "parse"
+            conn.execute(
+                "INSERT INTO graph_entities (id, kind, data) VALUES
+                    (10, 'Symbol', '{\"name\":\"parse\",\"kind\":\"Function\",\"display_fqn\":\"parse\",\"fqn\":\"a::parse\",\"canonical_fqn\":\"/test/a.rs::parse\",\"symbol_id\":\"target_parse\",\"byte_start\":100,\"byte_end\":200,\"start_line\":5,\"start_col\":0,\"end_line\":10,\"end_col\":1}'),
+                    (11, 'Symbol', '{\"name\":\"parse\",\"kind\":\"Function\",\"display_fqn\":\"parse\",\"fqn\":\"b::parse\",\"canonical_fqn\":\"/test/b.rs::parse\",\"symbol_id\":\"other_parse\",\"byte_start\":300,\"byte_end\":400,\"start_line\":15,\"start_col\":0,\"end_line\":20,\"end_col\":1}')",
+                [],
+            ).unwrap();
+
+            // Insert edges
+            conn.execute(
+                "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES')",
+                [],
+            ).unwrap();
+
+            let db_path = db_file.path();
+
+            // Use symbol_id to get exact match - no ambiguity
+            let options = SearchOptions {
+                db_path,
+                query: "ignored",  // Query is ignored when symbol_id is provided
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions {
+                    fqn: false,
+                    canonical_fqn: true,  // Enable to see canonical_fqn in results
+                    display_fqn: false,
+                },
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
+                symbol_id: Some("target_parse"),
+                fqn_pattern: None,
+                exact_fqn: None,
+            };
+
+            let (response, _partial) = search_symbols(options).unwrap();
+            assert_eq!(response.results.len(), 1, "Should find exactly 1 result by symbol_id");
+            assert_eq!(response.results[0].symbol_id.as_deref(), Some("target_parse"));
+            assert_eq!(response.results[0].canonical_fqn.as_deref(), Some("/test/a.rs::parse"));
         }
     }
 }
