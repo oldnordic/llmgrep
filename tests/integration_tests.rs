@@ -839,3 +839,73 @@ fn test_combined_metrics_and_language_filter() {
     assert_eq!(response.0.results[0].name, rust_complex);
     assert_eq!(response.0.results[0].language.as_ref().unwrap(), "rust");
 }
+
+/// Test 11: Metrics present in search results
+///
+/// This test verifies that metrics are actually returned in the JSON output
+/// when using metrics-based sorting. This is a regression test for the bug
+/// where the JOIN condition compared TEXT to INTEGER and no metrics were returned.
+#[test]
+fn test_metrics_present_in_search_results() {
+    let temp_dir = tempfile::TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db(&db_path);
+
+    let file_path = "src/metrics_test.rs";
+    let file_id = insert_file(&conn, file_path);
+
+    // Insert symbols with metrics
+    let test_name = "test_function";
+    let test_id = insert_symbol(&conn, test_name, "Function", "fn", (0, 20));
+    insert_define_edge(&conn, file_id, test_id);
+    insert_metrics(&conn, test_id, test_name, "Function", file_path, 10, 5, 3);
+
+    // Search with sort-by fan-in - this should trigger the metrics JOIN
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: test_name,
+        path_filter: None,
+        kind_filter: None,
+        language_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::FanIn,
+        metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+    };
+
+    let response = search_symbols(options).expect("search should succeed");
+    assert_eq!(response.0.results.len(), 1, "Should find the test symbol");
+
+    let result = &response.0.results[0];
+
+    // Verify that metrics fields are populated (this was broken before the fix)
+    assert!(
+        result.fan_in.is_some(),
+        "fan_in should be present in search results"
+    );
+    assert_eq!(result.fan_in.unwrap(), 10, "fan_in should match inserted value");
+
+    assert!(
+        result.fan_out.is_some(),
+        "fan_out should be present in search results"
+    );
+    assert_eq!(result.fan_out.unwrap(), 5, "fan_out should match inserted value");
+
+    assert!(
+        result.cyclomatic_complexity.is_some(),
+        "cyclomatic_complexity should be present in search results"
+    );
+    assert_eq!(
+        result.cyclomatic_complexity.unwrap(),
+        3,
+        "cyclomatic_complexity should match inserted value"
+    );
+}
