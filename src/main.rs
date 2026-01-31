@@ -7,8 +7,8 @@ use llmgrep::output::{
 };
 use llmgrep::output_common::{format_partial_footer, format_total_header, render_json_response};
 use llmgrep::query::{
-    search_calls, search_references, search_symbols, ContextOptions, FqnOptions, MetricsOptions,
-    SearchOptions, SnippetOptions,
+    search_calls, search_references, search_symbols, AstOptions, ContextOptions, FqnOptions,
+    MetricsOptions, SearchOptions, SnippetOptions,
 };
 use llmgrep::SortMode;
 use std::path::{Path, PathBuf};
@@ -114,6 +114,10 @@ enum Command {
 
         #[arg(long)]
         exact_fqn: Option<String>,
+
+        // AST filtering flag
+        #[arg(long, value_name = "KIND")]
+        ast_kind: Option<String>,
     },
 }
 
@@ -169,6 +173,22 @@ V1.1 FEATURES:
 
   # FQN pattern matching
   llmgrep --db code.db search --query "test" --fqn "%module::tests::%"
+
+V2.0 AST FEATURES:
+  # Filter by AST node kind
+  llmgrep --db code.db search --query ".*" --ast-kind function_item
+
+  # Find only call expressions
+  llmgrep --db code.db search --query "parse" --ast-kind call_expression
+
+  AST Node Kinds:
+    function_item       - Function definitions
+    block               - Code blocks
+    call_expression     - Function calls
+    let_declaration     - Variable declarations
+    expression_statement - Expression statements
+    attribute_item      - Attributes/macros
+    mod_item            - Module declarations
 "#;
 
 fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
@@ -259,6 +279,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             symbol_id,
             fqn,
             exact_fqn,
+            ast_kind,
         } => run_search(
             cli,
             query,
@@ -285,6 +306,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             symbol_id.as_ref(),
             fqn.as_ref(),
             exact_fqn.as_ref(),
+            ast_kind.as_ref(),
         ),
     }
 }
@@ -316,6 +338,7 @@ fn run_search(
     symbol_id: Option<&String>,
     fqn: Option<&String>,
     exact_fqn: Option<&String>,
+    ast_kind: Option<&String>,
 ) -> Result<(), LlmError> {
     // Validate SymbolId format (32 hex characters)
     if let Some(sid) = symbol_id {
@@ -440,6 +463,9 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                ast: AstOptions {
+                    ast_kind: ast_kind.as_deref().map(|s| s.as_str()),
+                },
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
@@ -470,6 +496,7 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -500,6 +527,7 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -544,6 +572,9 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                ast: AstOptions {
+                    ast_kind: ast_kind.as_deref().map(|s| s.as_str()),
+                },
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
@@ -570,6 +601,7 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -596,6 +628,7 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,

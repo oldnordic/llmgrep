@@ -1,3 +1,4 @@
+use crate::ast::{check_ast_table_exists, AstContext};
 use crate::error::LlmError;
 use crate::output::{
     CallMatch, CallSearchResponse, ReferenceMatch, ReferenceSearchResponse, SearchResponse,
@@ -65,6 +66,8 @@ pub struct SearchOptions<'a> {
     pub sort_by: SortMode,
     /// Metrics filtering options
     pub metrics: MetricsOptions,
+    /// AST filtering options
+    pub ast: AstOptions<'a>,
     /// SymbolId for direct BLAKE3 hash lookup (overrides name-based search)
     pub symbol_id: Option<&'a str>,
     /// FQN pattern filter (LIKE match on canonical_fqn)
@@ -115,6 +118,13 @@ pub struct MetricsOptions {
     pub min_fan_in: Option<usize>,
     /// Minimum fan-out (outgoing calls)
     pub min_fan_out: Option<usize>,
+}
+
+/// AST-based filtering options
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AstOptions<'a> {
+    /// Filter by AST node kind (function_item, block, call_expression, etc.)
+    pub ast_kind: Option<&'a str>,
 }
 
 #[derive(Debug, Deserialize)]
