@@ -17,4 +17,10 @@ pub enum SortMode {
     Relevance,
     /// Position-based ordering (faster, pure SQL ORDER BY)
     Position,
+    /// Sort by fan-in (incoming references) descending
+    FanIn,
+    /// Sort by fan-out (outgoing calls) descending
+    FanOut,
+    /// Sort by cyclomatic complexity descending
+    Complexity,
 }
