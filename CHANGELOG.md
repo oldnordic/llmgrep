@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-31
+
+### Magellan 1.8.0 Integration
+
+**Added**
+- Magellan v1.8.0 dependency for safe UTF-8 content extraction
+- Chunk-based snippet retrieval from `code_chunks` table (eliminates file I/O when available)
+- Metrics-based filtering: `--min-complexity`, `--max-complexity`, `--min-fan-in`, `--min-fan-out`
+- Metrics-based sorting: `--sort-by fan-in|fan-out|complexity`
+- SymbolId-based lookups via `--symbol-id` flag (32-char BLAKE3 hash, unambiguous reference)
+- FQN filtering: `--fqn` (pattern match with LIKE) and `--exact-fqn` (exact match)
+- Ambiguity detection for symbols with multiple matches
+- Language filtering via `--language` flag (rust, python, javascript, typescript, c, cpp, java, go, etc.)
+- Enhanced `--kind` flag with comma-separated multiple values support
+- New JSON fields: `symbol_id`, `canonical_fqn`, `display_fqn`
+- New JSON fields: `complexity_score`, `fan_in`, `fan_out`, `cyclomatic_complexity`
+- New JSON fields: `content_hash` (SHA-256), `language`, `kind_normalized`
+- Integration tests for v1.1 features (10 tests covering UTF-8, metrics, SymbolId, FQN, language filtering)
+- Unit tests for v1.1 features (11 tests covering safe extraction and public API)
+
+**Changed**
+- Updated `sqlitegraph` dependency to crates.io version 1.2.7
+- UTF-8 extraction now uses Magellan's safe functions (no panics on multi-byte boundaries)
+- Enhanced help text with v1.1 examples
+- MANUAL.md updated with complete v1.1 documentation
+- README.md updated with v1.1 feature highlights
+
+**Performance**
+- Chunk-based retrieval reduces file I/O for snippet extraction
+- Label-based filtering uses indexed queries for faster results
+- Metrics sorting uses COALESCE to handle NULL values gracefully
+
+**Fixed**
+- SymbolId format validation (32 hex characters)
+- FQN pattern matching with LIKE wildcards
+
+**Breaking Changes**
+- None (backward compatible with v1.0 databases)
+
 ## [1.0.0] - 2026-01-25
 
 ### Production-Ready CLI
