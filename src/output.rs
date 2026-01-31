@@ -81,6 +81,10 @@ pub struct SymbolMatch {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_fqn: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol_kind_from_chunk: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet_truncated: Option<bool>,
@@ -95,6 +99,10 @@ pub struct ReferenceMatch {
     pub target_symbol_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol_kind_from_chunk: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -111,6 +119,10 @@ pub struct CallMatch {
     pub callee_symbol_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol_kind_from_chunk: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
