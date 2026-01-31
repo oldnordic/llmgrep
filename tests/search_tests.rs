@@ -1,4 +1,4 @@
-use llmgrep::query::{search_calls, search_references, search_symbols, SearchOptions, ContextOptions, SnippetOptions, FqnOptions};
+use llmgrep::query::{search_calls, search_references, search_symbols, SearchOptions, ContextOptions, SnippetOptions, FqnOptions, MetricsOptions};
 use rusqlite::{params, Connection};
 use serde_json::json;
 use std::path::PathBuf;
@@ -167,6 +167,7 @@ fn test_search_symbols_with_path_filter() {
         },
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -212,6 +213,7 @@ fn test_search_symbols_with_kind_filter() {
         },
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -256,6 +258,7 @@ fn test_search_symbols_rank_exact_match_first() {
         },
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -299,6 +302,7 @@ fn test_search_symbols_regex_filters() {
         },
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -344,6 +348,7 @@ fn test_search_symbols_with_context_and_snippet() {
         },
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -391,6 +396,7 @@ fn test_search_symbols_context_truncated_at_file_edges() {
         },
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -444,6 +450,7 @@ fn test_search_symbols_context_truncated_by_cap() {
         },
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
     };
     let response = search_symbols(options).expect("search");
 
@@ -489,6 +496,7 @@ fn test_search_symbols_with_fqn_toggle() {
         },
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
     };
     let response = search_symbols(options)
     .expect("search");
@@ -521,6 +529,7 @@ fn test_search_symbols_with_fqn_toggle() {
         },
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
     };
     let response = search_symbols(options)
     .expect("search");
@@ -561,6 +570,7 @@ fn test_search_references_basic() {
         fqn: FqnOptions::default(),
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
     };
     let response = search_references(options).expect("search");
 
@@ -597,6 +607,7 @@ fn test_search_calls_basic() {
         fqn: FqnOptions::default(),
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
     };
     let response = search_calls(options).expect("search");
 
@@ -645,6 +656,7 @@ fn test_combined_response_counts_match() {
             },
             include_score: true,
             sort_by: llmgrep::SortMode::default(),
+            metrics: MetricsOptions::default(),
         };
         search_symbols(options).expect("symbols")
     };
@@ -670,6 +682,7 @@ fn test_combined_response_counts_match() {
             fqn: FqnOptions::default(),
             include_score: true,
             sort_by: llmgrep::SortMode::default(),
+            metrics: MetricsOptions::default(),
         };
         search_references(options).expect("refs")
     };
@@ -695,6 +708,7 @@ fn test_combined_response_counts_match() {
             fqn: FqnOptions::default(),
             include_score: true,
             sort_by: llmgrep::SortMode::default(),
+            metrics: MetricsOptions::default(),
         };
         search_calls(options).expect("calls")
     };

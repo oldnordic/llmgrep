@@ -1474,7 +1474,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_basic() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100);
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default());
 
         // Should have LIKE clauses for name, display_fqn, fqn
         assert!(sql.contains("s.name LIKE ? ESCAPE '\\'"));
@@ -1491,7 +1491,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_kind_filter() {
-        let (sql, params) = build_search_query("test", None, Some("Function"), false, false, 100);
+        let (sql, params) = build_search_query("test", None, Some("Function"), false, false, 100, MetricsOptions::default(), SortMode::default());
 
         // Should add kind filter
         assert!(sql.contains("s.kind_normalized = ? OR s.kind = ?"));
@@ -1504,7 +1504,7 @@ mod tests {
     #[test]
     fn test_build_search_query_with_path_filter() {
         let path = PathBuf::from("/src/module");
-        let (sql, params) = build_search_query("test", Some(&path), None, false, false, 100);
+        let (sql, params) = build_search_query("test", Some(&path), None, false, false, 100, MetricsOptions::default(), SortMode::default());
 
         // Should add file path filter
         assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));
@@ -1516,7 +1516,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_regex_mode() {
-        let (sql, params) = build_search_query("test.*", None, None, true, false, 100);
+        let (sql, params) = build_search_query("test.*", None, None, true, false, 100, MetricsOptions::default(), SortMode::default());
 
         // Should NOT have LIKE clauses in regex mode
         assert!(!sql.contains("LIKE ? ESCAPE '\\'"));
@@ -1531,7 +1531,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_count_only() {
-        let (sql, params) = build_search_query("test", None, None, false, true, 0);
+        let (sql, params) = build_search_query("test", None, None, false, true, 0, MetricsOptions::default(), SortMode::default());
 
         // Should start with COUNT
         assert!(sql.starts_with("SELECT COUNT(*)"));
@@ -1546,7 +1546,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_regular_query() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100);
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default());
 
         // Should have ORDER BY
         assert!(sql.contains("ORDER BY"));
@@ -1556,6 +1556,118 @@ mod tests {
 
         // Should have params
         assert!(!params.is_empty());
+    }
+
+    #[test]
+    fn test_build_search_query_with_metrics_fan_in_sort() {
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::FanIn);
+
+        // Should ORDER BY fan_in DESC
+        assert!(sql.contains("COALESCE(sm.fan_in, 0) DESC"));
+
+        // Should have basic params
+        assert!(!params.is_empty());
+    }
+
+    #[test]
+    fn test_build_search_query_with_metrics_fan_out_sort() {
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::FanOut);
+
+        // Should ORDER BY fan_out DESC
+        assert!(sql.contains("COALESCE(sm.fan_out, 0) DESC"));
+
+        // Should have basic params
+        assert!(!params.is_empty());
+    }
+
+    #[test]
+    fn test_build_search_query_with_metrics_complexity_sort() {
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::Complexity);
+
+        // Should ORDER BY cyclomatic_complexity DESC
+        assert!(sql.contains("COALESCE(sm.cyclomatic_complexity, 0) DESC"));
+
+        // Should have basic params
+        assert!(!params.is_empty());
+    }
+
+    #[test]
+    fn test_build_search_query_with_min_complexity_filter() {
+        let metrics = MetricsOptions {
+            min_complexity: Some(5),
+            ..Default::default()
+        };
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default());
+
+        // Should filter by min_complexity
+        assert!(sql.contains("sm.cyclomatic_complexity >= ?"));
+
+        // Should have 3 LIKE params + 1 filter param + 1 LIMIT param
+        assert_eq!(params.len(), 5);
+        assert_eq!(count_params(&sql), 5);
+    }
+
+    #[test]
+    fn test_build_search_query_with_max_complexity_filter() {
+        let metrics = MetricsOptions {
+            max_complexity: Some(20),
+            ..Default::default()
+        };
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default());
+
+        // Should filter by max_complexity
+        assert!(sql.contains("sm.cyclomatic_complexity <= ?"));
+
+        // Should have 3 LIKE params + 1 filter param + 1 LIMIT param
+        assert_eq!(params.len(), 5);
+        assert_eq!(count_params(&sql), 5);
+    }
+
+    #[test]
+    fn test_build_search_query_with_min_fan_in_filter() {
+        let metrics = MetricsOptions {
+            min_fan_in: Some(10),
+            ..Default::default()
+        };
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default());
+
+        // Should filter by min_fan_in
+        assert!(sql.contains("sm.fan_in >= ?"));
+
+        // Should have 3 LIKE params + 1 filter param + 1 LIMIT param
+        assert_eq!(params.len(), 5);
+        assert_eq!(count_params(&sql), 5);
+    }
+
+    #[test]
+    fn test_build_search_query_with_metrics_join() {
+        let (sql, _) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default());
+
+        // Should LEFT JOIN symbol_metrics
+        assert!(sql.contains("LEFT JOIN symbol_metrics sm"));
+
+        // Should select metrics columns
+        assert!(sql.contains("sm.fan_in, sm.fan_out, sm.cyclomatic_complexity"));
+    }
+
+    #[test]
+    fn test_build_search_query_combined_filters() {
+        let metrics = MetricsOptions {
+            min_complexity: Some(5),
+            max_complexity: Some(20),
+            min_fan_in: Some(10),
+            ..Default::default()
+        };
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default());
+
+        // Should have all filter clauses
+        assert!(sql.contains("sm.cyclomatic_complexity >= ?"));
+        assert!(sql.contains("sm.cyclomatic_complexity <= ?"));
+        assert!(sql.contains("sm.fan_in >= ?"));
+
+        // Should have 3 LIKE params + 3 filter params + 1 LIMIT param
+        assert_eq!(params.len(), 7);
+        assert_eq!(count_params(&sql), 7);
     }
 
     #[test]
@@ -1720,9 +1832,9 @@ mod tests {
     }
 
     #[test]
-    fn test_build_search_query_combined_filters() {
+    fn test_build_search_query_combined_filters_path_kind() {
         let path = PathBuf::from("/src/module");
-        let (sql, params) = build_search_query("test", Some(&path), Some("Function"), false, false, 100);
+        let (sql, params) = build_search_query("test", Some(&path), Some("Function"), false, false, 100, MetricsOptions::default(), SortMode::default());
 
         // Should have all filters
         assert!(sql.contains("s.name LIKE ? ESCAPE '\\'"));
@@ -2052,6 +2164,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2078,6 +2191,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2161,6 +2275,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2191,6 +2306,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2222,6 +2338,7 @@ mod tests {
                 },
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2287,6 +2404,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2319,6 +2437,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2350,6 +2469,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2376,6 +2496,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2407,6 +2528,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2433,6 +2555,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2465,6 +2588,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2497,6 +2621,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2524,6 +2649,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2550,6 +2676,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2579,6 +2706,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2607,6 +2735,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2860,6 +2989,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2958,6 +3088,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2985,6 +3116,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: true,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -3053,6 +3185,7 @@ mod tests {
             fqn: FqnOptions::default(),
             include_score: true,
             sort_by: SortMode::default(),
+            metrics: MetricsOptions::default(),
         });
 
         match result {
@@ -3234,6 +3367,511 @@ mod tests {
             // Query should return all chunks for the symbol
             let chunks = search_chunks_by_symbol_name(&conn, "my_symbol").unwrap();
             assert_eq!(chunks.len(), 2, "Should find 2 chunks for my_symbol");
+        }
+    }
+
+    // Metrics filtering and sorting tests
+    mod metrics_tests {
+        use super::*;
+
+        fn create_test_db_with_metrics() -> (tempfile::NamedTempFile, Connection) {
+            let db_file = tempfile::NamedTempFile::new().unwrap();
+            let conn = Connection::open(db_file.path()).unwrap();
+
+            // Create schema
+            conn.execute(
+                "CREATE TABLE graph_entities (
+                    id INTEGER PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    data TEXT NOT NULL
+                )",
+                [],
+            ).unwrap();
+            conn.execute(
+                "CREATE TABLE graph_edges (
+                    id INTEGER PRIMARY KEY,
+                    from_id INTEGER NOT NULL,
+                    to_id INTEGER NOT NULL,
+                    edge_type TEXT NOT NULL
+                )",
+                [],
+            ).unwrap();
+            conn.execute(
+                "CREATE TABLE symbol_metrics (
+                    symbol_id TEXT PRIMARY KEY,
+                    symbol_name TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    loc INTEGER NOT NULL,
+                    fan_in INTEGER,
+                    fan_out INTEGER,
+                    cyclomatic_complexity INTEGER
+                )",
+                [],
+            ).unwrap();
+
+            // Insert test File entity
+            conn.execute(
+                "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"/test/file.rs\"}')",
+                [],
+            ).unwrap();
+
+            // Insert test Symbol entities with varying metrics
+            // sym1: complexity=5, fan_in=10, fan_out=2
+            // sym2: complexity=15, fan_in=5, fan_out=8
+            // sym3: complexity=25, fan_in=2, fan_out=15
+            conn.execute(
+                "INSERT INTO graph_entities (id, kind, data) VALUES
+                    (10, 'Symbol', '{\"name\":\"low_complexity\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"low_complexity\",\"fqn\":\"module::low_complexity\",\"symbol_id\":\"sym1\",\"byte_start\":100,\"byte_end\":200,\"start_line\":5,\"start_col\":0,\"end_line\":10,\"end_col\":1}'),
+                    (11, 'Symbol', '{\"name\":\"med_complexity\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"med_complexity\",\"fqn\":\"module::med_complexity\",\"symbol_id\":\"sym2\",\"byte_start\":300,\"byte_end\":400,\"start_line\":15,\"start_col\":0,\"end_line\":20,\"end_col\":1}'),
+                    (12, 'Symbol', '{\"name\":\"high_complexity\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"high_complexity\",\"fqn\":\"module::high_complexity\",\"symbol_id\":\"sym3\",\"byte_start\":500,\"byte_end\":600,\"start_line\":25,\"start_col\":0,\"end_line\":30,\"end_col\":1}')",
+                [],
+            ).unwrap();
+
+            // Insert DEFINES edges from File to Symbols
+            conn.execute(
+                "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES'), (1, 11, 'DEFINES'), (1, 12, 'DEFINES')",
+                [],
+            ).unwrap();
+
+            // Insert metrics
+            conn.execute(
+                "INSERT INTO symbol_metrics (symbol_id, symbol_name, kind, file_path, loc, fan_in, fan_out, cyclomatic_complexity) VALUES
+                    ('sym1', 'low_complexity', 'Function', '/test/file.rs', 50, 10, 2, 5),
+                    ('sym2', 'med_complexity', 'Function', '/test/file.rs', 100, 5, 8, 15),
+                    ('sym3', 'high_complexity', 'Function', '/test/file.rs', 150, 2, 15, 25)",
+                [],
+            ).unwrap();
+
+            (db_file, conn)
+        }
+
+        #[test]
+        fn test_metrics_filter_by_min_complexity() {
+            let (_db_file, _conn) = create_test_db_with_metrics();
+            let db_path = _db_file.path();
+
+            let options = SearchOptions {
+                db_path,
+                query: "complexity",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions {
+                    min_complexity: Some(10),
+                    max_complexity: None,
+                    min_fan_in: None,
+                    min_fan_out: None,
+                },
+            };
+
+            let (response, partial) = search_symbols(options).unwrap();
+            assert!(!partial, "Should not be partial");
+            // Should find med_complexity (15) and high_complexity (25), but not low_complexity (5)
+            assert_eq!(response.results.len(), 2, "Should find 2 results with complexity >= 10");
+
+            let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
+            assert!(names.contains(&"med_complexity"), "Should contain med_complexity");
+            assert!(names.contains(&"high_complexity"), "Should contain high_complexity");
+            assert!(!names.contains(&"low_complexity"), "Should not contain low_complexity");
+        }
+
+        #[test]
+        fn test_metrics_filter_by_max_complexity() {
+            let (_db_file, _conn) = create_test_db_with_metrics();
+            let db_path = _db_file.path();
+
+            let options = SearchOptions {
+                db_path,
+                query: "complexity",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions {
+                    min_complexity: None,
+                    max_complexity: Some(10),
+                    min_fan_in: None,
+                    min_fan_out: None,
+                },
+            };
+
+            let (response, partial) = search_symbols(options).unwrap();
+            assert!(!partial, "Should not be partial");
+            // Should find only low_complexity (5), not med (15) or high (25)
+            assert_eq!(response.results.len(), 1, "Should find 1 result with complexity <= 10");
+            assert_eq!(response.results[0].name, "low_complexity");
+        }
+
+        #[test]
+        fn test_metrics_filter_combined_min_max_complexity() {
+            let (_db_file, _conn) = create_test_db_with_metrics();
+            let db_path = _db_file.path();
+
+            let options = SearchOptions {
+                db_path,
+                query: "complexity",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions {
+                    min_complexity: Some(10),
+                    max_complexity: Some(20),
+                    min_fan_in: None,
+                    min_fan_out: None,
+                },
+            };
+
+            let (response, partial) = search_symbols(options).unwrap();
+            assert!(!partial, "Should not be partial");
+            // Should find only med_complexity (15), not low (5) or high (25)
+            assert_eq!(response.results.len(), 1, "Should find 1 result with complexity in range [10, 20]");
+            assert_eq!(response.results[0].name, "med_complexity");
+        }
+
+        #[test]
+        fn test_metrics_filter_by_min_fan_in() {
+            let (_db_file, _conn) = create_test_db_with_metrics();
+            let db_path = _db_file.path();
+
+            let options = SearchOptions {
+                db_path,
+                query: "complexity",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions {
+                    min_complexity: None,
+                    max_complexity: None,
+                    min_fan_in: Some(8),
+                    min_fan_out: None,
+                },
+            };
+
+            let (response, partial) = search_symbols(options).unwrap();
+            assert!(!partial, "Should not be partial");
+            // Should find only low_complexity (fan_in=10)
+            assert_eq!(response.results.len(), 1, "Should find 1 result with fan_in >= 8");
+            assert_eq!(response.results[0].name, "low_complexity");
+            assert_eq!(response.results[0].fan_in, Some(10), "fan_in should be populated");
+        }
+
+        #[test]
+        fn test_metrics_filter_by_min_fan_out() {
+            let (_db_file, _conn) = create_test_db_with_metrics();
+            let db_path = _db_file.path();
+
+            let options = SearchOptions {
+                db_path,
+                query: "complexity",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions {
+                    min_complexity: None,
+                    max_complexity: None,
+                    min_fan_in: None,
+                    min_fan_out: Some(10),
+                },
+            };
+
+            let (response, partial) = search_symbols(options).unwrap();
+            assert!(!partial, "Should not be partial");
+            // Should find only high_complexity (fan_out=15)
+            assert_eq!(response.results.len(), 1, "Should find 1 result with fan_out >= 10");
+            assert_eq!(response.results[0].name, "high_complexity");
+            assert_eq!(response.results[0].fan_out, Some(15), "fan_out should be populated");
+        }
+
+        #[test]
+        fn test_metrics_sort_by_fan_in() {
+            let (_db_file, _conn) = create_test_db_with_metrics();
+            let db_path = _db_file.path();
+
+            let options = SearchOptions {
+                db_path,
+                query: "complexity",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::FanIn,
+                metrics: MetricsOptions::default(),
+            };
+
+            let (response, partial) = search_symbols(options).unwrap();
+            assert!(!partial, "Should not be partial");
+            assert_eq!(response.results.len(), 3, "Should find all 3 results");
+
+            // Should be sorted by fan_in DESC: low_complexity (10), med_complexity (5), high_complexity (2)
+            assert_eq!(response.results[0].name, "low_complexity", "First should have highest fan_in");
+            assert_eq!(response.results[0].fan_in, Some(10));
+            assert_eq!(response.results[1].name, "med_complexity", "Second should have medium fan_in");
+            assert_eq!(response.results[1].fan_in, Some(5));
+            assert_eq!(response.results[2].name, "high_complexity", "Third should have lowest fan_in");
+            assert_eq!(response.results[2].fan_in, Some(2));
+        }
+
+        #[test]
+        fn test_metrics_sort_by_fan_out() {
+            let (_db_file, _conn) = create_test_db_with_metrics();
+            let db_path = _db_file.path();
+
+            let options = SearchOptions {
+                db_path,
+                query: "complexity",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::FanOut,
+                metrics: MetricsOptions::default(),
+            };
+
+            let (response, partial) = search_symbols(options).unwrap();
+            assert!(!partial, "Should not be partial");
+            assert_eq!(response.results.len(), 3, "Should find all 3 results");
+
+            // Should be sorted by fan_out DESC: high_complexity (15), med_complexity (8), low_complexity (2)
+            assert_eq!(response.results[0].name, "high_complexity", "First should have highest fan_out");
+            assert_eq!(response.results[0].fan_out, Some(15));
+            assert_eq!(response.results[1].name, "med_complexity", "Second should have medium fan_out");
+            assert_eq!(response.results[1].fan_out, Some(8));
+            assert_eq!(response.results[2].name, "low_complexity", "Third should have lowest fan_out");
+            assert_eq!(response.results[2].fan_out, Some(2));
+        }
+
+        #[test]
+        fn test_metrics_sort_by_complexity() {
+            let (_db_file, _conn) = create_test_db_with_metrics();
+            let db_path = _db_file.path();
+
+            let options = SearchOptions {
+                db_path,
+                query: "complexity",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::Complexity,
+                metrics: MetricsOptions::default(),
+            };
+
+            let (response, partial) = search_symbols(options).unwrap();
+            assert!(!partial, "Should not be partial");
+            assert_eq!(response.results.len(), 3, "Should find all 3 results");
+
+            // Should be sorted by cyclomatic_complexity DESC: high_complexity (25), med_complexity (15), low_complexity (5)
+            assert_eq!(response.results[0].name, "high_complexity", "First should have highest complexity");
+            assert_eq!(response.results[0].cyclomatic_complexity, Some(25));
+            assert_eq!(response.results[1].name, "med_complexity", "Second should have medium complexity");
+            assert_eq!(response.results[1].cyclomatic_complexity, Some(15));
+            assert_eq!(response.results[2].name, "low_complexity", "Third should have lowest complexity");
+            assert_eq!(response.results[2].cyclomatic_complexity, Some(5));
+        }
+
+        #[test]
+        fn test_metrics_fields_populated() {
+            let (_db_file, _conn) = create_test_db_with_metrics();
+            let db_path = _db_file.path();
+
+            let options = SearchOptions {
+                db_path,
+                query: "low_complexity",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
+            };
+
+            let (response, partial) = search_symbols(options).unwrap();
+            assert!(!partial, "Should not be partial");
+            assert_eq!(response.results.len(), 1);
+
+            let result = &response.results[0];
+            assert_eq!(result.name, "low_complexity");
+            // Verify metrics fields are populated
+            assert_eq!(result.fan_in, Some(10), "fan_in should be populated");
+            assert_eq!(result.fan_out, Some(2), "fan_out should be populated");
+            assert_eq!(result.cyclomatic_complexity, Some(5), "cyclomatic_complexity should be populated");
+            assert_eq!(result.complexity_score, None, "complexity_score is not available in symbol_metrics");
+        }
+
+        #[test]
+        fn test_metrics_null_handling() {
+            // Create a DB where some symbols have metrics and some don't
+            let db_file = tempfile::NamedTempFile::new().unwrap();
+            let conn = Connection::open(db_file.path()).unwrap();
+
+            conn.execute(
+                "CREATE TABLE graph_entities (
+                    id INTEGER PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    data TEXT NOT NULL
+                )",
+                [],
+            ).unwrap();
+            conn.execute(
+                "CREATE TABLE graph_edges (
+                    id INTEGER PRIMARY KEY,
+                    from_id INTEGER NOT NULL,
+                    to_id INTEGER NOT NULL,
+                    edge_type TEXT NOT NULL
+                )",
+                [],
+            ).unwrap();
+            conn.execute(
+                "CREATE TABLE symbol_metrics (
+                    symbol_id TEXT PRIMARY KEY,
+                    symbol_name TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    loc INTEGER NOT NULL,
+                    fan_in INTEGER,
+                    fan_out INTEGER,
+                    cyclomatic_complexity INTEGER
+                )",
+                [],
+            ).unwrap();
+
+            conn.execute(
+                "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"/test/file.rs\"}')",
+                [],
+            ).unwrap();
+
+            // Insert 3 symbols: only sym1 has metrics
+            conn.execute(
+                "INSERT INTO graph_entities (id, kind, data) VALUES
+                    (10, 'Symbol', '{\"name\":\"with_metrics\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"with_metrics\",\"fqn\":\"module::with_metrics\",\"symbol_id\":\"sym1\",\"byte_start\":100,\"byte_end\":200,\"start_line\":5,\"start_col\":0,\"end_line\":10,\"end_col\":1}'),
+                    (11, 'Symbol', '{\"name\":\"no_metrics_1\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"no_metrics_1\",\"fqn\":\"module::no_metrics_1\",\"symbol_id\":\"sym2\",\"byte_start\":300,\"byte_end\":400,\"start_line\":15,\"start_col\":0,\"end_line\":20,\"end_col\":1}'),
+                    (12, 'Symbol', '{\"name\":\"no_metrics_2\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"no_metrics_2\",\"fqn\":\"module::no_metrics_2\",\"symbol_id\":\"sym3\",\"byte_start\":500,\"byte_end\":600,\"start_line\":25,\"start_col\":0,\"end_line\":30,\"end_col\":1}')",
+                [],
+            ).unwrap();
+
+            conn.execute(
+                "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES'), (1, 11, 'DEFINES'), (1, 12, 'DEFINES')",
+                [],
+            ).unwrap();
+
+            // Only sym1 has metrics
+            conn.execute(
+                "INSERT INTO symbol_metrics (symbol_id, symbol_name, kind, file_path, loc, fan_in, fan_out, cyclomatic_complexity) VALUES
+                    ('sym1', 'with_metrics', 'Function', '/test/file.rs', 50, 10, 2, 5)",
+                [],
+            ).unwrap();
+
+            let db_path = db_file.path();
+
+            // Test without filter: all symbols should appear
+            let options = SearchOptions {
+                db_path,
+                query: "",  // Empty query matches all
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::FanIn,  // Sort by fan_in
+                metrics: MetricsOptions::default(),
+            };
+
+            let (response, _partial) = search_symbols(options).unwrap();
+            assert_eq!(response.results.len(), 3, "Should find all 3 symbols");
+
+            // Symbols without metrics should have None for metrics fields
+            // and appear last in sorted results (COALESCE to 0)
+            let with_metrics = response.results.iter().find(|r| r.name == "with_metrics").unwrap();
+            assert_eq!(with_metrics.fan_in, Some(10), "Symbol with metrics should have fan_in");
+
+            let no_metrics_1 = response.results.iter().find(|r| r.name == "no_metrics_1").unwrap();
+            assert_eq!(no_metrics_1.fan_in, None, "Symbol without metrics should have None for fan_in");
+
+            let no_metrics_2 = response.results.iter().find(|r| r.name == "no_metrics_2").unwrap();
+            assert_eq!(no_metrics_2.fan_in, None, "Symbol without metrics should have None for fan_in");
+
+            // With filter: only symbols with metrics matching filter should appear
+            let options_filter = SearchOptions {
+                db_path,
+                query: "",
+                path_filter: None,
+                kind_filter: None,
+                limit: 10,
+                use_regex: false,
+                candidates: 100,
+                context: ContextOptions::default(),
+                snippet: SnippetOptions::default(),
+                fqn: FqnOptions::default(),
+                include_score: false,
+                sort_by: SortMode::default(),
+                metrics: MetricsOptions {
+                    min_fan_in: Some(5),
+                    ..Default::default()
+                },
+            };
+
+            let (response_filter, _) = search_symbols(options_filter).unwrap();
+            assert_eq!(response_filter.results.len(), 1, "Should find only 1 symbol with fan_in >= 5");
+            assert_eq!(response_filter.results[0].name, "with_metrics");
         }
     }
 }
