@@ -149,6 +149,19 @@ EXAMPLES:
 
   # Combined filters with regex
   llmgrep --db code.db search --query "^[A-Z]" --regex --kind Function --output pretty
+
+V1.1 FEATURES:
+  # SymbolId lookup (unambiguous reference)
+  llmgrep --db code.db search --symbol-id abc123def456789abc123def456789ab
+
+  # Filter by complexity and language
+  llmgrep --db code.db search --query "handler" --min-complexity 10 --language rust
+
+  # Sort by fan-in to find hotspots
+  llmgrep --db code.db search --query ".*" --sort-by fan-in --limit 20
+
+  # FQN pattern matching
+  llmgrep --db code.db search --query "test" --fqn "%module::tests::%"
 "#;
 
 fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {

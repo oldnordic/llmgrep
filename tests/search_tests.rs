@@ -17,6 +17,12 @@ fn setup_db(path: &std::path::Path) -> Connection {
             from_id INTEGER NOT NULL,
             to_id INTEGER NOT NULL,
             edge_type TEXT NOT NULL
+        );
+        CREATE TABLE symbol_metrics (
+            symbol_id TEXT PRIMARY KEY,
+            fan_in INTEGER DEFAULT 0,
+            fan_out INTEGER DEFAULT 0,
+            cyclomatic_complexity INTEGER DEFAULT 0
         );",
     )
     .expect("create tables");
@@ -168,6 +174,10 @@ fn test_search_symbols_with_path_filter() {
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -214,6 +224,10 @@ fn test_search_symbols_with_kind_filter() {
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -259,6 +273,10 @@ fn test_search_symbols_rank_exact_match_first() {
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -303,6 +321,10 @@ fn test_search_symbols_regex_filters() {
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -349,6 +371,10 @@ fn test_search_symbols_with_context_and_snippet() {
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -397,6 +423,10 @@ fn test_search_symbols_context_truncated_at_file_edges() {
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -451,6 +481,10 @@ fn test_search_symbols_context_truncated_by_cap() {
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -497,6 +531,10 @@ fn test_search_symbols_with_fqn_toggle() {
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
     };
     let response = search_symbols(options)
     .expect("search");
@@ -530,6 +568,10 @@ fn test_search_symbols_with_fqn_toggle() {
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
     };
     let response = search_symbols(options)
     .expect("search");
@@ -571,6 +613,10 @@ fn test_search_references_basic() {
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
     };
     let response = search_references(options).expect("search");
 
@@ -608,6 +654,10 @@ fn test_search_calls_basic() {
         include_score: true,
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
     };
     let response = search_calls(options).expect("search");
 
@@ -657,6 +707,10 @@ fn test_combined_response_counts_match() {
             include_score: true,
             sort_by: llmgrep::SortMode::default(),
             metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
         };
         search_symbols(options).expect("symbols")
     };
@@ -683,6 +737,10 @@ fn test_combined_response_counts_match() {
             include_score: true,
             sort_by: llmgrep::SortMode::default(),
             metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
         };
         search_references(options).expect("refs")
     };
@@ -709,6 +767,10 @@ fn test_combined_response_counts_match() {
             include_score: true,
             sort_by: llmgrep::SortMode::default(),
             metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
         };
         search_calls(options).expect("calls")
     };
