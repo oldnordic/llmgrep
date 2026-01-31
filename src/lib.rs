@@ -1,3 +1,4 @@
+pub mod ast;
 pub mod error;
 pub mod output;
 pub mod output_common;
@@ -6,6 +7,9 @@ pub mod safe_extraction;
 
 // Re-export safe extraction functions for testing and external use
 pub use safe_extraction::*;
+
+// Re-export AST types for external use
+pub use ast::{AstContext, check_ast_table_exists};
 
 use clap::ValueEnum;
 
