@@ -3,6 +3,7 @@ use crate::output::{
     CallMatch, CallSearchResponse, ReferenceMatch, ReferenceSearchResponse, SearchResponse,
     SpanContext, SymbolMatch,
 };
+use crate::safe_extraction::extract_symbol_content_safe;
 use crate::SortMode;
 use rusqlite::{params_from_iter, Connection, ErrorCode, OpenFlags, ToSql};
 use regex::{Regex, RegexBuilder};
@@ -911,7 +912,18 @@ fn snippet_from_file(
     }
     let capped_end = end.min(start + max_bytes);
     let truncated = capped_end < end;
-    let snippet = String::from_utf8_lossy(&file.bytes[start..capped_end]).to_string();
+
+    // Use safe UTF-8 extraction to handle multi-byte characters
+    // This prevents panics on emoji, CJK, and accented characters
+    let snippet = match extract_symbol_content_safe(&file.bytes, start, capped_end) {
+        Some(s) => s,
+        None => {
+            // Fallback: if safe extraction fails, use from_utf8_lossy
+            // This is less ideal but shouldn't panic
+            String::from_utf8_lossy(&file.bytes[start..capped_end]).to_string()
+        }
+    };
+
     (Some(snippet), Some(truncated))
 }
 
