@@ -78,31 +78,40 @@ mod tests {
 
     #[test]
     fn test_safe_extract_snippet_accented_latin() {
-        // "café" - 'é' is 2 bytes in UTF-8
-        let source = "fn café() { return 42; }".as_bytes();
+        // "café" - 'é' is 2 bytes in UTF-8 (0xC3, 0xA9)
+        let source = "fn café() { return 42; }";
+        let bytes = source.as_bytes();
         // Extract the function name part
-        let result = safe_extract_snippet(source, 3, 9);
+        // "caf" is bytes 3-6, 'é' is bytes 6-7, '(' is byte 8
+        // To get "café", we need bytes 3-8 (end at '(')
+        let result = safe_extract_snippet(bytes, 3, 8);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "café()");
+        assert_eq!(result.unwrap(), "café");
     }
 
     #[test]
     fn test_safe_extract_snippet_emoji() {
         // "fn test() { // 🎉 }" - emoji is 4 bytes
-        let source = "fn test() { // 🎉 }".as_bytes();
+        let source = "fn test() { // 🎉 }";
+        let bytes = source.as_bytes();
         // Extract from start through the emoji comment
-        // "🎉" is at byte 15-18 (4 bytes)
-        let result = safe_extract_snippet(source, 0, 19);
+        // "🎉" starts at byte 15, is 4 bytes (15-18)
+        // If we pass 19, it gets adjusted to 18 (end of emoji)
+        let result = safe_extract_snippet(bytes, 0, 19);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "fn test() { // 🎉 ");
+        // The end boundary is adjusted to the character boundary
+        assert_eq!(result.unwrap(), "fn test() { // 🎉");
     }
 
     #[test]
     fn test_safe_extract_snippet_cjk() {
         // "fn test() { // 中文 }" - each CJK char is 3 bytes
-        let source = "fn test() { // 中文 }".as_bytes();
+        let source = "fn test() { // 中文 }";
+        let bytes = source.as_bytes();
         // Extract from start through part of CJK comment
-        let result = safe_extract_snippet(source, 0, 18);
+        // "中" is bytes 15-17, "文" is bytes 18-20
+        // Byte 18 is at the start of "文", so we get it
+        let result = safe_extract_snippet(bytes, 0, 18);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "fn test() { // 中");
     }
@@ -110,19 +119,15 @@ mod tests {
     #[test]
     fn test_safe_extract_snippet_boundary_splitting() {
         // "café" - 'é' is bytes [0xC3, 0xA9]
-        let source = "fn café()".as_bytes();
-        // Try to split in the middle of 'é' (byte 5 is in middle of 2-byte sequence)
-        let result = safe_extract_snippet(source, 0, 5);
-        // Should return error or adjusted result - not panic
-        // Magellan's safe extraction should handle this
-        match result {
-            Ok(_) => {
-                // If Ok, should be valid UTF-8
-            }
-            Err(_) => {
-                // If Err, should be SearchFailed with explanation
-            }
-        }
+        let source = "fn café()";
+        let bytes = source.as_bytes();
+        // Try to split in the middle of 'é' (byte 6 is in middle of 2-byte sequence)
+        // 'é' is at bytes 5-6 in "fn café"
+        let result = safe_extract_snippet(bytes, 0, 6);
+        // extract_symbol_content_safe adjusts end to char boundary (byte 5)
+        // So we get "fn caf" instead of splitting 'é'
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "fn caf");
     }
 
     #[test]
@@ -135,8 +140,10 @@ mod tests {
     #[test]
     fn test_extract_symbol_content_safe_direct() {
         // Test direct magellan function re-export
-        let source = "fn test() { return 42; }".as_bytes();
-        let result = extract_symbol_content_safe(source, 0, 10);
+        let source = "fn test() { return 42; }";
+        let bytes = source.as_bytes();
+        // Byte 11 is the '{', so [0..11] gives us "fn test() {"
+        let result = extract_symbol_content_safe(bytes, 0, 11);
         assert!(result.is_some());
         assert_eq!(result.unwrap(), "fn test() {");
     }
@@ -145,34 +152,60 @@ mod tests {
     fn test_safe_str_slice() {
         // Test string slice with safe boundaries
         let source = "fn test() { return 42; }";
-        let result = safe_str_slice(source, 0, 10);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap(), "fn test() {");
+        // Byte 11 is the '{', so [0..11] gives us "fn test() {"
+        let result = safe_str_slice(source, 0, 11);
+        // safe_str_slice uses source.get() which returns exact range or None
+        assert_eq!(result, Some("fn test() {"));
     }
 
     #[test]
     fn test_safe_str_slice_multi_byte() {
         // Test with multi-byte characters
+        // "café" = c(1) a(1) f(1) é(2) = 5 bytes total
         let source = "café";
-        let result = safe_str_slice(source, 0, 4);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap(), "caf");
+        // Byte 0-3 is "caf" (ends before é which starts at byte 3)
+        let result = safe_str_slice(source, 0, 3);
+        assert_eq!(result, Some("caf"));
     }
 
     #[test]
     fn test_safe_str_slice_invalid_boundary() {
         // Try to slice in middle of multi-byte character
         let source = "café"; // 'é' is 2 bytes at positions 3-4
-        let result = safe_str_slice(source, 0, 4); // Ends at 'é' start
-        // Should return Some with adjusted boundary or None
-        match result {
-            Some(s) => {
-                // If Some, should be valid UTF-8
-                assert!(s.is_char_boundary(s.len()));
-            }
-            None => {
-                // Valid boundary can't be found
-            }
-        }
+        // Byte 4 is in middle of 'é', so safe_str_slice returns None
+        let result = safe_str_slice(source, 0, 4);
+        // Should return None since byte 4 is not a valid char boundary
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_symbol_content_safe_adjusts_end_boundary() {
+        // Test that extract_symbol_content_safe adjusts end boundary
+        let source = "café";
+        let bytes = source.as_bytes();
+        // Byte 4 is in middle of 'é', function should adjust to byte 3
+        let result = extract_symbol_content_safe(bytes, 0, 4);
+        // Should return "caf" (adjusted to valid boundary)
+        assert_eq!(result, Some("caf".to_string()));
+    }
+
+    #[test]
+    fn test_extract_symbol_content_safe_start_at_boundary() {
+        // Test extraction starting at multi-byte char boundary
+        let source = "a🎉b"; // emoji is 4 bytes at positions 1-4
+        let bytes = source.as_bytes();
+        // Start at position 1 (emoji start), end at 5 (after emoji)
+        let result = extract_symbol_content_safe(bytes, 1, 5);
+        assert_eq!(result, Some("🎉".to_string()));
+    }
+
+    #[test]
+    fn test_extract_symbol_content_safe_start_splits_char_returns_none() {
+        // Test that start at invalid boundary returns None
+        let source = "a🎉b"; // emoji is 4 bytes at positions 1-4
+        let bytes = source.as_bytes();
+        // Start at position 2 (in middle of emoji) - should return None
+        let result = extract_symbol_content_safe(bytes, 2, 5);
+        assert_eq!(result, None);
     }
 }

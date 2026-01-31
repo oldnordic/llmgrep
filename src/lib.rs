@@ -2,6 +2,10 @@ pub mod error;
 pub mod output;
 pub mod output_common;
 pub mod query;
+pub mod safe_extraction;
+
+// Re-export safe extraction functions for testing and external use
+pub use safe_extraction::*;
 
 use clap::ValueEnum;
 
