@@ -1,6 +1,6 @@
 # llmgrep
 
-**v1.0 Production-Ready CLI** (shipped 2026-01-25)
+**v1.1 Production-Ready CLI** (shipped 2026-01-31)
 
 A command-line search tool for code indexed by [Magellan](https://github.com/oldnordic/magellan). Queries SQLite graph databases to find symbols, references, and call relationships. Outputs human-readable or structured JSON for programmatic use.
 
@@ -15,13 +15,25 @@ A command-line search tool for code indexed by [Magellan](https://github.com/old
 - Searches symbols, references, and calls from Magellan's code database
 - Emits deterministic, schema-aligned JSON output for LLM consumption
 - Supports regex, intelligent relevance ranking, and optional context/snippets
-- `--sort-by {relevance|position}` flag for LLM-optimized or performance modes
+- `--sort-by {relevance|position|fan-in|fan-out|complexity}` flag for LLM-optimized or performance modes
+
+## v1.1 Features
+
+**Magellan 1.8.0 Integration:**
+- Safe UTF-8 content extraction (no panics on emoji/CJK/accented characters)
+- Chunk-based snippet retrieval (eliminates file I/O when chunks available)
+- Metrics-based filtering and sorting (complexity, fan-in, fan-out)
+- SymbolId lookups via `--symbol-id` for unambiguous reference
+- FQN filtering: `--fqn` (pattern) and `--exact-fqn` (exact match)
+- Language filtering via `--language` flag
+- Enhanced JSON fields: `symbol_id`, `canonical_fqn`, `display_fqn`, metrics, `content_hash`
 
 ## Features
 
 ### LLM-Optimized Search
 - **Relevance mode** (default): Intelligent scoring using regex matching (exact > prefix > contains)
 - **Position mode**: Fast SQL-only sorting, skips in-memory scoring
+- **Metrics modes**: Sort by fan-in, fan-out, or complexity (v1.1)
 
 ### Security
 - ReDoS prevention via 10KB regex size limit
@@ -35,7 +47,7 @@ A command-line search tool for code indexed by [Magellan](https://github.com/old
 - File read error logging with context
 
 ### Quality
-- 118 unit tests with 87.72% coverage
+- 149 unit and integration tests with comprehensive coverage
 - Clippy-clean codebase with zero warnings
 - Comprehensive CLI examples in help text
 
@@ -68,16 +80,43 @@ Then query it with llmgrep:
 
 ```bash
 # Basic symbol search (relevance-ranked, LLM-friendly)
-llmgrep search --db /tmp/repo.db --query "parse"
+llmgrep --db /tmp/repo.db search --query "parse"
 
 # Position-only sorting (faster, no scoring)
-llmgrep search --db /tmp/repo.db --query "parse" --sort-by position
+llmgrep --db /tmp/repo.db search --query "parse" --sort-by position
 
 # Regex search with JSON output
-llmgrep search --db /tmp/repo.db --query "^Token" --regex --output json
+llmgrep --db /tmp/repo.db search --query "^Token" --regex --output json
 
 # Reference search
-llmgrep search --db /tmp/repo.db --query "MyType" --mode references
+llmgrep --db /tmp/repo.db search --query "MyType" --mode references
+```
+
+## v1.1 Examples
+
+### SymbolId lookup (unambiguous)
+```bash
+llmgrep --db code.db search --symbol-id abc123def456789abc123def456789ab
+```
+
+### Filter by complexity
+```bash
+llmgrep --db code.db search --query "parse" --min-complexity 10
+```
+
+### Filter by language and kind
+```bash
+llmgrep --db code.db search --query "Test" --language rust --kind Function
+```
+
+### Sort by fan-in (find hotspots)
+```bash
+llmgrep --db code.db search --query ".*" --sort-by fan-in --limit 20
+```
+
+### FQN pattern matching
+```bash
+llmgrep --db code.db search --query "helper" --fqn "%module::%"
 ```
 
 ## Documentation
@@ -88,9 +127,9 @@ llmgrep search --db /tmp/repo.db --query "MyType" --mode references
 
 ## Compatibility
 
-- **Magellen schema**: 1.0.0 (JsonResponse wrapper)
-- **Magellen export**: 2.0.0
-- **Minimum Magellen**: 1.7.0
+- **Magellan schema**: 1.0.0 (JsonResponse wrapper)
+- **Magellan export**: 2.0.0
+- **Minimum Magellan**: 1.8.0 (v1.1 features require metrics/chunks tables)
 
 ## License
 
