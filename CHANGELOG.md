@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-01-31
+
+### Bug Fixes
+
+**Critical: Metrics not returned in search results**
+
+- Fixed JOIN condition in `build_symbol_query()` (line 1237)
+- Changed from `json_extract(s.data, '$.symbol_id') = sm.symbol_id` to `s.id = sm.symbol_id`
+- Root cause: Compared SHA hash string to INTEGER row ID, causing never-matching JOIN
+- Impact: Metrics filtering, sorting, and JSON output now work correctly
+
+**Test infrastructure updates**
+
+- Updated all test fixtures to match production Magellan schema
+- `symbol_metrics.symbol_id` now INTEGER PRIMARY KEY (was TEXT)
+- Added new fields: `estimated_loc`, `last_updated`
+- Added FOREIGN KEY constraint to `graph_entities(id)`
+- Updated all `insert_metrics()` helper functions
+
+**Test coverage**
+
+- Added regression test `test_metrics_present_in_search_results()`
+- Total: 195 tests passing (was 194)
+
 ## [1.1.0] - 2026-01-31
 
 ### Magellan 1.8.0 Integration
