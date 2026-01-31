@@ -172,6 +172,45 @@ struct CallNodeData {
     end_col: u64,
 }
 
+/// Infer programming language from file extension
+///
+/// Returns standard language label based on file extension.
+/// Returns None for unknown extensions.
+fn infer_language(file_path: &str) -> Option<&'static str> {
+    match Path::new(file_path).extension().and_then(|s| s.to_str()) {
+        Some("rs") => Some("rust"),
+        Some("py") => Some("python"),
+        Some("js") => Some("javascript"),
+        Some("ts") => Some("typescript"),
+        Some("jsx") => Some("javascript"),
+        Some("tsx") => Some("typescript"),
+        Some("c") => Some("c"),
+        Some("cpp") | Some("cc") | Some("cxx") | Some("hpp") | Some("hxx") => Some("cpp"),
+        Some("h") => Some("c"), // Assume C for .h files (could also be C++)
+        Some("java") => Some("java"),
+        Some("go") => Some("go"),
+        Some("rb") => Some("ruby"),
+        Some("php") => Some("php"),
+        Some("swift") => Some("swift"),
+        Some("kt") | Some("kts") => Some("kotlin"),
+        Some("scala") => Some("scala"),
+        Some("sh") | Some("bash") => Some("shell"),
+        Some("lua") => Some("lua"),
+        Some("r") => Some("r"),
+        Some("m") => Some("matlab"), // Could also be Objective-C
+        Some("cs") => Some("csharp"),
+        _ => None,
+    }
+}
+
+/// Normalize symbol kind to standard label name
+///
+/// Converts various kind representations to lowercase normalized form.
+/// Used for populating kind_normalized field in SymbolMatch.
+fn normalize_kind_label(kind: &str) -> String {
+    kind.to_lowercase()
+}
+
 /// Query the code_chunks table by symbol name
 ///
 /// Searches for chunks associated with a specific symbol name.
@@ -452,6 +491,14 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         let fan_out = fan_out.and_then(|v| if v >= 0 { Some(v as u64) } else { None });
         let cyclomatic_complexity = cyclomatic_complexity.and_then(|v| if v >= 0 { Some(v as u64) } else { None });
 
+        // Infer language from file extension
+        let language = infer_language(&file_path).map(|s| s.to_string());
+
+        // Normalize kind (prefer kind_normalized from data, otherwise normalize kind)
+        let kind_normalized = symbol.kind_normalized.clone().unwrap_or_else(|| {
+            normalize_kind_label(&symbol.kind)
+        });
+
         results.push(SymbolMatch {
             match_id,
             span,
@@ -467,6 +514,8 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             symbol_kind_from_chunk,
             snippet,
             snippet_truncated,
+            language,
+            kind_normalized: Some(kind_normalized),
             complexity_score,
             fan_in,
             fan_out,

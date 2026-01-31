@@ -88,6 +88,11 @@ pub struct SymbolMatch {
     pub snippet: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet_truncated: Option<bool>,
+    // Label fields (language and normalized kind)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind_normalized: Option<String>,
     // Metrics fields (from symbol_metrics table)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub complexity_score: Option<u64>,
