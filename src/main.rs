@@ -81,6 +81,19 @@ enum Command {
 
         #[arg(long, value_enum, default_value = "per-mode")]
         auto_limit: AutoLimitMode,
+
+        // Metrics-based filtering flags
+        #[arg(long, value_parser = ranged_usize(0, 1000))]
+        min_complexity: Option<usize>,
+
+        #[arg(long, value_parser = ranged_usize(0, 1000))]
+        max_complexity: Option<usize>,
+
+        #[arg(long, value_parser = ranged_usize(0, 10000))]
+        min_fan_in: Option<usize>,
+
+        #[arg(long, value_parser = ranged_usize(0, 10000))]
+        min_fan_out: Option<usize>,
     },
 }
 
@@ -206,6 +219,10 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             fields,
             sort_by,
             auto_limit,
+            min_complexity,
+            max_complexity,
+            min_fan_in,
+            min_fan_out,
         } => run_search(
             cli,
             query,
@@ -224,6 +241,10 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             fields.as_ref(),
             *sort_by,
             *auto_limit,
+            *min_complexity,
+            *max_complexity,
+            *min_fan_in,
+            *min_fan_out,
         ),
     }
 }
@@ -247,6 +268,10 @@ fn run_search(
     fields: Option<&String>,
     sort_by: SortMode,
     auto_limit: AutoLimitMode,
+    min_complexity: Option<usize>,
+    max_complexity: Option<usize>,
+    min_fan_in: Option<usize>,
+    min_fan_out: Option<usize>,
 ) -> Result<(), LlmError> {
     if query.trim().is_empty() {
         return Err(LlmError::EmptyQuery);
