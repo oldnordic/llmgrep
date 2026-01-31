@@ -1,11 +1,12 @@
+use llmgrep::query::{
+    search_symbols, ContextOptions, FqnOptions, MetricsOptions, SearchOptions, SnippetOptions,
+};
 /// Unit tests for v1.1 features - internal logic testing
 ///
 /// Tests for:
 /// - Safe extraction function edge cases
 /// - Public API with new v1.1 options
-
 use llmgrep::safe_extraction::extract_symbol_content_safe;
-use llmgrep::query::{search_symbols, ContextOptions, FqnOptions, MetricsOptions, SearchOptions, SnippetOptions};
 use llmgrep::SortMode;
 use rusqlite::{params, Connection};
 use serde_json::json;
@@ -62,7 +63,13 @@ fn insert_file(conn: &Connection, path: &str) -> i64 {
     conn.last_insert_rowid()
 }
 
-fn insert_symbol(conn: &Connection, name: &str, kind: &str, kind_normalized: &str, span: (u64, u64)) -> i64 {
+fn insert_symbol(
+    conn: &Connection,
+    name: &str,
+    kind: &str,
+    kind_normalized: &str,
+    span: (u64, u64),
+) -> i64 {
     let data = json!({
         "symbol_id": format!("{}-id", name),
         "name": name,
@@ -324,8 +331,14 @@ fn test_api_fqn_field_population() {
 
     let result = &response.0.results[0];
     assert!(result.fqn.is_some(), "fqn should be populated");
-    assert!(result.canonical_fqn.is_some(), "canonical_fqn should be populated");
-    assert!(result.display_fqn.is_some(), "display_fqn should be populated");
+    assert!(
+        result.canonical_fqn.is_some(),
+        "canonical_fqn should be populated"
+    );
+    assert!(
+        result.display_fqn.is_some(),
+        "display_fqn should be populated"
+    );
 }
 
 /// Test 5: Public API - language filtering
@@ -495,7 +508,10 @@ fn test_api_symbol_id_lookup() {
     let response = search_symbols(options).expect("search should succeed");
     assert_eq!(response.0.results.len(), 1);
     assert_eq!(response.0.results[0].name, symbol_name);
-    assert_eq!(response.0.results[0].symbol_id.as_ref().unwrap(), known_symbol_id);
+    assert_eq!(
+        response.0.results[0].symbol_id.as_ref().unwrap(),
+        known_symbol_id
+    );
 }
 
 /// Test 8: Public API - FQN pattern filtering

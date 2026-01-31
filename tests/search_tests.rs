@@ -1,4 +1,7 @@
-use llmgrep::query::{search_calls, search_references, search_symbols, SearchOptions, ContextOptions, SnippetOptions, FqnOptions, MetricsOptions};
+use llmgrep::query::{
+    search_calls, search_references, search_symbols, ContextOptions, FqnOptions, MetricsOptions,
+    SearchOptions, SnippetOptions,
+};
 use rusqlite::{params, Connection};
 use serde_json::json;
 use std::path::PathBuf;
@@ -45,7 +48,13 @@ fn insert_file(conn: &Connection, path: &str) -> i64 {
     conn.last_insert_rowid()
 }
 
-fn insert_symbol(conn: &Connection, name: &str, kind: &str, kind_normalized: &str, span: (u64, u64)) -> i64 {
+fn insert_symbol(
+    conn: &Connection,
+    name: &str,
+    kind: &str,
+    kind_normalized: &str,
+    span: (u64, u64),
+) -> i64 {
     let data = json!({
         "symbol_id": format!("{}-id", name),
         "name": name,
@@ -78,7 +87,12 @@ fn insert_define_edge(conn: &Connection, file_id: i64, symbol_id: i64) {
     .expect("insert edge");
 }
 
-fn insert_reference(conn: &Connection, file: &str, referenced_symbol: &str, span: (u64, u64)) -> i64 {
+fn insert_reference(
+    conn: &Connection,
+    file: &str,
+    referenced_symbol: &str,
+    span: (u64, u64),
+) -> i64 {
     let data = json!({
         "file": file,
         "byte_start": span.0,
@@ -106,13 +120,7 @@ fn insert_reference_edge(conn: &Connection, reference_id: i64, symbol_id: i64) {
     .expect("insert reference edge");
 }
 
-fn insert_call(
-    conn: &Connection,
-    file: &str,
-    caller: &str,
-    callee: &str,
-    span: (u64, u64),
-) -> i64 {
+fn insert_call(conn: &Connection, file: &str, caller: &str, callee: &str, span: (u64, u64)) -> i64 {
     let data = json!({
         "file": file,
         "caller": caller,
@@ -445,11 +453,7 @@ fn test_search_symbols_context_truncated_by_cap() {
     let conn = setup_db(&db_path);
 
     let file_path = temp_dir.path().join("sample.rs");
-    std::fs::write(
-        &file_path,
-        "line1\nline2\nline3\nline4\nline5\nline6\n",
-    )
-    .expect("write file");
+    std::fs::write(&file_path, "line1\nline2\nline3\nline4\nline5\nline6\n").expect("write file");
     let file_path_str = file_path.to_string_lossy().to_string();
 
     let file_id = insert_file(&conn, &file_path_str);
@@ -536,8 +540,7 @@ fn test_search_symbols_with_fqn_toggle() {
         exact_fqn: None,
         language_filter: None,
     };
-    let response = search_symbols(options)
-    .expect("search");
+    let response = search_symbols(options).expect("search");
     let result = &response.0.results[0];
     assert!(result.fqn.is_none());
     assert!(result.canonical_fqn.is_none());
@@ -573,8 +576,7 @@ fn test_search_symbols_with_fqn_toggle() {
         exact_fqn: None,
         language_filter: None,
     };
-    let response = search_symbols(options)
-    .expect("search");
+    let response = search_symbols(options).expect("search");
     let result = &response.0.results[0];
     assert!(result.fqn.is_some() || result.display_fqn.is_some() || result.canonical_fqn.is_some());
 }
@@ -707,10 +709,10 @@ fn test_combined_response_counts_match() {
             include_score: true,
             sort_by: llmgrep::SortMode::default(),
             metrics: MetricsOptions::default(),
-        symbol_id: None,
-        fqn_pattern: None,
-        exact_fqn: None,
-        language_filter: None,
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
+            language_filter: None,
         };
         search_symbols(options).expect("symbols")
     };
@@ -737,10 +739,10 @@ fn test_combined_response_counts_match() {
             include_score: true,
             sort_by: llmgrep::SortMode::default(),
             metrics: MetricsOptions::default(),
-        symbol_id: None,
-        fqn_pattern: None,
-        exact_fqn: None,
-        language_filter: None,
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
+            language_filter: None,
         };
         search_references(options).expect("refs")
     };
@@ -767,10 +769,10 @@ fn test_combined_response_counts_match() {
             include_score: true,
             sort_by: llmgrep::SortMode::default(),
             metrics: MetricsOptions::default(),
-        symbol_id: None,
-        fqn_pattern: None,
-        exact_fqn: None,
-        language_filter: None,
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
+            language_filter: None,
         };
         search_calls(options).expect("calls")
     };

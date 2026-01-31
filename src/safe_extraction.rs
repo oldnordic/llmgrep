@@ -17,8 +17,8 @@
 //! boundaries to valid UTF-8 character boundaries or returning None.
 
 // Re-export Magellan's safe UTF-8 extraction functions
-pub use magellan::common::extract_symbol_content_safe;
 pub use magellan::common::extract_context_safe;
+pub use magellan::common::extract_symbol_content_safe;
 pub use magellan::common::safe_str_slice;
 
 use crate::error::LlmError;
@@ -50,11 +50,7 @@ use crate::error::LlmError;
 /// assert_eq!(snippet, "fn test() { // ");
 /// # Ok::<(), LlmError>(())
 /// ```
-pub fn safe_extract_snippet(
-    source: &[u8],
-    start: usize,
-    end: usize,
-) -> Result<String, LlmError> {
+pub fn safe_extract_snippet(source: &[u8], start: usize, end: usize) -> Result<String, LlmError> {
     extract_symbol_content_safe(source, start, end).ok_or_else(|| {
         LlmError::SearchFailed {
             reason: format!(
@@ -173,7 +169,7 @@ mod tests {
     fn test_safe_str_slice_invalid_boundary() {
         // Try to slice in middle of multi-byte character
         let source = "café"; // 'é' is 2 bytes at positions 3-4
-        // Byte 4 is in middle of 'é', so safe_str_slice returns None
+                             // Byte 4 is in middle of 'é', so safe_str_slice returns None
         let result = safe_str_slice(source, 0, 4);
         // Should return None since byte 4 is not a valid char boundary
         assert_eq!(result, None);

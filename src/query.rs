@@ -5,8 +5,8 @@ use crate::output::{
 };
 use crate::safe_extraction::extract_symbol_content_safe;
 use crate::SortMode;
-use rusqlite::{params_from_iter, Connection, ErrorCode, OpenFlags, ToSql};
 use regex::{Regex, RegexBuilder};
+use rusqlite::{params_from_iter, Connection, ErrorCode, OpenFlags, ToSql};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -288,12 +288,14 @@ pub fn search_chunks_by_span(
 }
 
 pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), LlmError> {
-    let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+    let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+    {
         Ok(conn) => conn,
         Err(rusqlite::Error::SqliteFailure(err, msg)) => match err.code {
             ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
                 return Err(LlmError::DatabaseCorrupted {
-                    reason: msg.unwrap_or_else(|| "Database file is invalid or corrupted".to_string()),
+                    reason: msg
+                        .unwrap_or_else(|| "Database file is invalid or corrupted".to_string()),
                 });
             }
             ErrorCode::CannotOpen => {
@@ -308,13 +310,20 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
 
     // Force database validation by checking if schema exists
     // This catches "not a database" errors that occur lazily
-    conn.query_row("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1", [], |_| Ok(())).map_err(|e| match e {
+    conn.query_row(
+        "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1",
+        [],
+        |_| Ok(()),
+    )
+    .map_err(|e| match e {
         rusqlite::Error::SqliteFailure(err, ref msg) => match err.code {
-            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
-                LlmError::DatabaseCorrupted {
-                    reason: msg.as_ref().map(|s| s.as_str()).unwrap_or("Database file is invalid or corrupted").to_string(),
-                }
-            }
+            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => LlmError::DatabaseCorrupted {
+                reason: msg
+                    .as_ref()
+                    .map(|s| s.as_str())
+                    .unwrap_or("Database file is invalid or corrupted")
+                    .to_string(),
+            },
             _ => LlmError::from(e),
         },
         other => LlmError::from(other),
@@ -369,76 +378,87 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         // Use symbol_id from query if available, otherwise from JSON data
         let symbol_id = symbol_id_from_query.or_else(|| symbol.symbol_id.clone());
 
-        let name = symbol.name.clone().unwrap_or_else(|| "<unknown>".to_string());
+        let name = symbol
+            .name
+            .clone()
+            .unwrap_or_else(|| "<unknown>".to_string());
         let display_fqn = symbol.display_fqn.clone().unwrap_or_default();
         let fqn = symbol.fqn.clone().unwrap_or_default();
 
         if let Some(ref pattern) = regex {
-            if !pattern.is_match(&name) && !pattern.is_match(&display_fqn) && !pattern.is_match(&fqn)
+            if !pattern.is_match(&name)
+                && !pattern.is_match(&display_fqn)
+                && !pattern.is_match(&fqn)
             {
                 continue;
             }
         }
 
-        let (snippet, snippet_truncated, content_hash, symbol_kind_from_chunk) = if options.snippet.include {
-            // Try chunks table first for faster, pre-validated content
-            match search_chunks_by_span(&conn, &file_path, symbol.byte_start, symbol.byte_end) {
-                Ok(Some(chunk)) => {
-                    // Apply max_bytes limit to chunk content
-                    let content_bytes = chunk.content.as_bytes();
-                    let capped_end = content_bytes.len().min(options.snippet.max_bytes);
-                    let truncated = capped_end < content_bytes.len();
+        let (snippet, snippet_truncated, content_hash, symbol_kind_from_chunk) =
+            if options.snippet.include {
+                // Try chunks table first for faster, pre-validated content
+                match search_chunks_by_span(&conn, &file_path, symbol.byte_start, symbol.byte_end) {
+                    Ok(Some(chunk)) => {
+                        // Apply max_bytes limit to chunk content
+                        let content_bytes = chunk.content.as_bytes();
+                        let capped_end = content_bytes.len().min(options.snippet.max_bytes);
+                        let truncated = capped_end < content_bytes.len();
 
-                    // Safe UTF-8 slice at character boundary
-                    let snippet_content = if capped_end < content_bytes.len() {
-                        // Use safe extraction to avoid splitting multi-byte characters
-                        match extract_symbol_content_safe(content_bytes, 0, capped_end) {
-                            Some(s) => s,
-                            None => {
-                                // Fallback to chunk content if safe extraction fails
-                                chunk.content.chars().take(capped_end).collect()
+                        // Safe UTF-8 slice at character boundary
+                        let snippet_content = if capped_end < content_bytes.len() {
+                            // Use safe extraction to avoid splitting multi-byte characters
+                            match extract_symbol_content_safe(content_bytes, 0, capped_end) {
+                                Some(s) => s,
+                                None => {
+                                    // Fallback to chunk content if safe extraction fails
+                                    chunk.content.chars().take(capped_end).collect()
+                                }
                             }
-                        }
-                    } else {
-                        chunk.content.clone()
-                    };
+                        } else {
+                            chunk.content.clone()
+                        };
 
-                    (Some(snippet_content), Some(truncated), Some(chunk.content_hash), chunk.symbol_kind)
+                        (
+                            Some(snippet_content),
+                            Some(truncated),
+                            Some(chunk.content_hash),
+                            chunk.symbol_kind,
+                        )
+                    }
+                    Ok(None) => {
+                        // Chunk not found, log fallback and use file I/O
+                        eprintln!(
+                            "Chunk fallback: {}:{}-{}",
+                            file_path, symbol.byte_start, symbol.byte_end
+                        );
+                        let (snippet, truncated) = snippet_from_file(
+                            &file_path,
+                            symbol.byte_start,
+                            symbol.byte_end,
+                            options.snippet.max_bytes,
+                            &mut file_cache,
+                        );
+                        (snippet, truncated, None, None)
+                    }
+                    Err(e) => {
+                        // Error querying chunks, fall back to file I/O
+                        eprintln!(
+                            "Chunk query error for {}:{}-{}: {}, using file I/O",
+                            file_path, symbol.byte_start, symbol.byte_end, e
+                        );
+                        let (snippet, truncated) = snippet_from_file(
+                            &file_path,
+                            symbol.byte_start,
+                            symbol.byte_end,
+                            options.snippet.max_bytes,
+                            &mut file_cache,
+                        );
+                        (snippet, truncated, None, None)
+                    }
                 }
-                Ok(None) => {
-                    // Chunk not found, log fallback and use file I/O
-                    eprintln!(
-                        "Chunk fallback: {}:{}-{}",
-                        file_path, symbol.byte_start, symbol.byte_end
-                    );
-                    let (snippet, truncated) = snippet_from_file(
-                        &file_path,
-                        symbol.byte_start,
-                        symbol.byte_end,
-                        options.snippet.max_bytes,
-                        &mut file_cache,
-                    );
-                    (snippet, truncated, None, None)
-                }
-                Err(e) => {
-                    // Error querying chunks, fall back to file I/O
-                    eprintln!(
-                        "Chunk query error for {}:{}-{}: {}, using file I/O",
-                        file_path, symbol.byte_start, symbol.byte_end, e
-                    );
-                    let (snippet, truncated) = snippet_from_file(
-                        &file_path,
-                        symbol.byte_start,
-                        symbol.byte_end,
-                        options.snippet.max_bytes,
-                        &mut file_cache,
-                    );
-                    (snippet, truncated, None, None)
-                }
-            }
-        } else {
-            (None, None, None, None)
-        };
+            } else {
+                (None, None, None, None)
+            };
         let context = if options.context.include {
             let capped = options.context.lines > options.context.max_lines;
             let effective_lines = options.context.lines.min(options.context.max_lines);
@@ -489,15 +509,17 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         let complexity_score = None; // Not available in symbol_metrics
         let fan_in = fan_in.and_then(|v| if v >= 0 { Some(v as u64) } else { None });
         let fan_out = fan_out.and_then(|v| if v >= 0 { Some(v as u64) } else { None });
-        let cyclomatic_complexity = cyclomatic_complexity.and_then(|v| if v >= 0 { Some(v as u64) } else { None });
+        let cyclomatic_complexity =
+            cyclomatic_complexity.and_then(|v| if v >= 0 { Some(v as u64) } else { None });
 
         // Infer language from file extension
         let language = infer_language(&file_path).map(|s| s.to_string());
 
         // Normalize kind (prefer kind_normalized from data, otherwise normalize kind)
-        let kind_normalized = symbol.kind_normalized.clone().unwrap_or_else(|| {
-            normalize_kind_label(&symbol.kind)
-        });
+        let kind_normalized = symbol
+            .kind_normalized
+            .clone()
+            .unwrap_or_else(|| normalize_kind_label(&symbol.kind));
 
         results.push(SymbolMatch {
             match_id,
@@ -506,7 +528,11 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             kind: symbol.kind,
             parent: None,
             symbol_id,
-            score: if options.include_score { Some(score) } else { None },
+            score: if options.include_score {
+                Some(score)
+            } else {
+                None
+            },
             fqn,
             canonical_fqn,
             display_fqn,
@@ -530,8 +556,20 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         }
         results.len() as u64
     } else {
-        let (count_sql, count_params) =
-            build_search_query(options.query, options.path_filter, options.kind_filter, options.language_filter, options.use_regex, true, 0, options.metrics, options.sort_by, options.symbol_id, options.fqn_pattern, options.exact_fqn);
+        let (count_sql, count_params) = build_search_query(
+            options.query,
+            options.path_filter,
+            options.kind_filter,
+            options.language_filter,
+            options.use_regex,
+            true,
+            0,
+            options.metrics,
+            options.sort_by,
+            options.symbol_id,
+            options.fqn_pattern,
+            options.exact_fqn,
+        );
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {
             partial = true;
@@ -556,20 +594,25 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
     // Only warn in human mode and when not using symbol_id lookup
     if options.symbol_id.is_none() && !options.use_regex && total_count > 1 {
         // Group results by name to find collisions
-        let mut name_groups: std::collections::HashMap<&str, Vec<&SymbolMatch>> = std::collections::HashMap::new();
+        let mut name_groups: std::collections::HashMap<&str, Vec<&SymbolMatch>> =
+            std::collections::HashMap::new();
         for result in &results {
             name_groups.entry(&result.name).or_default().push(result);
         }
 
         // Find names with multiple different canonical_fqns
         for (name, group) in &name_groups {
-            let unique_fqns: HashSet<_> = group.iter()
+            let unique_fqns: HashSet<_> = group
+                .iter()
                 .filter_map(|r| r.canonical_fqn.as_ref())
                 .collect();
 
             if unique_fqns.len() > 1 {
                 // Multiple symbols with same name but different FQNs
-                eprintln!("Warning: Ambiguous symbol \"{}\" ({} candidates across database)", name, total_count);
+                eprintln!(
+                    "Warning: Ambiguous symbol \"{}\" ({} candidates across database)",
+                    name, total_count
+                );
                 eprintln!("Top {} candidates:", group.len().min(5));
                 for result in group.iter().take(5) {
                     if let Some(symbol_id) = &result.symbol_id {
@@ -587,7 +630,9 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         SearchResponse {
             results,
             query: options.query.to_string(),
-            path_filter: options.path_filter.map(|path| path.to_string_lossy().to_string()),
+            path_filter: options
+                .path_filter
+                .map(|path| path.to_string_lossy().to_string()),
             kind_filter: options.kind_filter.map(|value| value.to_string()),
             total_count,
         },
@@ -595,13 +640,17 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
     ))
 }
 
-pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchResponse, bool), LlmError> {
-    let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+pub fn search_references(
+    options: SearchOptions,
+) -> Result<(ReferenceSearchResponse, bool), LlmError> {
+    let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+    {
         Ok(conn) => conn,
         Err(rusqlite::Error::SqliteFailure(err, msg)) => match err.code {
             ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
                 return Err(LlmError::DatabaseCorrupted {
-                    reason: msg.unwrap_or_else(|| "Database file is invalid or corrupted".to_string()),
+                    reason: msg
+                        .unwrap_or_else(|| "Database file is invalid or corrupted".to_string()),
                 });
             }
             ErrorCode::CannotOpen => {
@@ -616,20 +665,32 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
 
     // Force database validation by checking if schema exists
     // This catches "not a database" errors that occur lazily
-    conn.query_row("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1", [], |_| Ok(())).map_err(|e| match e {
+    conn.query_row(
+        "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1",
+        [],
+        |_| Ok(()),
+    )
+    .map_err(|e| match e {
         rusqlite::Error::SqliteFailure(err, ref msg) => match err.code {
-            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
-                LlmError::DatabaseCorrupted {
-                    reason: msg.as_ref().map(|s| s.as_str()).unwrap_or("Database file is invalid or corrupted").to_string(),
-                }
-            }
+            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => LlmError::DatabaseCorrupted {
+                reason: msg
+                    .as_ref()
+                    .map(|s| s.as_str())
+                    .unwrap_or("Database file is invalid or corrupted")
+                    .to_string(),
+            },
             _ => LlmError::from(e),
         },
         other => LlmError::from(other),
     })?;
 
-    let (sql, params) =
-        build_reference_query(options.query, options.path_filter, options.use_regex, false, options.candidates);
+    let (sql, params) = build_reference_query(
+        options.query,
+        options.path_filter,
+        options.use_regex,
+        false,
+        options.candidates,
+    );
     let mut stmt = conn.prepare_cached(&sql)?;
     let mut rows = stmt.query(params_from_iter(params))?;
     let regex = if options.use_regex {
@@ -685,44 +746,53 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
         } else {
             None
         };
-        let (snippet, snippet_truncated, content_hash, symbol_kind_from_chunk) = if options.snippet.include {
-            // Try chunks table first for faster, pre-validated content
-            match search_chunks_by_span(&conn, &reference.file, reference.byte_start, reference.byte_end) {
-                Ok(Some(chunk)) => {
-                    // Apply max_bytes limit to chunk content
-                    let content_bytes = chunk.content.as_bytes();
-                    let capped_end = content_bytes.len().min(options.snippet.max_bytes);
-                    let truncated = capped_end < content_bytes.len();
+        let (snippet, snippet_truncated, content_hash, symbol_kind_from_chunk) =
+            if options.snippet.include {
+                // Try chunks table first for faster, pre-validated content
+                match search_chunks_by_span(
+                    &conn,
+                    &reference.file,
+                    reference.byte_start,
+                    reference.byte_end,
+                ) {
+                    Ok(Some(chunk)) => {
+                        // Apply max_bytes limit to chunk content
+                        let content_bytes = chunk.content.as_bytes();
+                        let capped_end = content_bytes.len().min(options.snippet.max_bytes);
+                        let truncated = capped_end < content_bytes.len();
 
-                    // Safe UTF-8 slice at character boundary
-                    let snippet_content = if capped_end < content_bytes.len() {
-                        match extract_symbol_content_safe(content_bytes, 0, capped_end) {
-                            Some(s) => s,
-                            None => {
-                                chunk.content.chars().take(capped_end).collect()
+                        // Safe UTF-8 slice at character boundary
+                        let snippet_content = if capped_end < content_bytes.len() {
+                            match extract_symbol_content_safe(content_bytes, 0, capped_end) {
+                                Some(s) => s,
+                                None => chunk.content.chars().take(capped_end).collect(),
                             }
-                        }
-                    } else {
-                        chunk.content.clone()
-                    };
+                        } else {
+                            chunk.content.clone()
+                        };
 
-                    (Some(snippet_content), Some(truncated), Some(chunk.content_hash), chunk.symbol_kind)
+                        (
+                            Some(snippet_content),
+                            Some(truncated),
+                            Some(chunk.content_hash),
+                            chunk.symbol_kind,
+                        )
+                    }
+                    Ok(None) | Err(_) => {
+                        // Chunk not found or error, fall back to file I/O
+                        let (snippet, truncated) = snippet_from_file(
+                            &reference.file,
+                            reference.byte_start,
+                            reference.byte_end,
+                            options.snippet.max_bytes,
+                            &mut file_cache,
+                        );
+                        (snippet, truncated, None, None)
+                    }
                 }
-                Ok(None) | Err(_) => {
-                    // Chunk not found or error, fall back to file I/O
-                    let (snippet, truncated) = snippet_from_file(
-                        &reference.file,
-                        reference.byte_start,
-                        reference.byte_end,
-                        options.snippet.max_bytes,
-                        &mut file_cache,
-                    );
-                    (snippet, truncated, None, None)
-                }
-            }
-        } else {
-            (None, None, None, None)
-        };
+            } else {
+                (None, None, None, None)
+            };
 
         let span = crate::output::Span {
             span_id: span_id(&reference.file, reference.byte_start, reference.byte_end),
@@ -747,7 +817,11 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
             referenced_symbol,
             reference_kind: None,
             target_symbol_id,
-            score: if options.include_score { Some(score) } else { None },
+            score: if options.include_score {
+                Some(score)
+            } else {
+                None
+            },
             content_hash,
             symbol_kind_from_chunk,
             snippet,
@@ -762,8 +836,13 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
         }
         results.len() as u64
     } else {
-        let (count_sql, count_params) =
-            build_reference_query(options.query, options.path_filter, options.use_regex, true, 0);
+        let (count_sql, count_params) = build_reference_query(
+            options.query,
+            options.path_filter,
+            options.use_regex,
+            true,
+            0,
+        );
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {
             partial = true;
@@ -788,7 +867,9 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
         ReferenceSearchResponse {
             results,
             query: options.query.to_string(),
-            path_filter: options.path_filter.map(|path| path.to_string_lossy().to_string()),
+            path_filter: options
+                .path_filter
+                .map(|path| path.to_string_lossy().to_string()),
             total_count,
         },
         partial,
@@ -796,12 +877,14 @@ pub fn search_references(options: SearchOptions) -> Result<(ReferenceSearchRespo
 }
 
 pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool), LlmError> {
-    let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+    let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+    {
         Ok(conn) => conn,
         Err(rusqlite::Error::SqliteFailure(err, msg)) => match err.code {
             ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
                 return Err(LlmError::DatabaseCorrupted {
-                    reason: msg.unwrap_or_else(|| "Database file is invalid or corrupted".to_string()),
+                    reason: msg
+                        .unwrap_or_else(|| "Database file is invalid or corrupted".to_string()),
                 });
             }
             ErrorCode::CannotOpen => {
@@ -816,19 +899,32 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
 
     // Force database validation by checking if schema exists
     // This catches "not a database" errors that occur lazily
-    conn.query_row("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1", [], |_| Ok(())).map_err(|e| match e {
+    conn.query_row(
+        "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1",
+        [],
+        |_| Ok(()),
+    )
+    .map_err(|e| match e {
         rusqlite::Error::SqliteFailure(err, ref msg) => match err.code {
-            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
-                LlmError::DatabaseCorrupted {
-                    reason: msg.as_ref().map(|s| s.as_str()).unwrap_or("Database file is invalid or corrupted").to_string(),
-                }
-            }
+            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => LlmError::DatabaseCorrupted {
+                reason: msg
+                    .as_ref()
+                    .map(|s| s.as_str())
+                    .unwrap_or("Database file is invalid or corrupted")
+                    .to_string(),
+            },
             _ => LlmError::from(e),
         },
         other => LlmError::from(other),
     })?;
 
-    let (sql, params) = build_call_query(options.query, options.path_filter, options.use_regex, false, options.candidates);
+    let (sql, params) = build_call_query(
+        options.query,
+        options.path_filter,
+        options.use_regex,
+        false,
+        options.candidates,
+    );
     let mut stmt = conn.prepare_cached(&sql)?;
     let mut rows = stmt.query(params_from_iter(params))?;
     let regex = if options.use_regex {
@@ -884,44 +980,48 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
         } else {
             None
         };
-        let (snippet, snippet_truncated, content_hash, symbol_kind_from_chunk) = if options.snippet.include {
-            // Try chunks table first for faster, pre-validated content
-            match search_chunks_by_span(&conn, &call.file, call.byte_start, call.byte_end) {
-                Ok(Some(chunk)) => {
-                    // Apply max_bytes limit to chunk content
-                    let content_bytes = chunk.content.as_bytes();
-                    let capped_end = content_bytes.len().min(options.snippet.max_bytes);
-                    let truncated = capped_end < content_bytes.len();
+        let (snippet, snippet_truncated, content_hash, symbol_kind_from_chunk) =
+            if options.snippet.include {
+                // Try chunks table first for faster, pre-validated content
+                match search_chunks_by_span(&conn, &call.file, call.byte_start, call.byte_end) {
+                    Ok(Some(chunk)) => {
+                        // Apply max_bytes limit to chunk content
+                        let content_bytes = chunk.content.as_bytes();
+                        let capped_end = content_bytes.len().min(options.snippet.max_bytes);
+                        let truncated = capped_end < content_bytes.len();
 
-                    // Safe UTF-8 slice at character boundary
-                    let snippet_content = if capped_end < content_bytes.len() {
-                        match extract_symbol_content_safe(content_bytes, 0, capped_end) {
-                            Some(s) => s,
-                            None => {
-                                chunk.content.chars().take(capped_end).collect()
+                        // Safe UTF-8 slice at character boundary
+                        let snippet_content = if capped_end < content_bytes.len() {
+                            match extract_symbol_content_safe(content_bytes, 0, capped_end) {
+                                Some(s) => s,
+                                None => chunk.content.chars().take(capped_end).collect(),
                             }
-                        }
-                    } else {
-                        chunk.content.clone()
-                    };
+                        } else {
+                            chunk.content.clone()
+                        };
 
-                    (Some(snippet_content), Some(truncated), Some(chunk.content_hash), chunk.symbol_kind)
+                        (
+                            Some(snippet_content),
+                            Some(truncated),
+                            Some(chunk.content_hash),
+                            chunk.symbol_kind,
+                        )
+                    }
+                    Ok(None) | Err(_) => {
+                        // Chunk not found or error, fall back to file I/O
+                        let (snippet, truncated) = snippet_from_file(
+                            &call.file,
+                            call.byte_start,
+                            call.byte_end,
+                            options.snippet.max_bytes,
+                            &mut file_cache,
+                        );
+                        (snippet, truncated, None, None)
+                    }
                 }
-                Ok(None) | Err(_) => {
-                    // Chunk not found or error, fall back to file I/O
-                    let (snippet, truncated) = snippet_from_file(
-                        &call.file,
-                        call.byte_start,
-                        call.byte_end,
-                        options.snippet.max_bytes,
-                        &mut file_cache,
-                    );
-                    (snippet, truncated, None, None)
-                }
-            }
-        } else {
-            (None, None, None, None)
-        };
+            } else {
+                (None, None, None, None)
+            };
 
         let span = crate::output::Span {
             span_id: span_id(&call.file, call.byte_start, call.byte_end),
@@ -943,7 +1043,11 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
             callee: call.callee,
             caller_symbol_id: call.caller_symbol_id,
             callee_symbol_id: call.callee_symbol_id,
-            score: if options.include_score { Some(score) } else { None },
+            score: if options.include_score {
+                Some(score)
+            } else {
+                None
+            },
             content_hash,
             symbol_kind_from_chunk,
             snippet,
@@ -958,8 +1062,13 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
         }
         results.len() as u64
     } else {
-        let (count_sql, count_params) =
-            build_call_query(options.query, options.path_filter, options.use_regex, true, 0);
+        let (count_sql, count_params) = build_call_query(
+            options.query,
+            options.path_filter,
+            options.use_regex,
+            true,
+            0,
+        );
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {
             partial = true;
@@ -984,7 +1093,9 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
         CallSearchResponse {
             results,
             query: options.query.to_string(),
-            path_filter: options.path_filter.map(|path| path.to_string_lossy().to_string()),
+            path_filter: options
+                .path_filter
+                .map(|path| path.to_string_lossy().to_string()),
             total_count,
         },
         partial,
@@ -1026,7 +1137,8 @@ fn build_search_query(
 
     // FQN pattern filter (LIKE match on canonical_fqn)
     if let Some(pattern) = fqn_pattern {
-        where_clauses.push("json_extract(s.data, '$.canonical_fqn') LIKE ? ESCAPE '\\'".to_string());
+        where_clauses
+            .push("json_extract(s.data, '$.canonical_fqn') LIKE ? ESCAPE '\\'".to_string());
         params.push(Box::new(pattern.to_string()));
     }
 
@@ -1072,11 +1184,15 @@ fn build_search_query(
     // Add metrics filter WHERE clauses
     // For filters, we use IS NOT NULL to ensure symbols have metrics
     if let Some(min_cc) = metrics.min_complexity {
-        where_clauses.push("(sm.cyclomatic_complexity IS NOT NULL AND sm.cyclomatic_complexity >= ?)".to_string());
+        where_clauses.push(
+            "(sm.cyclomatic_complexity IS NOT NULL AND sm.cyclomatic_complexity >= ?)".to_string(),
+        );
         params.push(Box::new(min_cc as i64));
     }
     if let Some(max_cc) = metrics.max_complexity {
-        where_clauses.push("(sm.cyclomatic_complexity IS NOT NULL AND sm.cyclomatic_complexity <= ?)".to_string());
+        where_clauses.push(
+            "(sm.cyclomatic_complexity IS NOT NULL AND sm.cyclomatic_complexity <= ?)".to_string(),
+        );
         params.push(Box::new(max_cc as i64));
     }
     if let Some(min_fi) = metrics.min_fan_in {
@@ -1284,10 +1400,7 @@ struct FileCache {
     lines: Vec<String>,
 }
 
-fn load_file<'a>(
-    path: &str,
-    cache: &'a mut HashMap<String, FileCache>,
-) -> Option<&'a FileCache> {
+fn load_file<'a>(path: &str, cache: &'a mut HashMap<String, FileCache>) -> Option<&'a FileCache> {
     if !cache.contains_key(path) {
         let bytes = match std::fs::read(path) {
             Ok(bytes) => bytes,
@@ -1298,13 +1411,7 @@ fn load_file<'a>(
         };
         let text = String::from_utf8_lossy(&bytes);
         let lines = text.split('\n').map(|line| line.to_string()).collect();
-        cache.insert(
-            path.to_string(),
-            FileCache {
-                bytes,
-                lines,
-            },
-        );
+        cache.insert(path.to_string(), FileCache { bytes, lines });
     }
     cache.get(path)
 }
@@ -1500,7 +1607,10 @@ mod tests {
     #[test]
     fn test_score_match_display_fqn_contains() {
         let score = score_match("foo", "", "barfoobar", "", None);
-        assert_eq!(score, 50, "Display_fqn contains match should return score 50");
+        assert_eq!(
+            score, 50,
+            "Display_fqn contains match should return score 50"
+        );
     }
 
     #[test]
@@ -1532,8 +1642,7 @@ mod tests {
         let regex = Regex::new("foo.*").ok();
         let score = score_match("foo.*", "", "foobar", "", regex.as_ref());
         assert_eq!(
-            score,
-            60,
+            score, 60,
             "Regex match on display_fqn should return score 60"
         );
     }
@@ -1579,10 +1688,7 @@ mod tests {
     fn test_score_match_priority_prefix_over_contains() {
         // Prefix match should take priority over contains match
         let score = score_match("foo", "foobar", "barfoobar", "", None);
-        assert_eq!(
-            score, 80,
-            "Prefix match should take priority over contains"
-        );
+        assert_eq!(score, 80, "Prefix match should take priority over contains");
     }
 
     #[test]
@@ -1606,7 +1712,10 @@ mod tests {
     fn test_score_match_empty_name_field() {
         // Empty fields should be handled correctly
         let score = score_match("foo", "", "", "", None);
-        assert_eq!(score, 0, "All empty fields with non-empty query should return 0");
+        assert_eq!(
+            score, 0,
+            "All empty fields with non-empty query should return 0"
+        );
     }
 
     // Helper to count parameter placeholders in SQL
@@ -1616,7 +1725,20 @@ mod tests {
 
     #[test]
     fn test_build_search_query_basic() {
-        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            None,
+            None,
+            None,
+            false,
+            false,
+            100,
+            MetricsOptions::default(),
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should have LIKE clauses for name, display_fqn, fqn
         assert!(sql.contains("s.name LIKE ? ESCAPE '\\'"));
@@ -1633,7 +1755,20 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_kind_filter() {
-        let (sql, params) = build_search_query("test", None, Some("Function"), None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            None,
+            Some("Function"),
+            None,
+            false,
+            false,
+            100,
+            MetricsOptions::default(),
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should add kind filter
         assert!(sql.contains("s.kind_normalized = ? OR s.kind = ?"));
@@ -1646,7 +1781,20 @@ mod tests {
     #[test]
     fn test_build_search_query_with_path_filter() {
         let path = PathBuf::from("/src/module");
-        let (sql, params) = build_search_query("test", Some(&path), None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            Some(&path),
+            None,
+            None,
+            false,
+            false,
+            100,
+            MetricsOptions::default(),
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should add file path filter
         assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));
@@ -1658,7 +1806,20 @@ mod tests {
 
     #[test]
     fn test_build_search_query_regex_mode() {
-        let (sql, params) = build_search_query("test.*", None, None, None, true, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query(
+            "test.*",
+            None,
+            None,
+            None,
+            true,
+            false,
+            100,
+            MetricsOptions::default(),
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should NOT have LIKE clauses in regex mode
         assert!(!sql.contains("LIKE ? ESCAPE '\\'"));
@@ -1673,7 +1834,20 @@ mod tests {
 
     #[test]
     fn test_build_search_query_count_only() {
-        let (sql, params) = build_search_query("test", None, None, None, false, true, 0, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            None,
+            None,
+            None,
+            false,
+            true,
+            0,
+            MetricsOptions::default(),
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should start with COUNT
         assert!(sql.starts_with("SELECT COUNT(*)"));
@@ -1688,7 +1862,20 @@ mod tests {
 
     #[test]
     fn test_build_search_query_regular_query() {
-        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            None,
+            None,
+            None,
+            false,
+            false,
+            100,
+            MetricsOptions::default(),
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should have ORDER BY
         assert!(sql.contains("ORDER BY"));
@@ -1702,7 +1889,20 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_fan_in_sort() {
-        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::FanIn, None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            None,
+            None,
+            None,
+            false,
+            false,
+            100,
+            MetricsOptions::default(),
+            SortMode::FanIn,
+            None,
+            None,
+            None,
+        );
 
         // Should ORDER BY fan_in DESC
         assert!(sql.contains("COALESCE(sm.fan_in, 0) DESC"));
@@ -1713,7 +1913,20 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_fan_out_sort() {
-        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::FanOut, None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            None,
+            None,
+            None,
+            false,
+            false,
+            100,
+            MetricsOptions::default(),
+            SortMode::FanOut,
+            None,
+            None,
+            None,
+        );
 
         // Should ORDER BY fan_out DESC
         assert!(sql.contains("COALESCE(sm.fan_out, 0) DESC"));
@@ -1724,7 +1937,20 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_complexity_sort() {
-        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::Complexity, None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            None,
+            None,
+            None,
+            false,
+            false,
+            100,
+            MetricsOptions::default(),
+            SortMode::Complexity,
+            None,
+            None,
+            None,
+        );
 
         // Should ORDER BY cyclomatic_complexity DESC
         assert!(sql.contains("COALESCE(sm.cyclomatic_complexity, 0) DESC"));
@@ -1739,7 +1965,20 @@ mod tests {
             min_complexity: Some(5),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            None,
+            None,
+            None,
+            false,
+            false,
+            100,
+            metrics,
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should filter by min_complexity
         assert!(sql.contains("sm.cyclomatic_complexity >= ?"));
@@ -1755,7 +1994,20 @@ mod tests {
             max_complexity: Some(20),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            None,
+            None,
+            None,
+            false,
+            false,
+            100,
+            metrics,
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should filter by max_complexity
         assert!(sql.contains("sm.cyclomatic_complexity <= ?"));
@@ -1771,7 +2023,20 @@ mod tests {
             min_fan_in: Some(10),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            None,
+            None,
+            None,
+            false,
+            false,
+            100,
+            metrics,
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should filter by min_fan_in
         assert!(sql.contains("sm.fan_in >= ?"));
@@ -1783,7 +2048,20 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_join() {
-        let (sql, _) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, _) = build_search_query(
+            "test",
+            None,
+            None,
+            None,
+            false,
+            false,
+            100,
+            MetricsOptions::default(),
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should LEFT JOIN symbol_metrics
         assert!(sql.contains("LEFT JOIN symbol_metrics sm"));
@@ -1800,7 +2078,20 @@ mod tests {
             min_fan_in: Some(10),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            None,
+            None,
+            None,
+            false,
+            false,
+            100,
+            metrics,
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should have all filter clauses
         assert!(sql.contains("sm.cyclomatic_complexity >= ?"));
@@ -1976,7 +2267,20 @@ mod tests {
     #[test]
     fn test_build_search_query_combined_filters_path_kind() {
         let path = PathBuf::from("/src/module");
-        let (sql, params) = build_search_query("test", Some(&path), Some("Function"), None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query(
+            "test",
+            Some(&path),
+            Some("Function"),
+            None,
+            false,
+            false,
+            100,
+            MetricsOptions::default(),
+            SortMode::default(),
+            None,
+            None,
+            None,
+        );
 
         // Should have all filters
         assert!(sql.contains("s.name LIKE ? ESCAPE '\\'"));
@@ -2018,7 +2322,6 @@ mod tests {
         assert_eq!(count_params(&sql), 1);
     }
 
-
     // Helper to create a test database with sample data for search_symbols tests
     fn create_test_db() -> (tempfile::NamedTempFile, Connection) {
         let db_file = tempfile::NamedTempFile::new().unwrap();
@@ -2032,7 +2335,8 @@ mod tests {
                 data TEXT NOT NULL
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
         conn.execute(
             "CREATE TABLE graph_edges (
                 id INTEGER PRIMARY KEY,
@@ -2041,7 +2345,8 @@ mod tests {
                 edge_type TEXT NOT NULL
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
         // Create symbol_metrics table (required for LEFT JOIN in queries)
         conn.execute(
             "CREATE TABLE symbol_metrics (
@@ -2052,7 +2357,8 @@ mod tests {
                 loc INTEGER
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         // Insert test File entity
         conn.execute(
@@ -2110,7 +2416,10 @@ mod tests {
             let (response, partial) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
-            assert_eq!(response.results[0].name, "test_func", "Should match test_func");
+            assert_eq!(
+                response.results[0].name, "test_func",
+                "Should match test_func"
+            );
         }
 
         #[test]
@@ -2237,7 +2546,10 @@ mod tests {
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 Function result");
             assert_eq!(response.results[0].name, "test_func", "Should be test_func");
-            assert_eq!(response.results[0].kind, "Function", "Should be Function kind");
+            assert_eq!(
+                response.results[0].kind, "Function",
+                "Should be Function kind"
+            );
         }
 
         #[test]
@@ -2267,7 +2579,11 @@ mod tests {
 
             let (response, partial) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
-            assert_eq!(response.results.len(), 1, "Should return at most 1 result due to limit");
+            assert_eq!(
+                response.results.len(),
+                1,
+                "Should return at most 1 result due to limit"
+            );
         }
 
         #[test]
@@ -2297,7 +2613,11 @@ mod tests {
 
             let (response, partial) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
-            assert_eq!(response.results.len(), 1, "Should find 1 result matching regex");
+            assert_eq!(
+                response.results.len(),
+                1,
+                "Should find 1 result matching regex"
+            );
             assert_eq!(response.results[0].name, "test_func", "Should be test_func");
         }
 
@@ -2359,7 +2679,11 @@ mod tests {
             let (response, partial) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
-            assert_eq!(response.results[0].score, Some(100), "Exact match should have score 100");
+            assert_eq!(
+                response.results[0].score,
+                Some(100),
+                "Exact match should have score 100"
+            );
         }
 
         #[test]
@@ -2391,11 +2715,27 @@ mod tests {
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 2, "Should find 2 results");
 
-            let test_func = response.results.iter().find(|r| r.name == "test_func").unwrap();
-            assert_eq!(test_func.score, Some(80), "test_func should have prefix score 80");
+            let test_func = response
+                .results
+                .iter()
+                .find(|r| r.name == "test_func")
+                .unwrap();
+            assert_eq!(
+                test_func.score,
+                Some(80),
+                "test_func should have prefix score 80"
+            );
 
-            let test_struct = response.results.iter().find(|r| r.name == "TestStruct").unwrap();
-            assert_eq!(test_struct.score, Some(0), "TestStruct should have score 0 (case mismatch)");
+            let test_struct = response
+                .results
+                .iter()
+                .find(|r| r.name == "TestStruct")
+                .unwrap();
+            assert_eq!(
+                test_struct.score,
+                Some(0),
+                "TestStruct should have score 0 (case mismatch)"
+            );
         }
 
         #[test]
@@ -2487,10 +2827,24 @@ mod tests {
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 2, "Should find 2 results");
 
-            assert_eq!(response.results[0].name, "test_func", "test_func should be first (higher score)");
-            assert_eq!(response.results[0].score, Some(80), "test_func should have prefix score 80");
-            assert_eq!(response.results[1].name, "TestStruct", "TestStruct should be second");
-            assert_eq!(response.results[1].score, Some(0), "TestStruct should have score 0");
+            assert_eq!(
+                response.results[0].name, "test_func",
+                "test_func should be first (higher score)"
+            );
+            assert_eq!(
+                response.results[0].score,
+                Some(80),
+                "test_func should have prefix score 80"
+            );
+            assert_eq!(
+                response.results[1].name, "TestStruct",
+                "TestStruct should be second"
+            );
+            assert_eq!(
+                response.results[1].score,
+                Some(0),
+                "TestStruct should have score 0"
+            );
         }
 
         #[test]
@@ -2521,7 +2875,10 @@ mod tests {
             let (response, partial) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
-            assert!(response.results[0].score.is_some(), "Score should be included");
+            assert!(
+                response.results[0].score.is_some(),
+                "Score should be included"
+            );
             assert_eq!(response.results[0].score, Some(100), "Score should be 100");
         }
 
@@ -2586,7 +2943,8 @@ mod tests {
                     data TEXT NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
 
             // Insert test Call entities
             conn.execute(
@@ -3030,7 +3388,8 @@ mod tests {
                     name TEXT
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             conn.execute(
                 "CREATE TABLE graph_edges (
                     id INTEGER PRIMARY KEY,
@@ -3039,7 +3398,8 @@ mod tests {
                     edge_type TEXT NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
 
             // Insert test Symbol entity
             let symbol_data = json!({
@@ -3052,7 +3412,8 @@ mod tests {
             conn.execute(
                 "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'Symbol', ?1)",
                 [symbol_data],
-            ).unwrap();
+            )
+            .unwrap();
 
             // Insert test Reference entities
             let ref1_data = json!({
@@ -3063,12 +3424,14 @@ mod tests {
                 "start_col": 5,
                 "end_line": 3,
                 "end_col": 14
-            }).to_string();
+            })
+            .to_string();
             conn.execute(
                 "INSERT INTO graph_entities (id, kind, name, data) VALUES
                     (10, 'Reference', 'ref to test_func', ?1)",
                 [ref1_data],
-            ).unwrap();
+            )
+            .unwrap();
 
             let ref2_data = json!({
                 "file": "/test/file.rs",
@@ -3078,12 +3441,14 @@ mod tests {
                 "start_col": 0,
                 "end_line": 7,
                 "end_col": 12
-            }).to_string();
+            })
+            .to_string();
             conn.execute(
                 "INSERT INTO graph_entities (id, kind, name, data) VALUES
                     (11, 'Reference', 'ref to TestStruct', ?1)",
                 [ref2_data],
-            ).unwrap();
+            )
+            .unwrap();
 
             let ref3_data = json!({
                 "file": "/test/other.rs",
@@ -3093,18 +3458,21 @@ mod tests {
                 "start_col": 0,
                 "end_line": 10,
                 "end_col": 10
-            }).to_string();
+            })
+            .to_string();
             conn.execute(
                 "INSERT INTO graph_entities (id, kind, name, data) VALUES
                     (12, 'Reference', 'ref to helper', ?1)",
                 [ref3_data],
-            ).unwrap();
+            )
+            .unwrap();
 
             // Insert REFERENCES edge
             conn.execute(
                 "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (10, 1, 'REFERENCES')",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
 
             (db_file, conn)
         }
@@ -3134,7 +3502,11 @@ mod tests {
             };
 
             let (result, _partial) = search_references(options).unwrap();
-            assert_eq!(result.results.len(), 1, "Should find 1 reference to test_func");
+            assert_eq!(
+                result.results.len(),
+                1,
+                "Should find 1 reference to test_func"
+            );
             assert_eq!(result.results[0].referenced_symbol, "test_func");
             assert_eq!(result.query, "test_func");
         }
@@ -3164,7 +3536,11 @@ mod tests {
             };
 
             let (result, _partial) = search_references(options).unwrap();
-            assert_eq!(result.results.len(), 0, "Should find 0 references for nonexistent symbol");
+            assert_eq!(
+                result.results.len(),
+                0,
+                "Should find 0 references for nonexistent symbol"
+            );
         }
 
         #[test]
@@ -3192,7 +3568,11 @@ mod tests {
             };
 
             let (result, _partial) = search_references(options).unwrap();
-            assert_eq!(result.results.len(), 1, "Should find 1 reference with 'test' prefix");
+            assert_eq!(
+                result.results.len(),
+                1,
+                "Should find 1 reference with 'test' prefix"
+            );
             assert_eq!(result.results[0].referenced_symbol, "test_func");
         }
 
@@ -3221,7 +3601,11 @@ mod tests {
             };
 
             let (result, _partial) = search_references(options).unwrap();
-            assert_eq!(result.results.len(), 1, "Should find 1 reference matching regex 'test.*'");
+            assert_eq!(
+                result.results.len(),
+                1,
+                "Should find 1 reference matching regex 'test.*'"
+            );
             assert_eq!(result.results[0].referenced_symbol, "test_func");
         }
 
@@ -3250,7 +3634,11 @@ mod tests {
             };
 
             let (result, _partial) = search_references(options).unwrap();
-            assert_eq!(result.results.len(), 0, "Should find 0 references matching regex 'xyz.*'");
+            assert_eq!(
+                result.results.len(),
+                0,
+                "Should find 0 references matching regex 'xyz.*'"
+            );
         }
 
         #[test]
@@ -3279,7 +3667,11 @@ mod tests {
 
             let (result, _partial) = search_references(options).unwrap();
             assert_eq!(result.results.len(), 1);
-            assert_eq!(result.results[0].score, Some(100), "Exact match should have score 100");
+            assert_eq!(
+                result.results[0].score,
+                Some(100),
+                "Exact match should have score 100"
+            );
         }
 
         #[test]
@@ -3307,7 +3699,11 @@ mod tests {
             };
 
             let (result, _partial) = search_references(options).unwrap();
-            assert_eq!(result.results.len(), 1, "Limit should restrict results to 1");
+            assert_eq!(
+                result.results.len(),
+                1,
+                "Limit should restrict results to 1"
+            );
         }
 
         #[test]
@@ -3364,7 +3760,11 @@ mod tests {
             };
 
             let (result, _partial) = search_references(options).unwrap();
-            assert_eq!(result.results.len(), 1, "Should find 1 reference in /test/file.rs");
+            assert_eq!(
+                result.results.len(),
+                1,
+                "Should find 1 reference in /test/file.rs"
+            );
             assert_eq!(result.results[0].span.file_path, "/test/file.rs");
         }
 
@@ -3491,10 +3891,10 @@ mod tests {
             include_score: true,
             sort_by: SortMode::default(),
             metrics: MetricsOptions::default(),
-        symbol_id: None,
-        fqn_pattern: None,
-        exact_fqn: None,
-                language_filter: None,
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
+            language_filter: None,
         });
 
         match result {
@@ -3531,7 +3931,8 @@ mod tests {
                     created_at INTEGER NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
 
             // Insert test chunks
             // SHA-256 hash of "fn test_func() { }"
@@ -3570,7 +3971,11 @@ mod tests {
 
             // Query for non-existent symbol
             let chunks = search_chunks_by_symbol_name(&conn, "nonexistent").unwrap();
-            assert_eq!(chunks.len(), 0, "Should find 0 chunks for non-existent symbol");
+            assert_eq!(
+                chunks.len(),
+                0,
+                "Should find 0 chunks for non-existent symbol"
+            );
         }
 
         #[test]
@@ -3609,11 +4014,17 @@ mod tests {
 
             // Query with wrong byte_start
             let chunk = search_chunks_by_span(&conn, "/test/file.rs", 101, 200).unwrap();
-            assert!(chunk.is_none(), "Should return None when byte_start doesn't match");
+            assert!(
+                chunk.is_none(),
+                "Should return None when byte_start doesn't match"
+            );
 
             // Query with wrong byte_end
             let chunk = search_chunks_by_span(&conn, "/test/file.rs", 100, 201).unwrap();
-            assert!(chunk.is_none(), "Should return None when byte_end doesn't match");
+            assert!(
+                chunk.is_none(),
+                "Should return None when byte_end doesn't match"
+            );
         }
 
         #[test]
@@ -3663,7 +4074,8 @@ mod tests {
                     created_at INTEGER NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
 
             // Insert multiple chunks for the same symbol (e.g., different parts)
             conn.execute(
@@ -3695,7 +4107,8 @@ mod tests {
                     data TEXT NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             conn.execute(
                 "CREATE TABLE graph_edges (
                     id INTEGER PRIMARY KEY,
@@ -3704,7 +4117,8 @@ mod tests {
                     edge_type TEXT NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             conn.execute(
                 "CREATE TABLE symbol_metrics (
                     symbol_id TEXT PRIMARY KEY,
@@ -3717,7 +4131,8 @@ mod tests {
                     cyclomatic_complexity INTEGER
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
 
             // Insert test File entity
             conn.execute(
@@ -3788,12 +4203,25 @@ mod tests {
             let (response, partial) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             // Should find med_complexity (15) and high_complexity (25), but not low_complexity (5)
-            assert_eq!(response.results.len(), 2, "Should find 2 results with complexity >= 10");
+            assert_eq!(
+                response.results.len(),
+                2,
+                "Should find 2 results with complexity >= 10"
+            );
 
             let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
-            assert!(names.contains(&"med_complexity"), "Should contain med_complexity");
-            assert!(names.contains(&"high_complexity"), "Should contain high_complexity");
-            assert!(!names.contains(&"low_complexity"), "Should not contain low_complexity");
+            assert!(
+                names.contains(&"med_complexity"),
+                "Should contain med_complexity"
+            );
+            assert!(
+                names.contains(&"high_complexity"),
+                "Should contain high_complexity"
+            );
+            assert!(
+                !names.contains(&"low_complexity"),
+                "Should not contain low_complexity"
+            );
         }
 
         #[test]
@@ -3829,7 +4257,11 @@ mod tests {
             let (response, partial) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             // Should find only low_complexity (5), not med (15) or high (25)
-            assert_eq!(response.results.len(), 1, "Should find 1 result with complexity <= 10");
+            assert_eq!(
+                response.results.len(),
+                1,
+                "Should find 1 result with complexity <= 10"
+            );
             assert_eq!(response.results[0].name, "low_complexity");
         }
 
@@ -3866,7 +4298,11 @@ mod tests {
             let (response, partial) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             // Should find only med_complexity (15), not low (5) or high (25)
-            assert_eq!(response.results.len(), 1, "Should find 1 result with complexity in range [10, 20]");
+            assert_eq!(
+                response.results.len(),
+                1,
+                "Should find 1 result with complexity in range [10, 20]"
+            );
             assert_eq!(response.results[0].name, "med_complexity");
         }
 
@@ -3903,9 +4339,17 @@ mod tests {
             let (response, partial) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             // Should find only low_complexity (fan_in=10)
-            assert_eq!(response.results.len(), 1, "Should find 1 result with fan_in >= 8");
+            assert_eq!(
+                response.results.len(),
+                1,
+                "Should find 1 result with fan_in >= 8"
+            );
             assert_eq!(response.results[0].name, "low_complexity");
-            assert_eq!(response.results[0].fan_in, Some(10), "fan_in should be populated");
+            assert_eq!(
+                response.results[0].fan_in,
+                Some(10),
+                "fan_in should be populated"
+            );
         }
 
         #[test]
@@ -3941,9 +4385,17 @@ mod tests {
             let (response, partial) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             // Should find only high_complexity (fan_out=15)
-            assert_eq!(response.results.len(), 1, "Should find 1 result with fan_out >= 10");
+            assert_eq!(
+                response.results.len(),
+                1,
+                "Should find 1 result with fan_out >= 10"
+            );
             assert_eq!(response.results[0].name, "high_complexity");
-            assert_eq!(response.results[0].fan_out, Some(15), "fan_out should be populated");
+            assert_eq!(
+                response.results[0].fan_out,
+                Some(15),
+                "fan_out should be populated"
+            );
         }
 
         #[test]
@@ -3976,11 +4428,20 @@ mod tests {
             assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
             // Should be sorted by fan_in DESC: low_complexity (10), med_complexity (5), high_complexity (2)
-            assert_eq!(response.results[0].name, "low_complexity", "First should have highest fan_in");
+            assert_eq!(
+                response.results[0].name, "low_complexity",
+                "First should have highest fan_in"
+            );
             assert_eq!(response.results[0].fan_in, Some(10));
-            assert_eq!(response.results[1].name, "med_complexity", "Second should have medium fan_in");
+            assert_eq!(
+                response.results[1].name, "med_complexity",
+                "Second should have medium fan_in"
+            );
             assert_eq!(response.results[1].fan_in, Some(5));
-            assert_eq!(response.results[2].name, "high_complexity", "Third should have lowest fan_in");
+            assert_eq!(
+                response.results[2].name, "high_complexity",
+                "Third should have lowest fan_in"
+            );
             assert_eq!(response.results[2].fan_in, Some(2));
         }
 
@@ -4014,11 +4475,20 @@ mod tests {
             assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
             // Should be sorted by fan_out DESC: high_complexity (15), med_complexity (8), low_complexity (2)
-            assert_eq!(response.results[0].name, "high_complexity", "First should have highest fan_out");
+            assert_eq!(
+                response.results[0].name, "high_complexity",
+                "First should have highest fan_out"
+            );
             assert_eq!(response.results[0].fan_out, Some(15));
-            assert_eq!(response.results[1].name, "med_complexity", "Second should have medium fan_out");
+            assert_eq!(
+                response.results[1].name, "med_complexity",
+                "Second should have medium fan_out"
+            );
             assert_eq!(response.results[1].fan_out, Some(8));
-            assert_eq!(response.results[2].name, "low_complexity", "Third should have lowest fan_out");
+            assert_eq!(
+                response.results[2].name, "low_complexity",
+                "Third should have lowest fan_out"
+            );
             assert_eq!(response.results[2].fan_out, Some(2));
         }
 
@@ -4052,11 +4522,20 @@ mod tests {
             assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
             // Should be sorted by cyclomatic_complexity DESC: high_complexity (25), med_complexity (15), low_complexity (5)
-            assert_eq!(response.results[0].name, "high_complexity", "First should have highest complexity");
+            assert_eq!(
+                response.results[0].name, "high_complexity",
+                "First should have highest complexity"
+            );
             assert_eq!(response.results[0].cyclomatic_complexity, Some(25));
-            assert_eq!(response.results[1].name, "med_complexity", "Second should have medium complexity");
+            assert_eq!(
+                response.results[1].name, "med_complexity",
+                "Second should have medium complexity"
+            );
             assert_eq!(response.results[1].cyclomatic_complexity, Some(15));
-            assert_eq!(response.results[2].name, "low_complexity", "Third should have lowest complexity");
+            assert_eq!(
+                response.results[2].name, "low_complexity",
+                "Third should have lowest complexity"
+            );
             assert_eq!(response.results[2].cyclomatic_complexity, Some(5));
         }
 
@@ -4094,8 +4573,15 @@ mod tests {
             // Verify metrics fields are populated
             assert_eq!(result.fan_in, Some(10), "fan_in should be populated");
             assert_eq!(result.fan_out, Some(2), "fan_out should be populated");
-            assert_eq!(result.cyclomatic_complexity, Some(5), "cyclomatic_complexity should be populated");
-            assert_eq!(result.complexity_score, None, "complexity_score is not available in symbol_metrics");
+            assert_eq!(
+                result.cyclomatic_complexity,
+                Some(5),
+                "cyclomatic_complexity should be populated"
+            );
+            assert_eq!(
+                result.complexity_score, None,
+                "complexity_score is not available in symbol_metrics"
+            );
         }
 
         #[test]
@@ -4111,7 +4597,8 @@ mod tests {
                     data TEXT NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             conn.execute(
                 "CREATE TABLE graph_edges (
                     id INTEGER PRIMARY KEY,
@@ -4120,7 +4607,8 @@ mod tests {
                     edge_type TEXT NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             conn.execute(
                 "CREATE TABLE symbol_metrics (
                     symbol_id TEXT PRIMARY KEY,
@@ -4133,7 +4621,8 @@ mod tests {
                     cyclomatic_complexity INTEGER
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
 
             conn.execute(
                 "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"/test/file.rs\"}')",
@@ -4166,7 +4655,7 @@ mod tests {
             // Test without filter: all symbols should appear
             let options = SearchOptions {
                 db_path,
-                query: "",  // Empty query matches all
+                query: "", // Empty query matches all
                 path_filter: None,
                 kind_filter: None,
                 limit: 10,
@@ -4176,7 +4665,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions::default(),
                 include_score: false,
-                sort_by: SortMode::FanIn,  // Sort by fan_in
+                sort_by: SortMode::FanIn, // Sort by fan_in
                 metrics: MetricsOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
@@ -4189,14 +4678,36 @@ mod tests {
 
             // Symbols without metrics should have None for metrics fields
             // and appear last in sorted results (COALESCE to 0)
-            let with_metrics = response.results.iter().find(|r| r.name == "with_metrics").unwrap();
-            assert_eq!(with_metrics.fan_in, Some(10), "Symbol with metrics should have fan_in");
+            let with_metrics = response
+                .results
+                .iter()
+                .find(|r| r.name == "with_metrics")
+                .unwrap();
+            assert_eq!(
+                with_metrics.fan_in,
+                Some(10),
+                "Symbol with metrics should have fan_in"
+            );
 
-            let no_metrics_1 = response.results.iter().find(|r| r.name == "no_metrics_1").unwrap();
-            assert_eq!(no_metrics_1.fan_in, None, "Symbol without metrics should have None for fan_in");
+            let no_metrics_1 = response
+                .results
+                .iter()
+                .find(|r| r.name == "no_metrics_1")
+                .unwrap();
+            assert_eq!(
+                no_metrics_1.fan_in, None,
+                "Symbol without metrics should have None for fan_in"
+            );
 
-            let no_metrics_2 = response.results.iter().find(|r| r.name == "no_metrics_2").unwrap();
-            assert_eq!(no_metrics_2.fan_in, None, "Symbol without metrics should have None for fan_in");
+            let no_metrics_2 = response
+                .results
+                .iter()
+                .find(|r| r.name == "no_metrics_2")
+                .unwrap();
+            assert_eq!(
+                no_metrics_2.fan_in, None,
+                "Symbol without metrics should have None for fan_in"
+            );
 
             // With filter: only symbols with metrics matching filter should appear
             let options_filter = SearchOptions {
@@ -4223,7 +4734,11 @@ mod tests {
             };
 
             let (response_filter, _) = search_symbols(options_filter).unwrap();
-            assert_eq!(response_filter.results.len(), 1, "Should find only 1 symbol with fan_in >= 5");
+            assert_eq!(
+                response_filter.results.len(),
+                1,
+                "Should find only 1 symbol with fan_in >= 5"
+            );
             assert_eq!(response_filter.results[0].name, "with_metrics");
         }
     }
@@ -4234,13 +4749,13 @@ mod tests {
 
         #[test]
         fn test_symbol_id_lookup_returns_single_result() {
-            let (_db_file, conn) = create_test_db();
+            let (_db_file, _conn) = create_test_db();
             let db_path = _db_file.path();
 
             // Lookup by exact symbol_id
             let options = SearchOptions {
                 db_path,
-                query: "unused",  // Query is ignored when symbol_id is provided
+                query: "unused", // Query is ignored when symbol_id is provided
                 path_filter: None,
                 kind_filter: None,
                 limit: 10,
@@ -4253,27 +4768,31 @@ mod tests {
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
                 symbol_id: Some("sym1"),
-                    fqn_pattern: None,
-                    exact_fqn: None,
+                fqn_pattern: None,
+                exact_fqn: None,
                 language_filter: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
-            assert_eq!(response.results.len(), 1, "Should find exactly 1 result by symbol_id");
+            assert_eq!(
+                response.results.len(),
+                1,
+                "Should find exactly 1 result by symbol_id"
+            );
             assert_eq!(response.results[0].name, "test_func");
             assert_eq!(response.results[0].symbol_id.as_deref(), Some("sym1"));
         }
 
         #[test]
         fn test_fqn_pattern_filter() {
-            let (_db_file, conn) = create_test_db();
+            let (_db_file, _conn) = create_test_db();
             let db_path = _db_file.path();
 
             // Filter by FQN pattern
             let options = SearchOptions {
                 db_path,
-                query: "test",  // Query still applies
+                query: "test", // Query still applies
                 path_filter: None,
                 kind_filter: None,
                 limit: 10,
@@ -4285,26 +4804,29 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
-                    symbol_id: None,
+                symbol_id: None,
                 fqn_pattern: Some("/test/file.rs%"),
-                    exact_fqn: None,
+                exact_fqn: None,
                 language_filter: None,
             };
 
             let (response, _partial) = search_symbols(options).unwrap();
             // All test symbols are in /test/file.rs
-            assert!(response.results.len() >= 1, "Should find symbols matching FQN pattern");
+            assert!(
+                !response.results.is_empty(),
+                "Should find symbols matching FQN pattern"
+            );
         }
 
         #[test]
         fn test_exact_fqn_filter() {
-            let (_db_file, conn) = create_test_db();
+            let (_db_file, _conn) = create_test_db();
             let db_path = _db_file.path();
 
             // Filter by exact FQN
             let options = SearchOptions {
                 db_path,
-                query: "",  // Empty query with exact_fqn should work
+                query: "", // Empty query with exact_fqn should work
                 path_filter: None,
                 kind_filter: None,
                 limit: 10,
@@ -4314,7 +4836,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions {
                     fqn: false,
-                    canonical_fqn: true,  // Enable to see canonical_fqn in results
+                    canonical_fqn: true, // Enable to see canonical_fqn in results
                     display_fqn: false,
                 },
                 include_score: false,
@@ -4327,14 +4849,21 @@ mod tests {
             };
 
             let (response, _partial) = search_symbols(options).unwrap();
-            assert_eq!(response.results.len(), 1, "Should find exactly 1 result by exact FQN");
+            assert_eq!(
+                response.results.len(),
+                1,
+                "Should find exactly 1 result by exact FQN"
+            );
             assert_eq!(response.results[0].name, "test_func");
-            assert_eq!(response.results[0].canonical_fqn.as_deref(), Some("/test/file.rs::test_func"));
+            assert_eq!(
+                response.results[0].canonical_fqn.as_deref(),
+                Some("/test/file.rs::test_func")
+            );
         }
 
         #[test]
         fn test_symbol_id_included_in_json_output() {
-            let (_db_file, conn) = create_test_db();
+            let (_db_file, _conn) = create_test_db();
             let db_path = _db_file.path();
 
             let options = SearchOptions {
@@ -4355,18 +4884,27 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
-                    symbol_id: None,
-                    fqn_pattern: None,
-                    exact_fqn: None,
+                symbol_id: None,
+                fqn_pattern: None,
+                exact_fqn: None,
                 language_filter: None,
             };
 
             let (response, _partial) = search_symbols(options).unwrap();
             // All test symbols have symbol_id
             for result in &response.results {
-                assert!(result.symbol_id.is_some(), "symbol_id should be present in results");
-                assert!(result.canonical_fqn.is_some(), "canonical_fqn should be present when requested");
-                assert!(result.display_fqn.is_some(), "display_fqn should be present when requested");
+                assert!(
+                    result.symbol_id.is_some(),
+                    "symbol_id should be present in results"
+                );
+                assert!(
+                    result.canonical_fqn.is_some(),
+                    "canonical_fqn should be present when requested"
+                );
+                assert!(
+                    result.display_fqn.is_some(),
+                    "display_fqn should be present when requested"
+                );
             }
         }
 
@@ -4384,7 +4922,8 @@ mod tests {
                     data TEXT NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             conn.execute(
                 "CREATE TABLE graph_edges (
                     id INTEGER PRIMARY KEY,
@@ -4393,7 +4932,8 @@ mod tests {
                     edge_type TEXT NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             conn.execute(
                 "CREATE TABLE symbol_metrics (
                     symbol_id TEXT PRIMARY KEY,
@@ -4403,7 +4943,8 @@ mod tests {
                     loc INTEGER
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
 
             // Insert file
             conn.execute(
@@ -4444,24 +4985,30 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions {
                     fqn: false,
-                    canonical_fqn: true,  // Enable to see canonical_fqn in results
+                    canonical_fqn: true, // Enable to see canonical_fqn in results
                     display_fqn: false,
                 },
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
-                    symbol_id: None,
-                    fqn_pattern: None,
-                    exact_fqn: None,
+                symbol_id: None,
+                fqn_pattern: None,
+                exact_fqn: None,
                 language_filter: None,
             };
 
             // Capture stderr to check for warning
             let (response, _partial) = search_symbols(options).unwrap();
             // Should find both symbols
-            assert_eq!(response.results.len(), 2, "Should find both 'parse' symbols");
+            assert_eq!(
+                response.results.len(),
+                2,
+                "Should find both 'parse' symbols"
+            );
             // Both should have different canonical_fqns
-            let fqns: Vec<_> = response.results.iter()
+            let fqns: Vec<_> = response
+                .results
+                .iter()
                 .filter_map(|r| r.canonical_fqn.as_ref())
                 .collect();
             assert_eq!(fqns.len(), 2, "Should have 2 different FQNs");
@@ -4481,7 +5028,8 @@ mod tests {
                     data TEXT NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             conn.execute(
                 "CREATE TABLE graph_edges (
                     id INTEGER PRIMARY KEY,
@@ -4490,7 +5038,8 @@ mod tests {
                     edge_type TEXT NOT NULL
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             conn.execute(
                 "CREATE TABLE symbol_metrics (
                     symbol_id TEXT PRIMARY KEY,
@@ -4500,7 +5049,8 @@ mod tests {
                     loc INTEGER
                 )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
 
             // Insert file
             conn.execute(
@@ -4520,14 +5070,15 @@ mod tests {
             conn.execute(
                 "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES')",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
 
             let db_path = db_file.path();
 
             // Use symbol_id to get exact match - no ambiguity
             let options = SearchOptions {
                 db_path,
-                query: "ignored",  // Query is ignored when symbol_id is provided
+                query: "ignored", // Query is ignored when symbol_id is provided
                 path_filter: None,
                 kind_filter: None,
                 limit: 10,
@@ -4537,7 +5088,7 @@ mod tests {
                 snippet: SnippetOptions::default(),
                 fqn: FqnOptions {
                     fqn: false,
-                    canonical_fqn: true,  // Enable to see canonical_fqn in results
+                    canonical_fqn: true, // Enable to see canonical_fqn in results
                     display_fqn: false,
                 },
                 include_score: false,
@@ -4550,9 +5101,19 @@ mod tests {
             };
 
             let (response, _partial) = search_symbols(options).unwrap();
-            assert_eq!(response.results.len(), 1, "Should find exactly 1 result by symbol_id");
-            assert_eq!(response.results[0].symbol_id.as_deref(), Some("target_parse"));
-            assert_eq!(response.results[0].canonical_fqn.as_deref(), Some("/test/a.rs::parse"));
+            assert_eq!(
+                response.results.len(),
+                1,
+                "Should find exactly 1 result by symbol_id"
+            );
+            assert_eq!(
+                response.results[0].symbol_id.as_deref(),
+                Some("target_parse")
+            );
+            assert_eq!(
+                response.results[0].canonical_fqn.as_deref(),
+                Some("/test/a.rs::parse")
+            );
         }
 
         #[test]
@@ -4615,7 +5176,7 @@ mod tests {
         #[test]
         fn test_build_search_query_with_unknown_language() {
             // Test that unknown language doesn't add filter
-            let (sql, params) = build_search_query(
+            let (_sql, params) = build_search_query(
                 "test",
                 None,
                 None,

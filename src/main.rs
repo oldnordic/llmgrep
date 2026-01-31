@@ -1,12 +1,15 @@
-use clap::{Parser, Subcommand, ValueEnum};
 use clap::builder::{RangedI64ValueParser, TypedValueParser};
+use clap::{Parser, Subcommand, ValueEnum};
 use llmgrep::error::LlmError;
 use llmgrep::output::{
     json_response, json_response_with_partial, CallSearchResponse, CombinedSearchResponse,
     ErrorResponse, OutputFormat, ReferenceSearchResponse, SearchResponse,
 };
 use llmgrep::output_common::{format_partial_footer, format_total_header, render_json_response};
-use llmgrep::query::{search_calls, search_references, search_symbols, ContextOptions, FqnOptions, MetricsOptions, SearchOptions, SnippetOptions};
+use llmgrep::query::{
+    search_calls, search_references, search_symbols, ContextOptions, FqnOptions, MetricsOptions,
+    SearchOptions, SnippetOptions,
+};
 use llmgrep::SortMode;
 use std::path::{Path, PathBuf};
 
@@ -18,7 +21,11 @@ fn ranged_usize(min: i64, max: i64) -> impl TypedValueParser<Value = usize> {
 }
 
 #[derive(Parser)]
-#[command(name = "llmgrep", version, about = "Smart grep backed by a Magellan code map")]
+#[command(
+    name = "llmgrep",
+    version,
+    about = "Smart grep backed by a Magellan code map"
+)]
 struct Cli {
     #[arg(long, global = true, default_value_t = OutputFormat::Human)]
     output: OutputFormat,
@@ -190,8 +197,7 @@ fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
 
     // Block access to sensitive system directories
     let sensitive_dirs = [
-        "/etc", "/root", "/boot", "/sys", "/proc", "/dev",
-        "/run", "/var/run", "/var/tmp",
+        "/etc", "/root", "/boot", "/sys", "/proc", "/dev", "/run", "/var/run", "/var/tmp",
     ];
     for sensitive in sensitive_dirs {
         if canonical.starts_with(sensitive) {
@@ -313,9 +319,10 @@ fn run_search(
 ) -> Result<(), LlmError> {
     // Validate SymbolId format (32 hex characters)
     if let Some(sid) = symbol_id {
-        let hex_regex = regex::Regex::new(r"^[0-9a-f]{32}$").map_err(|_| LlmError::InvalidQuery {
-            query: "Failed to compile symbol_id validation regex".to_string(),
-        })?;
+        let hex_regex =
+            regex::Regex::new(r"^[0-9a-f]{32}$").map_err(|_| LlmError::InvalidQuery {
+                query: "Failed to compile symbol_id validation regex".to_string(),
+            })?;
         if !hex_regex.is_match(sid) {
             return Err(LlmError::InvalidQuery {
                 query: format!(
@@ -395,10 +402,8 @@ fn run_search(
     };
 
     let include_fqn = wants_json && fields.as_ref().map_or(with_fqn, |f| f.fqn);
-    let include_canonical_fqn =
-        wants_json && fields.as_ref().map_or(with_fqn, |f| f.canonical_fqn);
-    let include_display_fqn =
-        wants_json && fields.as_ref().map_or(with_fqn, |f| f.display_fqn);
+    let include_canonical_fqn = wants_json && fields.as_ref().map_or(with_fqn, |f| f.canonical_fqn);
+    let include_display_fqn = wants_json && fields.as_ref().map_or(with_fqn, |f| f.display_fqn);
 
     let metrics = MetricsOptions {
         min_complexity,
@@ -598,7 +603,9 @@ fn run_search(
             let total_count = symbols.total_count + references.total_count + calls.total_count;
             let combined = CombinedSearchResponse {
                 query: query.to_string(),
-                path_filter: validated_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+                path_filter: validated_path
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string()),
                 symbols,
                 references,
                 calls,
@@ -648,7 +655,11 @@ fn output_symbols(cli: &Cli, response: SearchResponse, partial: bool) -> Result<
     Ok(())
 }
 
-fn output_references(cli: &Cli, response: ReferenceSearchResponse, partial: bool) -> Result<(), LlmError> {
+fn output_references(
+    cli: &Cli,
+    response: ReferenceSearchResponse,
+    partial: bool,
+) -> Result<(), LlmError> {
     match cli.output {
         OutputFormat::Human => {
             println!("{}", format_total_header(response.total_count));
@@ -846,7 +857,8 @@ mod cli_tests {
 
     // Helper function to create a temp db file for testing
     fn create_temp_db() -> std::io::Result<PathBuf> {
-        let temp_file = std::env::temp_dir().join(format!("llmgrep_test_{}.db", std::process::id()));
+        let temp_file =
+            std::env::temp_dir().join(format!("llmgrep_test_{}.db", std::process::id()));
         std::fs::File::create(&temp_file)?;
         Ok(temp_file)
     }
@@ -865,7 +877,10 @@ mod cli_tests {
         let result = Cli::try_parse_from(args);
         assert!(result.is_ok(), "Should parse basic search command");
         let cli = result.unwrap();
-        assert_eq!(cli.db.as_ref().unwrap().to_str().unwrap(), temp_db.to_str().unwrap());
+        assert_eq!(
+            cli.db.as_ref().unwrap().to_str().unwrap(),
+            temp_db.to_str().unwrap()
+        );
         match cli.command {
             Command::Search { query, .. } => {
                 assert_eq!(query, "test");
@@ -1120,7 +1135,10 @@ mod cli_tests {
             "0",
         ];
         let result = Cli::try_parse_from(args);
-        assert!(result.is_err(), "Should reject candidates=0 (range is 1..=10000)");
+        assert!(
+            result.is_err(),
+            "Should reject candidates=0 (range is 1..=10000)"
+        );
     }
 
     #[test]
@@ -1137,7 +1155,10 @@ mod cli_tests {
             "10001",
         ];
         let result = Cli::try_parse_from(args);
-        assert!(result.is_err(), "Should reject candidates=10001 (range is 1..=10000)");
+        assert!(
+            result.is_err(),
+            "Should reject candidates=10001 (range is 1..=10000)"
+        );
     }
 
     #[test]
@@ -1154,7 +1175,10 @@ mod cli_tests {
             "0",
         ];
         let result = Cli::try_parse_from(args);
-        assert!(result.is_err(), "Should reject max_snippet_bytes=0 (range is 1..=1MB)");
+        assert!(
+            result.is_err(),
+            "Should reject max_snippet_bytes=0 (range is 1..=1MB)"
+        );
     }
 
     #[test]
@@ -1171,7 +1195,10 @@ mod cli_tests {
             "0",
         ];
         let result = Cli::try_parse_from(args);
-        assert!(result.is_err(), "Should reject context_lines=0 (range is 1..=100)");
+        assert!(
+            result.is_err(),
+            "Should reject context_lines=0 (range is 1..=100)"
+        );
     }
 
     #[test]
@@ -1188,7 +1215,10 @@ mod cli_tests {
             "101",
         ];
         let result = Cli::try_parse_from(args);
-        assert!(result.is_err(), "Should reject context_lines=101 (range is 1..=100)");
+        assert!(
+            result.is_err(),
+            "Should reject context_lines=101 (range is 1..=100)"
+        );
     }
 
     #[test]
@@ -1205,7 +1235,10 @@ mod cli_tests {
             "0",
         ];
         let result = Cli::try_parse_from(args);
-        assert!(result.is_err(), "Should reject max_context_lines=0 (range is 1..=500)");
+        assert!(
+            result.is_err(),
+            "Should reject max_context_lines=0 (range is 1..=500)"
+        );
     }
 
     #[test]
@@ -1222,7 +1255,10 @@ mod cli_tests {
             "501",
         ];
         let result = Cli::try_parse_from(args);
-        assert!(result.is_err(), "Should reject max_context_lines=501 (range is 1..=500)");
+        assert!(
+            result.is_err(),
+            "Should reject max_context_lines=501 (range is 1..=500)"
+        );
     }
 
     #[test]
@@ -1232,7 +1268,10 @@ mod cli_tests {
         assert!(result.is_err(), "Should reject /etc/passwd");
         match result {
             Err(LlmError::PathValidationFailed { reason, .. }) => {
-                assert!(reason.contains("not allowed"), "Error should mention access denied");
+                assert!(
+                    reason.contains("not allowed"),
+                    "Error should mention access denied"
+                );
             }
             _ => panic!("Expected PathValidationFailed error"),
         }

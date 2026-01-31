@@ -8,7 +8,6 @@
 /// - SymbolId lookup
 /// - Ambiguity detection
 /// - Label filtering
-
 use llmgrep::query::{
     search_chunks_by_span, search_symbols, ContextOptions, FqnOptions, MetricsOptions,
     SearchOptions, SnippetOptions,
@@ -69,7 +68,13 @@ fn insert_file(conn: &Connection, path: &str) -> i64 {
     conn.last_insert_rowid()
 }
 
-fn insert_symbol(conn: &Connection, name: &str, kind: &str, kind_normalized: &str, span: (u64, u64)) -> i64 {
+fn insert_symbol(
+    conn: &Connection,
+    name: &str,
+    kind: &str,
+    kind_normalized: &str,
+    span: (u64, u64),
+) -> i64 {
     let data = json!({
         "symbol_id": format!("{}-id", name),
         "name": name,
@@ -153,17 +158,32 @@ fn process_emoji(input: &str) -> String {
     insert_code_chunk(&conn, file_path, 0, 100, emoji_content, symbol_name);
 
     // Verify chunk can be retrieved
-    let chunk = search_chunks_by_span(&conn, file_path, 0, 100)
-        .expect("chunk query should succeed");
+    let chunk =
+        search_chunks_by_span(&conn, file_path, 0, 100).expect("chunk query should succeed");
     assert!(chunk.is_some(), "Chunk should exist");
     let chunk = chunk.unwrap();
 
     // Verify emoji content is intact
-    assert!(chunk.content.contains("🚀"), "Content should contain rocket emoji");
-    assert!(chunk.content.contains("🔥"), "Content should contain fire emoji");
-    assert!(chunk.content.contains("⭐"), "Content should contain star emoji");
-    assert!(chunk.content.contains("😀"), "Content should contain grinning face");
-    assert!(chunk.content.contains("😎"), "Content should contain sunglasses face");
+    assert!(
+        chunk.content.contains("🚀"),
+        "Content should contain rocket emoji"
+    );
+    assert!(
+        chunk.content.contains("🔥"),
+        "Content should contain fire emoji"
+    );
+    assert!(
+        chunk.content.contains("⭐"),
+        "Content should contain star emoji"
+    );
+    assert!(
+        chunk.content.contains("😀"),
+        "Content should contain grinning face"
+    );
+    assert!(
+        chunk.content.contains("😎"),
+        "Content should contain sunglasses face"
+    );
 
     // Search with snippet extraction
     let options = SearchOptions {
@@ -196,7 +216,10 @@ fn process_emoji(input: &str) -> String {
     assert!(result.snippet.is_some(), "Snippet should be extracted");
     let snippet = result.snippet.as_ref().unwrap();
     // Snippet should contain emoji without panic
-    assert!(snippet.contains("🚀") || snippet.contains("emoji"), "Snippet should contain emoji or keyword");
+    assert!(
+        snippet.contains("🚀") || snippet.contains("emoji"),
+        "Snippet should contain emoji or keyword"
+    );
 }
 
 /// Test 2: CJK character handling
@@ -224,16 +247,28 @@ fn chinese_function() {
     insert_code_chunk(&conn, file_path, 0, 200, cjk_content, symbol_name);
 
     // Verify chunk retrieval with CJK content
-    let chunk = search_chunks_by_span(&conn, file_path, 0, 200)
-        .expect("chunk query should succeed");
+    let chunk =
+        search_chunks_by_span(&conn, file_path, 0, 200).expect("chunk query should succeed");
     assert!(chunk.is_some(), "Chunk with CJK should exist");
     let chunk = chunk.unwrap();
 
     // Verify CJK characters are preserved
-    assert!(chunk.content.contains("中文"), "Content should contain Chinese characters");
-    assert!(chunk.content.contains("日本語"), "Content should contain Japanese characters");
-    assert!(chunk.content.contains("한국어"), "Content should contain Korean characters");
-    assert!(chunk.content.contains("变量"), "Content should contain Chinese variable name");
+    assert!(
+        chunk.content.contains("中文"),
+        "Content should contain Chinese characters"
+    );
+    assert!(
+        chunk.content.contains("日本語"),
+        "Content should contain Japanese characters"
+    );
+    assert!(
+        chunk.content.contains("한국어"),
+        "Content should contain Korean characters"
+    );
+    assert!(
+        chunk.content.contains("变量"),
+        "Content should contain Chinese variable name"
+    );
 }
 
 /// Test 3: Chunk retrieval with content_hash
@@ -281,7 +316,10 @@ fn test_chunk_retrieval_with_hash() {
     assert_eq!(response.0.results.len(), 1);
 
     let result = &response.0.results[0];
-    assert!(result.snippet.is_some(), "Snippet from chunk should be extracted");
+    assert!(
+        result.snippet.is_some(),
+        "Snippet from chunk should be extracted"
+    );
     assert!(
         result.content_hash.is_some(),
         "content_hash should be present when using chunk"
@@ -349,7 +387,11 @@ fn test_metrics_filtering() {
     };
 
     let response = search_symbols(options).expect("search should succeed");
-    assert_eq!(response.0.results.len(), 1, "Should only return high-complexity function");
+    assert_eq!(
+        response.0.results.len(),
+        1,
+        "Should only return high-complexity function"
+    );
     assert_eq!(response.0.results[0].name, complex_name);
 }
 
@@ -478,12 +520,13 @@ fn test_language_filtering() {
     };
 
     let response = search_symbols(options).expect("search should succeed");
-    assert_eq!(response.0.results.len(), 1, "Should only return Rust symbols");
-    assert_eq!(response.0.results[0].name, rust_fn);
     assert_eq!(
-        response.0.results[0].language.as_ref().unwrap(),
-        "rust"
+        response.0.results.len(),
+        1,
+        "Should only return Rust symbols"
     );
+    assert_eq!(response.0.results[0].name, rust_fn);
+    assert_eq!(response.0.results[0].language.as_ref().unwrap(), "rust");
 }
 
 /// Test 7: Multi-kind filtering (comma-separated)
@@ -717,12 +760,15 @@ fn test_fqn_pattern_filtering() {
         "Should only return helper from module_a"
     );
     assert_eq!(
-        response.0.results[0].name,
-        helper_a,
+        response.0.results[0].name, helper_a,
         "Should be helper_a from module_a"
     );
     assert!(
-        response.0.results[0].canonical_fqn.as_ref().unwrap().contains("module_a"),
+        response.0.results[0]
+            .canonical_fqn
+            .as_ref()
+            .unwrap()
+            .contains("module_a"),
         "canonical_fqn should contain module_a"
     );
 }
@@ -789,8 +835,5 @@ fn test_combined_metrics_and_language_filter() {
         "Should only return high-complexity Rust function"
     );
     assert_eq!(response.0.results[0].name, rust_complex);
-    assert_eq!(
-        response.0.results[0].language.as_ref().unwrap(),
-        "rust"
-    );
+    assert_eq!(response.0.results[0].language.as_ref().unwrap(), "rust");
 }

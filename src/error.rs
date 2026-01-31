@@ -38,7 +38,11 @@ pub enum LlmError {
 
     /// Resource limit exceeded.
     #[error("Resource limit exceeded: {resource} (max: {limit}, provided: {provided})")]
-    ResourceLimitExceeded { resource: String, limit: usize, provided: usize },
+    ResourceLimitExceeded {
+        resource: String,
+        limit: usize,
+        provided: usize,
+    },
 
     /// Path validation failed.
     #[error("Path validation failed: {path} - {reason}")]
@@ -118,33 +122,25 @@ impl LlmError {
             LlmError::InvalidQuery { .. } => {
                 Some("Check that your query is properly formatted and valid.")
             }
-            LlmError::EmptyQuery => {
-                Some("Provide a non-empty query string using --query.")
-            }
+            LlmError::EmptyQuery => Some("Provide a non-empty query string using --query."),
             LlmError::SearchFailed { .. } => {
                 Some("Check that the database is valid and the query is supported.")
             }
-            LlmError::InvalidPath { .. } => {
-                Some("Ensure the path is valid and accessible.")
-            }
+            LlmError::InvalidPath { .. } => Some("Ensure the path is valid and accessible."),
             LlmError::InvalidField { .. } => {
                 Some("Valid fields: context, snippet, score, fqn, canonical_fqn, display_fqn, all")
             }
-            LlmError::IoError(_) => {
-                Some("Check file permissions and disk space.")
-            }
+            LlmError::IoError(_) => Some("Check file permissions and disk space."),
             LlmError::SqliteError(_) => {
                 Some("The database may be locked or corrupted. Try reopening the database.")
             }
             LlmError::JsonError(_) => {
                 Some("JSON serialization error. This may indicate corrupted data.")
             }
-            LlmError::RegexError(_) => {
-                Some("Invalid regular expression. Check your query syntax.")
-            }
-            LlmError::RegexRejected { .. } => {
-                Some("Simplify the regex pattern or avoid nested quantifiers and excessive alternation")
-            }
+            LlmError::RegexError(_) => Some("Invalid regular expression. Check your query syntax."),
+            LlmError::RegexRejected { .. } => Some(
+                "Simplify the regex pattern or avoid nested quantifiers and excessive alternation",
+            ),
             LlmError::ResourceLimitExceeded { .. } => {
                 Some("Reduce the resource value to within the allowed maximum")
             }
