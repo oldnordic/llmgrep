@@ -43,11 +43,12 @@ use crate::error::LlmError;
 ///
 /// ```no_run
 /// use llmgrep::safe_extraction::safe_extract_snippet;
+/// use llmgrep::error::LlmError;
 ///
 /// let source = b"fn test() { // Hello }";
 /// let snippet = safe_extract_snippet(source, 0, 15)?;
 /// assert_eq!(snippet, "fn test() { // ");
-/// # Ok::<(), llmgrep::LlmError>(())
+/// # Ok::<(), LlmError>(())
 /// ```
 pub fn safe_extract_snippet(
     source: &[u8],
