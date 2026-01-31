@@ -1,14 +1,28 @@
 # llmgrep
 
-**v1.1 Production-Ready CLI** (shipped 2026-01-31)
+**v1.1.1** (shipped 2026-01-31)
 
 A command-line search tool for code indexed by [Magellan](https://github.com/oldnordic/magellan). Queries SQLite graph databases to find symbols, references, and call relationships. Outputs human-readable or structured JSON for programmatic use.
 
-**Crates:**
-- [magellan](https://crates.io/crates/magellan) - Code indexing and database creation
-- [llmgrep](https://crates.io/crates/llmgrep) - This tool (query only)
+## Works with Magellan
 
-**Note:** llmgrep requires a Magellan database. It does not build or modify databases — Magellan handles indexing and freshness.
+llmgrep requires a Magellan database. It does not build or modify databases — Magellan handles indexing and freshness.
+
+**Install Magellan:**
+```bash
+cargo install magellan
+# or: git clone https://github.com/oldnordic/magellan && cd magellan && cargo build --release
+```
+
+**Build a database:**
+```bash
+magellan watch --root /path/to/repo --db /path/to/repo.db
+```
+
+**Crates:**
+- [magellan](https://crates.io/crates/magellan) v1.8.0 - Code indexing and database creation
+- [sqlitegraph](https://crates.io/crates/sqlitegraph) v1.2.7 - Graph database persistence
+- [llmgrep](https://crates.io/crates/llmgrep) - This tool (query only)
 
 ## What it does
 
@@ -17,39 +31,36 @@ A command-line search tool for code indexed by [Magellan](https://github.com/old
 - Supports regex, intelligent relevance ranking, and optional context/snippets
 - `--sort-by {relevance|position|fan-in|fan-out|complexity}` flag for LLM-optimized or performance modes
 
-## v1.1 Features
+## Features
+
+- **Search modes**: symbols (definitions), references, calls, auto (all modes)
+- **Regex support**: Pattern matching with `--regex`
+- **Intelligent ranking**: Relevance mode (exact > prefix > contains scoring)
+- **Fast position mode**: SQL-only sorting, skips in-memory scoring
+- **Metrics-based**: Sort by fan-in, fan-out, or cyclomatic complexity
+- **JSON output**: Schema-aligned for LLM consumption
+- **Context/snippets**: Optional code context and snippets in results
+- **FQN filtering**: Filter by fully-qualified name patterns
+- **Language filtering**: Filter by programming language (rust, python, javascript, typescript, c, cpp, java, go)
+- **Kind filtering**: Filter by symbol kind (Function, Struct, Method, Class, Enum, Module, etc.)
+- **Security**: ReDoS prevention, resource bounds, path traversal blocking
+- **Error codes**: LLM-E### format with remediation hints
+
+## v1.1.1 - Bugfix Release
+
+**Critical fix:** Metrics JOIN condition - metrics (fan_in, fan_out, cyclomatic_complexity) are now correctly returned in search results. Previous versions compared SHA hash strings to integer row IDs, causing never-matching JOINs.
+
+## v1.1.0 - Magellan Integration
 
 **Magellan 1.8.0 Integration:**
 - Safe UTF-8 content extraction (no panics on emoji/CJK/accented characters)
 - Chunk-based snippet retrieval (eliminates file I/O when chunks available)
-- Metrics-based filtering and sorting (complexity, fan-in, fan-out)
+- Metrics-based filtering: `--min-complexity`, `--max-complexity`, `--min-fan-in`, `--min-fan-out`
+- Metrics-based sorting: `--sort-by fan-in|fan-out|complexity`
 - SymbolId lookups via `--symbol-id` for unambiguous reference
 - FQN filtering: `--fqn` (pattern) and `--exact-fqn` (exact match)
 - Language filtering via `--language` flag
 - Enhanced JSON fields: `symbol_id`, `canonical_fqn`, `display_fqn`, metrics, `content_hash`
-
-## Features
-
-### LLM-Optimized Search
-- **Relevance mode** (default): Intelligent scoring using regex matching (exact > prefix > contains)
-- **Position mode**: Fast SQL-only sorting, skips in-memory scoring
-- **Metrics modes**: Sort by fan-in, fan-out, or complexity (v1.1)
-
-### Security
-- ReDoS prevention via 10KB regex size limit
-- Resource bounds validation on all parameters
-- Path traversal blocking with canonicalize()
-
-### Developer Experience
-- LLM-E### error codes with remediation hints
-- Database validation (checks existence before connection)
-- Distinguishes "database not found" from "database corrupted" errors
-- File read error logging with context
-
-### Quality
-- 149 unit and integration tests with comprehensive coverage
-- Clippy-clean codebase with zero warnings
-- Comprehensive CLI examples in help text
 
 ## Install
 
@@ -66,17 +77,7 @@ cargo install llmgrep
 
 ## Quick start
 
-llmgrep requires a Magellan database. First, build one:
-
-```bash
-# Install Magellan (if not already available)
-cargo install magellan
-
-# Build a database from your code
-magellan watch --root /path/to/repo --db /tmp/repo.db
-```
-
-Then query it with llmgrep:
+Query your Magellan database with llmgrep:
 
 ```bash
 # Basic symbol search (relevance-ranked, LLM-friendly)
@@ -119,17 +120,19 @@ llmgrep --db code.db search --query ".*" --sort-by fan-in --limit 20
 llmgrep --db code.db search --query "helper" --fqn "%module::%"
 ```
 
+## Compatibility
+
+- **Magellan**: v1.8.0 or later (for metrics/chunks support)
+- **sqlitegraph**: v1.2.7 (via crates.io)
+- **Database schema**: Magellan 1.x (graph_entities, graph_edges, symbol_metrics, code_chunks)
+- **Languages**: Rust, C, C++, Java, JavaScript, TypeScript, Python (via Magellan parsers)
+
 ## Documentation
 
 - `llmgrep search --help` — Built-in usage examples
 - `MANUAL.md` — Full manual with all options
 - `CHANGELOG.md` — Version history
-
-## Compatibility
-
-- **Magellan schema**: 1.0.0 (JsonResponse wrapper)
-- **Magellan export**: 2.0.0
-- **Minimum Magellan**: 1.8.0 (v1.1 features require metrics/chunks tables)
+- [Magellan repo](https://github.com/oldnordic/magellan) — Code indexing tool
 
 ## License
 
