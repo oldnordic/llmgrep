@@ -94,6 +94,16 @@ enum Command {
 
         #[arg(long, value_parser = ranged_usize(0, 10000))]
         min_fan_out: Option<usize>,
+
+        // SymbolId and FQN flags
+        #[arg(long)]
+        symbol_id: Option<String>,
+
+        #[arg(long)]
+        fqn: Option<String>,
+
+        #[arg(long)]
+        exact_fqn: Option<String>,
     },
 }
 
@@ -223,6 +233,9 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             max_complexity,
             min_fan_in,
             min_fan_out,
+            symbol_id,
+            fqn,
+            exact_fqn,
         } => run_search(
             cli,
             query,
@@ -245,6 +258,9 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             *max_complexity,
             *min_fan_in,
             *min_fan_out,
+            symbol_id.as_ref(),
+            fqn.as_ref(),
+            exact_fqn.as_ref(),
         ),
     }
 }
@@ -272,8 +288,41 @@ fn run_search(
     max_complexity: Option<usize>,
     min_fan_in: Option<usize>,
     min_fan_out: Option<usize>,
+    symbol_id: Option<&String>,
+    fqn: Option<&String>,
+    exact_fqn: Option<&String>,
 ) -> Result<(), LlmError> {
-    if query.trim().is_empty() {
+    // Validate SymbolId format (32 hex characters)
+    if let Some(sid) = symbol_id {
+        let hex_regex = regex::Regex::new(r"^[0-9a-f]{32}$").map_err(|_| LlmError::InvalidQuery {
+            query: "Failed to compile symbol_id validation regex".to_string(),
+        })?;
+        if !hex_regex.is_match(sid) {
+            return Err(LlmError::InvalidQuery {
+                query: format!(
+                    "Invalid symbol_id format: '{}'. Expected 32 hex characters (0-9, a-f).",
+                    sid
+                ),
+            });
+        }
+    }
+
+    // Validate mutual exclusivity of --fqn and --exact-fqn
+    if fqn.is_some() && exact_fqn.is_some() {
+        return Err(LlmError::InvalidQuery {
+            query: "--fqn and --exact-fqn are mutually exclusive. Use only one.".to_string(),
+        });
+    }
+
+    // Warn if both --query and --symbol-id are provided (symbol_id takes precedence)
+    if symbol_id.is_some() {
+        eprintln!(
+            "Note: --symbol-id provided, using direct lookup. Query '{}' will be used as secondary filter if needed.",
+            query
+        );
+    }
+
+    if query.trim().is_empty() && symbol_id.is_none() {
         return Err(LlmError::EmptyQuery);
     }
 
@@ -350,6 +399,9 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                symbol_id: symbol_id.map(|s| s.as_str()),
+                fqn_pattern: fqn.map(|s| s.as_str()),
+                exact_fqn: exact_fqn.map(|s| s.as_str()),
             };
             let (response, partial) = search_symbols(options)?;
             output_symbols(cli, response, partial)?;
@@ -376,6 +428,9 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                symbol_id: None,
+                fqn_pattern: None,
+                exact_fqn: None,
             };
             let (response, partial) = search_references(options)?;
             output_references(cli, response, partial)?;
@@ -402,6 +457,9 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                symbol_id: None,
+                fqn_pattern: None,
+                exact_fqn: None,
             };
             let (response, partial) = search_calls(options)?;
             output_calls(cli, response, partial)?;
@@ -442,6 +500,9 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                symbol_id: symbol_id.map(|s| s.as_str()),
+                fqn_pattern: fqn.map(|s| s.as_str()),
+                exact_fqn: exact_fqn.map(|s| s.as_str()),
             })?;
             let (references, refs_partial) = search_references(SearchOptions {
                 db_path,
@@ -464,6 +525,9 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                symbol_id: None,
+                fqn_pattern: None,
+                exact_fqn: None,
             })?;
             let (calls, calls_partial) = search_calls(SearchOptions {
                 db_path,
@@ -486,6 +550,9 @@ fn run_search(
                 include_score,
                 sort_by,
                 metrics,
+                symbol_id: None,
+                fqn_pattern: None,
+                exact_fqn: None,
             })?;
             let total_count = symbols.total_count + references.total_count + calls.total_count;
             let combined = CombinedSearchResponse {

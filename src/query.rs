@@ -63,6 +63,12 @@ pub struct SearchOptions<'a> {
     pub sort_by: SortMode,
     /// Metrics filtering options
     pub metrics: MetricsOptions,
+    /// SymbolId for direct BLAKE3 hash lookup (overrides name-based search)
+    pub symbol_id: Option<&'a str>,
+    /// FQN pattern filter (LIKE match on canonical_fqn)
+    pub fqn_pattern: Option<&'a str>,
+    /// Exact FQN filter (exact match on canonical_fqn)
+    pub exact_fqn: Option<&'a str>,
 }
 
 /// Context extraction options
@@ -282,6 +288,9 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         options.candidates,
         options.metrics,
         options.sort_by,
+        options.symbol_id,
+        options.fqn_pattern,
+        options.exact_fqn,
     );
     let mut stmt = conn.prepare_cached(&sql)?;
 
@@ -311,7 +320,13 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         let fan_in: Option<i64> = row.get(2).ok();
         let fan_out: Option<i64> = row.get(3).ok();
         let cyclomatic_complexity: Option<i64> = row.get(4).ok();
+        // Read symbol_id column (may be NULL)
+        let symbol_id_from_query: Option<String> = row.get(5).ok();
         let symbol: SymbolNodeData = serde_json::from_str(&data)?;
+
+        // Use symbol_id from query if available, otherwise from JSON data
+        let symbol_id = symbol_id_from_query.or_else(|| symbol.symbol_id.clone());
+
         let name = symbol.name.clone().unwrap_or_else(|| "<unknown>".to_string());
         let display_fqn = symbol.display_fqn.clone().unwrap_or_default();
         let fqn = symbol.fqn.clone().unwrap_or_default();
@@ -440,7 +455,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             name,
             kind: symbol.kind,
             parent: None,
-            symbol_id: symbol.symbol_id,
+            symbol_id,
             score: if options.include_score { Some(score) } else { None },
             fqn,
             canonical_fqn,
@@ -464,7 +479,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         results.len() as u64
     } else {
         let (count_sql, count_params) =
-            build_search_query(options.query, options.path_filter, options.kind_filter, options.use_regex, true, 0, options.metrics, options.sort_by);
+            build_search_query(options.query, options.path_filter, options.kind_filter, options.use_regex, true, 0, options.metrics, options.sort_by, options.symbol_id, options.fqn_pattern, options.exact_fqn);
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {
             partial = true;
@@ -902,11 +917,19 @@ fn build_search_query(
     limit: usize,
     metrics: MetricsOptions,
     sort_by: SortMode,
+    symbol_id: Option<&str>,
+    fqn_pattern: Option<&str>,
+    exact_fqn: Option<&str>,
 ) -> (String, Vec<Box<dyn ToSql>>) {
     let mut params: Vec<Box<dyn ToSql>> = Vec::new();
     let mut where_clauses = Vec::new();
 
-    if !use_regex {
+    // SymbolId mode: Direct lookup by BLAKE3 hash (bypasses name search)
+    if let Some(sid) = symbol_id {
+        where_clauses.push("json_extract(s.data, '$.symbol_id') = ?".to_string());
+        params.push(Box::new(sid.to_string()));
+    } else if !use_regex {
+        // Standard name-based search (only if not using symbol_id)
         let like_query = like_pattern(query);
         where_clauses.push(
             "(s.name LIKE ? ESCAPE '\\' OR s.display_fqn LIKE ? ESCAPE '\\' OR s.fqn LIKE ? ESCAPE '\\')"
@@ -915,6 +938,18 @@ fn build_search_query(
         params.push(Box::new(like_query.clone()));
         params.push(Box::new(like_query.clone()));
         params.push(Box::new(like_query));
+    }
+
+    // FQN pattern filter (LIKE match on canonical_fqn)
+    if let Some(pattern) = fqn_pattern {
+        where_clauses.push("json_extract(s.data, '$.canonical_fqn') LIKE ? ESCAPE '\\'".to_string());
+        params.push(Box::new(pattern.to_string()));
+    }
+
+    // Exact FQN filter (exact match on canonical_fqn)
+    if let Some(exact) = exact_fqn {
+        where_clauses.push("json_extract(s.data, '$.canonical_fqn') = ?".to_string());
+        params.push(Box::new(exact.to_string()));
     }
 
     if let Some(path) = path_filter {
@@ -950,7 +985,7 @@ fn build_search_query(
     let select_clause = if count_only {
         "SELECT COUNT(*)"
     } else {
-        "SELECT s.data, f.file_path, sm.fan_in, sm.fan_out, sm.cyclomatic_complexity"
+        "SELECT s.data, f.file_path, sm.fan_in, sm.fan_out, sm.cyclomatic_complexity, json_extract(s.data, '$.symbol_id') AS symbol_id"
     };
 
     let mut sql = format!(
@@ -961,6 +996,7 @@ FROM (
            json_extract(data, '$.name') AS name,
            json_extract(data, '$.display_fqn') AS display_fqn,
            json_extract(data, '$.fqn') AS fqn,
+           json_extract(data, '$.canonical_fqn') AS canonical_fqn,
            json_extract(data, '$.kind') AS kind,
            json_extract(data, '$.kind_normalized') AS kind_normalized,
            json_extract(data, '$.start_line') AS start_line,
@@ -1474,7 +1510,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_basic() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default());
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should have LIKE clauses for name, display_fqn, fqn
         assert!(sql.contains("s.name LIKE ? ESCAPE '\\'"));
@@ -1491,7 +1527,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_kind_filter() {
-        let (sql, params) = build_search_query("test", None, Some("Function"), false, false, 100, MetricsOptions::default(), SortMode::default());
+        let (sql, params) = build_search_query("test", None, Some("Function"), false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should add kind filter
         assert!(sql.contains("s.kind_normalized = ? OR s.kind = ?"));
@@ -1504,7 +1540,7 @@ mod tests {
     #[test]
     fn test_build_search_query_with_path_filter() {
         let path = PathBuf::from("/src/module");
-        let (sql, params) = build_search_query("test", Some(&path), None, false, false, 100, MetricsOptions::default(), SortMode::default());
+        let (sql, params) = build_search_query("test", Some(&path), None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should add file path filter
         assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));
@@ -1516,7 +1552,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_regex_mode() {
-        let (sql, params) = build_search_query("test.*", None, None, true, false, 100, MetricsOptions::default(), SortMode::default());
+        let (sql, params) = build_search_query("test.*", None, None, true, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should NOT have LIKE clauses in regex mode
         assert!(!sql.contains("LIKE ? ESCAPE '\\'"));
@@ -1531,7 +1567,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_count_only() {
-        let (sql, params) = build_search_query("test", None, None, false, true, 0, MetricsOptions::default(), SortMode::default());
+        let (sql, params) = build_search_query("test", None, None, false, true, 0, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should start with COUNT
         assert!(sql.starts_with("SELECT COUNT(*)"));
@@ -1546,7 +1582,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_regular_query() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default());
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should have ORDER BY
         assert!(sql.contains("ORDER BY"));
@@ -1560,7 +1596,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_fan_in_sort() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::FanIn);
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::FanIn, None, None, None);
 
         // Should ORDER BY fan_in DESC
         assert!(sql.contains("COALESCE(sm.fan_in, 0) DESC"));
@@ -1571,7 +1607,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_fan_out_sort() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::FanOut);
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::FanOut, None, None, None);
 
         // Should ORDER BY fan_out DESC
         assert!(sql.contains("COALESCE(sm.fan_out, 0) DESC"));
@@ -1582,7 +1618,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_complexity_sort() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::Complexity);
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::Complexity, None, None, None);
 
         // Should ORDER BY cyclomatic_complexity DESC
         assert!(sql.contains("COALESCE(sm.cyclomatic_complexity, 0) DESC"));
@@ -1597,7 +1633,7 @@ mod tests {
             min_complexity: Some(5),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default());
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
 
         // Should filter by min_complexity
         assert!(sql.contains("sm.cyclomatic_complexity >= ?"));
@@ -1613,7 +1649,7 @@ mod tests {
             max_complexity: Some(20),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default());
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
 
         // Should filter by max_complexity
         assert!(sql.contains("sm.cyclomatic_complexity <= ?"));
@@ -1629,7 +1665,7 @@ mod tests {
             min_fan_in: Some(10),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default());
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
 
         // Should filter by min_fan_in
         assert!(sql.contains("sm.fan_in >= ?"));
@@ -1641,7 +1677,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_join() {
-        let (sql, _) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default());
+        let (sql, _) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should LEFT JOIN symbol_metrics
         assert!(sql.contains("LEFT JOIN symbol_metrics sm"));
@@ -1658,7 +1694,7 @@ mod tests {
             min_fan_in: Some(10),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default());
+        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
 
         // Should have all filter clauses
         assert!(sql.contains("sm.cyclomatic_complexity >= ?"));
@@ -1834,7 +1870,7 @@ mod tests {
     #[test]
     fn test_build_search_query_combined_filters_path_kind() {
         let path = PathBuf::from("/src/module");
-        let (sql, params) = build_search_query("test", Some(&path), Some("Function"), false, false, 100, MetricsOptions::default(), SortMode::default());
+        let (sql, params) = build_search_query("test", Some(&path), Some("Function"), false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should have all filters
         assert!(sql.contains("s.name LIKE ? ESCAPE '\\'"));
@@ -1900,6 +1936,17 @@ mod tests {
             )",
             [],
         ).unwrap();
+        // Create symbol_metrics table (required for LEFT JOIN in queries)
+        conn.execute(
+            "CREATE TABLE symbol_metrics (
+                symbol_id TEXT PRIMARY KEY,
+                fan_in INTEGER,
+                fan_out INTEGER,
+                cyclomatic_complexity INTEGER,
+                loc INTEGER
+            )",
+            [],
+        ).unwrap();
 
         // Insert test File entity
         conn.execute(
@@ -1910,9 +1957,9 @@ mod tests {
         // Insert test Symbol entities
         conn.execute(
             "INSERT INTO graph_entities (id, kind, data) VALUES
-                (10, 'Symbol', '{\"name\":\"test_func\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"test_func\",\"fqn\":\"module::test_func\",\"symbol_id\":\"sym1\",\"byte_start\":100,\"byte_end\":200,\"start_line\":5,\"start_col\":0,\"end_line\":10,\"end_col\":1}'),
-                (11, 'Symbol', '{\"name\":\"TestStruct\",\"kind\":\"Struct\",\"kind_normalized\":\"struct\",\"display_fqn\":\"TestStruct\",\"fqn\":\"module::TestStruct\",\"symbol_id\":\"sym2\",\"byte_start\":300,\"byte_end\":400,\"start_line\":15,\"start_col\":0,\"end_line\":20,\"end_col\":1}'),
-                (12, 'Symbol', '{\"name\":\"helper\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"helper\",\"fqn\":\"module::helper\",\"symbol_id\":\"sym3\",\"byte_start\":500,\"byte_end\":600,\"start_line\":25,\"start_col\":0,\"end_line\":30,\"end_col\":1}')",
+                (10, 'Symbol', '{\"name\":\"test_func\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"test_func\",\"fqn\":\"module::test_func\",\"canonical_fqn\":\"/test/file.rs::test_func\",\"symbol_id\":\"sym1\",\"byte_start\":100,\"byte_end\":200,\"start_line\":5,\"start_col\":0,\"end_line\":10,\"end_col\":1}'),
+                (11, 'Symbol', '{\"name\":\"TestStruct\",\"kind\":\"Struct\",\"kind_normalized\":\"struct\",\"display_fqn\":\"TestStruct\",\"fqn\":\"module::TestStruct\",\"canonical_fqn\":\"/test/file.rs::TestStruct\",\"symbol_id\":\"sym2\",\"byte_start\":300,\"byte_end\":400,\"start_line\":15,\"start_col\":0,\"end_line\":20,\"end_col\":1}'),
+                (12, 'Symbol', '{\"name\":\"helper\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"helper\",\"fqn\":\"module::helper\",\"canonical_fqn\":\"/test/file.rs::helper\",\"symbol_id\":\"sym3\",\"byte_start\":500,\"byte_end\":600,\"start_line\":25,\"start_col\":0,\"end_line\":30,\"end_col\":1}')",
             [],
         ).unwrap();
 
@@ -1948,6 +1995,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1975,6 +2025,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2001,6 +2054,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2031,6 +2087,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2058,6 +2117,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2086,6 +2148,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2112,6 +2177,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2139,6 +2207,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2165,6 +2236,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2192,6 +2266,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2224,6 +2301,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2250,6 +2330,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2276,6 +2359,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2307,6 +2393,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2339,6 +2428,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2405,6 +2497,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2438,6 +2533,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2470,6 +2568,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2497,6 +2598,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2529,6 +2633,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2556,6 +2663,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2589,6 +2699,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2622,6 +2735,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2650,6 +2766,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2677,6 +2796,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2707,6 +2829,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2736,6 +2861,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_calls(options).unwrap();
@@ -2866,6 +2994,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2892,6 +3023,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2916,6 +3050,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2941,6 +3078,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2966,6 +3106,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2990,6 +3133,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -3015,6 +3161,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -3039,6 +3188,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -3064,6 +3216,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -3089,6 +3244,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -3117,6 +3275,9 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -3186,6 +3347,9 @@ mod tests {
             include_score: true,
             sort_by: SortMode::default(),
             metrics: MetricsOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
         });
 
         match result {
@@ -3470,6 +3634,9 @@ mod tests {
                     min_fan_in: None,
                     min_fan_out: None,
                 },
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -3507,6 +3674,9 @@ mod tests {
                     min_fan_in: None,
                     min_fan_out: None,
                 },
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -3540,6 +3710,9 @@ mod tests {
                     min_fan_in: None,
                     min_fan_out: None,
                 },
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -3573,6 +3746,9 @@ mod tests {
                     min_fan_in: Some(8),
                     min_fan_out: None,
                 },
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -3607,6 +3783,9 @@ mod tests {
                     min_fan_in: None,
                     min_fan_out: Some(10),
                 },
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -3636,6 +3815,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::FanIn,
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -3670,6 +3852,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::FanOut,
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -3704,6 +3889,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::Complexity,
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -3738,6 +3926,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -3833,6 +4024,9 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::FanIn,  // Sort by fan_in
                 metrics: MetricsOptions::default(),
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response, _partial) = search_symbols(options).unwrap();
@@ -3867,6 +4061,9 @@ mod tests {
                     min_fan_in: Some(5),
                     ..Default::default()
                 },
+            symbol_id: None,
+            fqn_pattern: None,
+            exact_fqn: None,
             };
 
             let (response_filter, _) = search_symbols(options_filter).unwrap();
