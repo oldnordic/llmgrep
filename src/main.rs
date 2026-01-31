@@ -6,7 +6,7 @@ use llmgrep::output::{
     ErrorResponse, OutputFormat, ReferenceSearchResponse, SearchResponse,
 };
 use llmgrep::output_common::{format_partial_footer, format_total_header, render_json_response};
-use llmgrep::query::{search_calls, search_references, search_symbols, ContextOptions, FqnOptions, SearchOptions, SnippetOptions};
+use llmgrep::query::{search_calls, search_references, search_symbols, ContextOptions, FqnOptions, MetricsOptions, SearchOptions, SnippetOptions};
 use llmgrep::SortMode;
 use std::path::{Path, PathBuf};
 
@@ -316,6 +316,13 @@ fn run_search(
     let include_display_fqn =
         wants_json && fields.as_ref().map_or(with_fqn, |f| f.display_fqn);
 
+    let metrics = MetricsOptions {
+        min_complexity,
+        max_complexity,
+        min_fan_in,
+        min_fan_out,
+    };
+
     match mode {
         SearchMode::Symbols => {
             let options = SearchOptions {
@@ -342,6 +349,7 @@ fn run_search(
                 },
                 include_score,
                 sort_by,
+                metrics,
             };
             let (response, partial) = search_symbols(options)?;
             output_symbols(cli, response, partial)?;
@@ -367,6 +375,7 @@ fn run_search(
                 fqn: FqnOptions::default(),
                 include_score,
                 sort_by,
+                metrics,
             };
             let (response, partial) = search_references(options)?;
             output_references(cli, response, partial)?;
@@ -392,6 +401,7 @@ fn run_search(
                 fqn: FqnOptions::default(),
                 include_score,
                 sort_by,
+                metrics,
             };
             let (response, partial) = search_calls(options)?;
             output_calls(cli, response, partial)?;
@@ -431,6 +441,7 @@ fn run_search(
                 },
                 include_score,
                 sort_by,
+                metrics,
             })?;
             let (references, refs_partial) = search_references(SearchOptions {
                 db_path,
@@ -452,6 +463,7 @@ fn run_search(
                 fqn: FqnOptions::default(),
                 include_score,
                 sort_by,
+                metrics,
             })?;
             let (calls, calls_partial) = search_calls(SearchOptions {
                 db_path,
@@ -473,6 +485,7 @@ fn run_search(
                 fqn: FqnOptions::default(),
                 include_score,
                 sort_by,
+                metrics,
             })?;
             let total_count = symbols.total_count + references.total_count + calls.total_count;
             let combined = CombinedSearchResponse {

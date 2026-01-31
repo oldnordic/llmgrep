@@ -61,6 +61,8 @@ pub struct SearchOptions<'a> {
     pub include_score: bool,
     /// Sorting mode for results
     pub sort_by: SortMode,
+    /// Metrics filtering options
+    pub metrics: MetricsOptions,
 }
 
 /// Context extraction options
@@ -92,6 +94,19 @@ pub struct FqnOptions {
     pub canonical_fqn: bool,
     /// Include display FQN
     pub display_fqn: bool,
+}
+
+/// Metrics-based filtering options
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MetricsOptions {
+    /// Minimum cyclomatic complexity
+    pub min_complexity: Option<usize>,
+    /// Maximum cyclomatic complexity
+    pub max_complexity: Option<usize>,
+    /// Minimum fan-in (incoming references)
+    pub min_fan_in: Option<usize>,
+    /// Minimum fan-out (outgoing calls)
+    pub min_fan_out: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1760,6 +1775,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1786,6 +1802,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1811,6 +1828,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1840,6 +1858,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1866,6 +1885,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1893,6 +1913,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1918,6 +1939,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -1944,6 +1966,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2026,6 +2049,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2051,6 +2075,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (response, partial) = search_symbols(options).unwrap();
@@ -2651,6 +2676,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2676,6 +2702,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2699,6 +2726,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2723,6 +2751,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2747,6 +2776,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2794,6 +2824,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2817,6 +2848,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
@@ -2841,6 +2873,7 @@ mod tests {
                 fqn: FqnOptions::default(),
                 include_score: false,
                 sort_by: SortMode::default(),
+                metrics: MetricsOptions::default(),
             };
 
             let (result, _partial) = search_references(options).unwrap();
