@@ -43,8 +43,10 @@ pub struct SearchOptions<'a> {
     pub query: &'a str,
     /// Optional path filter
     pub path_filter: Option<&'a PathBuf>,
-    /// Optional kind filter (symbols only)
+    /// Optional kind filter (symbols only) - comma-separated values
     pub kind_filter: Option<&'a str>,
+    /// Optional language filter (symbols only)
+    pub language_filter: Option<&'a str>,
     /// Maximum results to return
     pub limit: usize,
     /// Use regex matching
@@ -283,6 +285,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         options.query,
         options.path_filter,
         options.kind_filter,
+        options.language_filter,
         options.use_regex,
         false,
         options.candidates,
@@ -479,7 +482,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         results.len() as u64
     } else {
         let (count_sql, count_params) =
-            build_search_query(options.query, options.path_filter, options.kind_filter, options.use_regex, true, 0, options.metrics, options.sort_by, options.symbol_id, options.fqn_pattern, options.exact_fqn);
+            build_search_query(options.query, options.path_filter, options.kind_filter, options.language_filter, options.use_regex, true, 0, options.metrics, options.sort_by, options.symbol_id, options.fqn_pattern, options.exact_fqn);
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {
             partial = true;
@@ -943,6 +946,7 @@ fn build_search_query(
     query: &str,
     path_filter: Option<&PathBuf>,
     kind_filter: Option<&str>,
+    language_filter: Option<&str>,
     use_regex: bool,
     count_only: bool,
     limit: usize,
@@ -992,6 +996,28 @@ fn build_search_query(
         where_clauses.push("(s.kind_normalized = ? OR s.kind = ?)".to_string());
         params.push(Box::new(kind.to_string()));
         params.push(Box::new(kind.to_string()));
+    }
+
+    // Language filter: Filter by inferred language from file extension
+    // Note: This uses file extension matching since language labels aren't
+    // directly stored in graph_entities. A future enhancement could use
+    // label tables for faster filtering.
+    if let Some(language) = language_filter {
+        let extensions = match language {
+            "rust" => ".rs",
+            "python" => ".py",
+            "javascript" => ".js",
+            "typescript" => ".ts",
+            "c" => ".c",
+            "cpp" => ".cpp",
+            "java" => ".java",
+            "go" => ".go",
+            _ => "", // Unknown language - no filter
+        };
+        if !extensions.is_empty() {
+            where_clauses.push("f.file_path LIKE ? ESCAPE '\\'".to_string());
+            params.push(Box::new(format!("%{}", extensions)));
+        }
     }
 
     // Add metrics filter WHERE clauses
@@ -1541,7 +1567,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_basic() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should have LIKE clauses for name, display_fqn, fqn
         assert!(sql.contains("s.name LIKE ? ESCAPE '\\'"));
@@ -1558,7 +1584,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_kind_filter() {
-        let (sql, params) = build_search_query("test", None, Some("Function"), false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query("test", None, Some("Function"), None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should add kind filter
         assert!(sql.contains("s.kind_normalized = ? OR s.kind = ?"));
@@ -1571,7 +1597,7 @@ mod tests {
     #[test]
     fn test_build_search_query_with_path_filter() {
         let path = PathBuf::from("/src/module");
-        let (sql, params) = build_search_query("test", Some(&path), None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query("test", Some(&path), None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should add file path filter
         assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));
@@ -1583,7 +1609,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_regex_mode() {
-        let (sql, params) = build_search_query("test.*", None, None, true, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query("test.*", None, None, None, true, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should NOT have LIKE clauses in regex mode
         assert!(!sql.contains("LIKE ? ESCAPE '\\'"));
@@ -1598,7 +1624,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_count_only() {
-        let (sql, params) = build_search_query("test", None, None, false, true, 0, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query("test", None, None, None, false, true, 0, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should start with COUNT
         assert!(sql.starts_with("SELECT COUNT(*)"));
@@ -1613,7 +1639,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_regular_query() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should have ORDER BY
         assert!(sql.contains("ORDER BY"));
@@ -1627,7 +1653,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_fan_in_sort() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::FanIn, None, None, None);
+        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::FanIn, None, None, None);
 
         // Should ORDER BY fan_in DESC
         assert!(sql.contains("COALESCE(sm.fan_in, 0) DESC"));
@@ -1638,7 +1664,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_fan_out_sort() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::FanOut, None, None, None);
+        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::FanOut, None, None, None);
 
         // Should ORDER BY fan_out DESC
         assert!(sql.contains("COALESCE(sm.fan_out, 0) DESC"));
@@ -1649,7 +1675,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_complexity_sort() {
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::Complexity, None, None, None);
+        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::Complexity, None, None, None);
 
         // Should ORDER BY cyclomatic_complexity DESC
         assert!(sql.contains("COALESCE(sm.cyclomatic_complexity, 0) DESC"));
@@ -1664,7 +1690,7 @@ mod tests {
             min_complexity: Some(5),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
 
         // Should filter by min_complexity
         assert!(sql.contains("sm.cyclomatic_complexity >= ?"));
@@ -1680,7 +1706,7 @@ mod tests {
             max_complexity: Some(20),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
 
         // Should filter by max_complexity
         assert!(sql.contains("sm.cyclomatic_complexity <= ?"));
@@ -1696,7 +1722,7 @@ mod tests {
             min_fan_in: Some(10),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
 
         // Should filter by min_fan_in
         assert!(sql.contains("sm.fan_in >= ?"));
@@ -1708,7 +1734,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_join() {
-        let (sql, _) = build_search_query("test", None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, _) = build_search_query("test", None, None, None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should LEFT JOIN symbol_metrics
         assert!(sql.contains("LEFT JOIN symbol_metrics sm"));
@@ -1725,7 +1751,7 @@ mod tests {
             min_fan_in: Some(10),
             ..Default::default()
         };
-        let (sql, params) = build_search_query("test", None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query("test", None, None, None, false, false, 100, metrics, SortMode::default(), None, None, None);
 
         // Should have all filter clauses
         assert!(sql.contains("sm.cyclomatic_complexity >= ?"));
@@ -1901,7 +1927,7 @@ mod tests {
     #[test]
     fn test_build_search_query_combined_filters_path_kind() {
         let path = PathBuf::from("/src/module");
-        let (sql, params) = build_search_query("test", Some(&path), Some("Function"), false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
+        let (sql, params) = build_search_query("test", Some(&path), Some("Function"), None, false, false, 100, MetricsOptions::default(), SortMode::default(), None, None, None);
 
         // Should have all filters
         assert!(sql.contains("s.name LIKE ? ESCAPE '\\'"));

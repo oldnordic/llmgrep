@@ -316,10 +316,18 @@ fn run_search(
     // Normalize and validate language filter
     let normalized_language = language.as_ref().map(|lang| normalize_language(lang));
 
-    // Parse comma-separated kind values and normalize
-    let parsed_kinds: Vec<String> = kind.as_ref()
-        .map(|k| parse_kinds(k))
-        .unwrap_or_default();
+    // Normalize kind value (handles comma-separated values for future use)
+    // For now, we still pass single kind to SearchOptions but normalize it
+    let normalized_kind = kind.as_ref().map(|k| {
+        let kinds = parse_kinds(k);
+        // For backward compatibility with current implementation,
+        // use the first kind. Future enhancement: support multiple kinds.
+        if !kinds.is_empty() {
+            kinds[0].clone()
+        } else {
+            k.to_lowercase()
+        }
+    });
 
     // Validate mutual exclusivity of --fqn and --exact-fqn
     if fqn.is_some() && exact_fqn.is_some() {
@@ -392,7 +400,8 @@ fn run_search(
                 db_path,
                 query,
                 path_filter: validated_path.as_ref(),
-                kind_filter: kind.as_deref(),
+                kind_filter: normalized_kind.as_deref(),
+                language_filter: normalized_language.as_deref(),
                 limit,
                 use_regex: regex,
                 candidates,
@@ -426,6 +435,7 @@ fn run_search(
                 query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
+                language_filter: None,
                 limit,
                 use_regex: regex,
                 candidates,
@@ -455,6 +465,7 @@ fn run_search(
                 query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
+                language_filter: None,
                 limit,
                 use_regex: regex,
                 candidates,
@@ -493,7 +504,8 @@ fn run_search(
                 db_path,
                 query,
                 path_filter: validated_path.as_ref(),
-                kind_filter: kind.as_deref(),
+                kind_filter: normalized_kind.as_deref(),
+                language_filter: normalized_language.as_deref(),
                 limit: symbols_limit,
                 use_regex: regex,
                 candidates,
@@ -523,6 +535,7 @@ fn run_search(
                 query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
+                language_filter: None,
                 limit: references_limit,
                 use_regex: regex,
                 candidates,
@@ -548,6 +561,7 @@ fn run_search(
                 query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
+                language_filter: None,
                 limit: calls_limit,
                 use_regex: regex,
                 candidates,
