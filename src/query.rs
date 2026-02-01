@@ -371,6 +371,10 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         options.exact_fqn,
         false, // has_ast_table - set to false for now, will check properly below
         None,  // ast_kind - set to None for now, will use options.ast.ast_kind below
+        None,  // min_depth
+        None,  // max_depth
+        None,  // inside_kind
+        None,  // contains_kind
     );
 
     // Check if ast_nodes table exists for AST filtering
@@ -380,7 +384,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         })?;
 
     // If we have AST options, rebuild query with correct AST settings
-    let (sql, params) = if options.ast.ast_kind.is_some() || has_ast_table {
+    let (sql, params) = if options.ast.ast_kind.is_some() || has_ast_table || options.depth.min_depth.is_some() || options.depth.max_depth.is_some() || options.depth.inside.is_some() || options.depth.contains.is_some() {
         build_search_query(
             options.query,
             options.path_filter,
@@ -396,6 +400,10 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             options.exact_fqn,
             has_ast_table,
             options.ast.ast_kind,
+            options.depth.min_depth,
+            options.depth.max_depth,
+            options.depth.inside,
+            options.depth.contains,
         )
     } else {
         (sql, params)
@@ -706,6 +714,10 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             options.exact_fqn,
             has_ast_table,
             options.ast.ast_kind,
+            options.depth.min_depth,
+            options.depth.max_depth,
+            options.depth.inside,
+            options.depth.contains,
         );
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {
@@ -1254,6 +1266,10 @@ fn build_search_query(
     exact_fqn: Option<&str>,
     has_ast_table: bool,
     ast_kind: Option<&str>,
+    min_depth: Option<usize>,
+    max_depth: Option<usize>,
+    inside_kind: Option<&str>,
+    contains_kind: Option<&str>,
 ) -> (String, Vec<Box<dyn ToSql>>) {
     let mut params: Vec<Box<dyn ToSql>> = Vec::new();
     let mut where_clauses = Vec::new();
@@ -1352,6 +1368,26 @@ fn build_search_query(
         where_clauses.push("(sm.fan_out IS NOT NULL AND sm.fan_out >= ?)".to_string());
         params.push(Box::new(min_fo as i64));
     }
+
+    // Structural search: --inside KIND (find children within parent of type KIND)
+    if let Some(inside_kind) = inside_kind {
+        if has_ast_table {
+            where_clauses.push("an.parent_id IN (SELECT id FROM ast_nodes WHERE kind = ?)".to_string());
+            params.push(Box::new(inside_kind.to_string()));
+        }
+    }
+
+    // Structural search: --contains KIND (find parents with children of type KIND)
+    if let Some(contains_kind) = contains_kind {
+        if has_ast_table {
+            where_clauses.push("an.id IN (SELECT parent_id FROM ast_nodes WHERE kind = ? AND parent_id IS NOT NULL)".to_string());
+            params.push(Box::new(contains_kind.to_string()));
+        }
+    }
+
+    // Note: Depth filtering (min_depth, max_depth) is handled post-query
+    // due to SQLite recursive CTE limitations in WHERE clauses.
+    // See Task 6 for post-query filtering implementation.
 
     let select_clause = if count_only {
         "SELECT COUNT(*)"
