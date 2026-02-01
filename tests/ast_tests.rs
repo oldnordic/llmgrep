@@ -124,6 +124,10 @@ fn test_ast_context_serialization() {
         parent_id: Some(122),
         byte_start: 100,
         byte_end: 200,
+        depth: None,
+        parent_kind: None,
+        children_count_by_kind: None,
+        decision_points: None,
     };
 
     let json = serde_json::to_string(&ctx).unwrap();
@@ -142,6 +146,10 @@ fn test_ast_context_without_parent() {
         parent_id: None,
         byte_start: 0,
         byte_end: 50,
+        depth: None,
+        parent_kind: None,
+        children_count_by_kind: None,
+        decision_points: None,
     };
 
     let json = serde_json::to_string(&ctx).unwrap();
@@ -426,4 +434,420 @@ fn test_ast_nodes_table_schema() {
     assert!(schema.contains("kind TEXT NOT NULL"));
     assert!(schema.contains("byte_start INTEGER NOT NULL"));
     assert!(schema.contains("byte_end INTEGER NOT NULL"));
+}
+
+// Test: Calculate AST depth for nested nodes
+#[test]
+fn test_calculate_ast_depth() {
+    use llmgrep::ast::calculate_ast_depth;
+
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = Connection::open(&db_path).expect("open db");
+
+    // Create ast_nodes table
+    conn.execute(ast_nodes_table_schema(), []).expect("create ast_nodes");
+
+    // Create a tree structure:
+    //   id=1: root (parent_id=NULL) -> depth 0
+    //   id=2: child of 1 -> depth 1
+    //   id=3: child of 2 -> depth 2
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (1, NULL, 'mod_item', 0, 1000),
+        (2, 1, 'function_item', 100, 500),
+        (3, 2, 'block', 150, 450)",
+        [],
+    )
+    .expect("insert nodes");
+
+    // Test depth calculation
+    assert_eq!(calculate_ast_depth(&conn, 1).unwrap().unwrap(), 0, "Root should have depth 0");
+    assert_eq!(calculate_ast_depth(&conn, 2).unwrap().unwrap(), 1, "Child should have depth 1");
+    assert_eq!(calculate_ast_depth(&conn, 3).unwrap().unwrap(), 2, "Grandchild should have depth 2");
+}
+
+// Test: Get parent kind for AST nodes
+#[test]
+fn test_get_parent_kind() {
+    use llmgrep::ast::get_parent_kind;
+
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = Connection::open(&db_path).expect("open db");
+
+    conn.execute(ast_nodes_table_schema(), []).expect("create ast_nodes");
+
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (1, NULL, 'mod_item', 0, 1000),
+        (2, 1, 'function_item', 100, 500)",
+        [],
+    )
+    .expect("insert nodes");
+
+    // Test parent kind lookup
+    assert_eq!(
+        get_parent_kind(&conn, Some(1)).unwrap().unwrap(),
+        "mod_item",
+        "Parent kind should be mod_item"
+    );
+    assert_eq!(
+        get_parent_kind(&conn, None).unwrap(),
+        None,
+        "None parent_id should return None"
+    );
+    assert_eq!(
+        get_parent_kind(&conn, Some(999)).unwrap(),
+        None,
+        "Non-existent parent should return None"
+    );
+}
+
+// Test: Count children by kind
+#[test]
+fn test_count_children_by_kind() {
+    use llmgrep::ast::count_children_by_kind;
+
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = Connection::open(&db_path).expect("open db");
+
+    conn.execute(ast_nodes_table_schema(), []).expect("create ast_nodes");
+
+    // Create a node with multiple child types
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (1, NULL, 'function_item', 0, 1000),
+        (2, 1, 'let_declaration', 100, 150),
+        (3, 1, 'let_declaration', 150, 200),
+        (4, 1, 'let_declaration', 200, 250),
+        (5, 1, 'if_expression', 250, 400),
+        (6, 1, 'call_expression', 300, 350),
+        (7, 1, 'call_expression', 350, 380)",
+        [],
+    )
+    .expect("insert nodes");
+
+    let counts = count_children_by_kind(&conn, 1).unwrap();
+    assert_eq!(counts.get("let_declaration"), Some(&3), "Should have 3 let_declaration");
+    assert_eq!(counts.get("if_expression"), Some(&1), "Should have 1 if_expression");
+    assert_eq!(counts.get("call_expression"), Some(&2), "Should have 2 call_expression");
+}
+
+// Test: Count decision points
+#[test]
+fn test_count_decision_points() {
+    use llmgrep::ast::count_decision_points;
+
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = Connection::open(&db_path).expect("open db");
+
+    conn.execute(ast_nodes_table_schema(), []).expect("create ast_nodes");
+
+    // Create a node with decision points (2-7 are decision points, 8-9 are not)
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (1, NULL, 'function_item', 0, 1000),
+        (2, 1, 'if_expression', 100, 200),
+        (3, 1, 'match_expression', 200, 300),
+        (4, 1, 'while_expression', 300, 400),
+        (5, 1, 'for_expression', 400, 500),
+        (6, 1, 'loop_expression', 500, 600),
+        (7, 1, 'conditional_expression', 600, 650),
+        (8, 1, 'let_declaration', 650, 700),
+        (9, 1, 'call_expression', 700, 750)",
+        [],
+    )
+    .expect("insert nodes");
+
+    let decision_points = count_decision_points(&conn, 1).unwrap();
+    assert_eq!(decision_points, 6, "Should count 6 decision points");
+}
+
+// Test: Enriched AST context in search results
+#[test]
+fn test_with_ast_context_flag() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&conn, file_id, "src/test.rs");
+
+    // Create AST nodes with nested structure
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (1, NULL, 'mod_item', 0, 1000),
+        (2, 1, 'function_item', 100, 500),
+        (3, 2, 'let_declaration', 150, 200),
+        (4, 2, 'if_expression', 200, 350),
+        (5, 2, 'call_expression', 360, 400)",
+        [],
+    )
+    .expect("insert ast nodes");
+
+    // Insert symbol and edge
+    insert_symbol(&conn, 100, "my_function", "Function", file_id);
+    insert_define_edge(&conn, file_id, 100);
+    conn.execute(
+        "UPDATE graph_entities SET data = json_object(
+            'byte_start', 150,
+            'byte_end', 400,
+            'start_line', 10,
+            'start_col', 0,
+            'end_line', 25,
+            'end_col', 1,
+            'kind', 'Function',
+            'name', 'my_function'
+        ) WHERE id = 100",
+        [],
+    )
+    .expect("update symbol data");
+
+    // Update symbol_metrics to match symbol_id
+    conn.execute(
+        "INSERT INTO symbol_metrics (symbol_id, fan_in, fan_out, cyclomatic_complexity)
+        VALUES (100, 5, 3, 2)",
+        [],
+    )
+    .expect("insert metrics");
+
+    // Search with --with-ast-context flag
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "my_function",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
+        ast: AstOptions {
+            ast_kind: None,
+            with_ast_context: true, // Enable enriched context
+        },
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    assert_eq!(response.results.len(), 1, "Should find the function");
+
+    let ast_ctx = response.results[0]
+        .ast_context
+        .as_ref()
+        .expect("Should have ast_context");
+
+    // Check basic fields
+    assert_eq!(ast_ctx.kind, "function_item");
+
+    // Check enriched fields (should be populated with --with-ast-context)
+    assert_eq!(ast_ctx.depth, Some(1), "Depth should be populated");
+    assert_eq!(
+        ast_ctx.parent_kind.as_ref().map(|s| s.as_str()),
+        Some("mod_item"),
+        "Parent kind should be populated"
+    );
+    assert!(
+        ast_ctx.children_count_by_kind.is_some(),
+        "Children count should be populated"
+    );
+    assert_eq!(
+        ast_ctx.decision_points,
+        Some(1), // One if_expression
+        "Decision points should be counted"
+    );
+}
+
+// Test: Backward compatibility - ast_context without flag
+#[test]
+fn test_ast_context_without_flag() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&conn, file_id, "src/test.rs");
+
+    // Create AST nodes - note: ID must match symbol ID (100) for the LEFT JOIN to work
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (100, NULL, 'function_item', 100, 500)",
+        [],
+    )
+    .expect("insert ast nodes");
+
+    // Insert symbol and edge
+    insert_symbol(&conn, 100, "my_function", "Function", file_id);
+    insert_define_edge(&conn, file_id, 100);
+    conn.execute(
+        "UPDATE graph_entities SET data = json_object(
+            'byte_start', 150,
+            'byte_end', 400,
+            'start_line', 10,
+            'start_col', 0,
+            'end_line', 25,
+            'end_col', 1,
+            'kind', 'Function',
+            'name', 'my_function'
+        ) WHERE id = 100",
+        [],
+    )
+    .expect("update symbol data");
+
+    // Update symbol_metrics
+    conn.execute(
+        "INSERT INTO symbol_metrics (symbol_id, fan_in, fan_out, cyclomatic_complexity)
+        VALUES (100, 5, 3, 2)",
+        [],
+    )
+    .expect("insert metrics");
+
+    // Search WITHOUT --with-ast-context flag
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "my_function",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
+        ast: AstOptions {
+            ast_kind: None,
+            with_ast_context: false, // NOT enabled
+        },
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    assert_eq!(response.results.len(), 1, "Should find the function");
+
+    let ast_ctx = response.results[0]
+        .ast_context
+        .as_ref()
+        .expect("Should have basic ast_context from LEFT JOIN");
+
+    // Basic fields should be present
+    assert_eq!(ast_ctx.kind, "function_item");
+
+    // Enriched fields should NOT be populated without flag
+    assert_eq!(ast_ctx.depth, None, "Depth should not be populated");
+    assert_eq!(ast_ctx.parent_kind, None, "Parent kind should not be populated");
+    assert_eq!(
+        ast_ctx.children_count_by_kind, None,
+        "Children count should not be populated"
+    );
+    assert_eq!(
+        ast_ctx.decision_points, None,
+        "Decision points should not be populated"
+    );
+}
+
+// Test: Sorting by AstComplexity (same as Complexity)
+#[test]
+fn test_sort_by_ast_complexity() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&conn, file_id, "src/test.rs");
+
+    // Insert symbols with different complexities
+    insert_symbol(&conn, 100, "simple_func", "Function", file_id);
+    insert_define_edge(&conn, file_id, 100);
+    conn.execute(
+        "UPDATE graph_entities SET data = json_object(
+            'byte_start', 100, 'byte_end', 150,
+            'start_line', 10, 'start_col', 0, 'end_line', 12, 'end_col', 1,
+            'kind', 'Function', 'name', 'simple_func'
+        ) WHERE id = 100",
+        [],
+    )
+    .expect("update symbol 1");
+
+    insert_symbol(&conn, 200, "complex_func", "Function", file_id);
+    insert_define_edge(&conn, file_id, 200);
+    conn.execute(
+        "UPDATE graph_entities SET data = json_object(
+            'byte_start', 200, 'byte_end', 300,
+            'start_line', 20, 'start_col', 0, 'end_line', 25, 'end_col', 1,
+            'kind', 'Function', 'name', 'complex_func'
+        ) WHERE id = 200",
+        [],
+    )
+    .expect("update symbol 2");
+
+    // Insert metrics with different complexity values
+    conn.execute(
+        "INSERT INTO symbol_metrics (symbol_id, fan_in, fan_out, cyclomatic_complexity)
+        VALUES (100, 1, 0, 1)",
+        [],
+    )
+    .expect("insert metrics 1");
+
+    conn.execute(
+        "INSERT INTO symbol_metrics (symbol_id, fan_in, fan_out, cyclomatic_complexity)
+        VALUES (200, 2, 1, 10)",
+        [],
+    )
+    .expect("insert metrics 2");
+
+    // Search with AstComplexity sort
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "func",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::AstComplexity, // New sort mode
+        metrics: MetricsOptions::default(),
+        ast: AstOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    assert_eq!(response.results.len(), 2, "Should find both functions");
+
+    // Should be sorted by complexity descending (complex_func first)
+    assert_eq!(
+        response.results[0].name,
+        "complex_func",
+        "Highest complexity should come first"
+    );
+    assert_eq!(
+        response.results[1].name,
+        "simple_func",
+        "Lower complexity should come second"
+    );
 }
