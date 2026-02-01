@@ -122,6 +122,20 @@ enum Command {
         // Enriched AST context flag
         #[arg(long)]
         with_ast_context: bool,
+
+        // Depth filtering flags
+        #[arg(long, value_parser = ranged_usize(0, 100))]
+        min_depth: Option<usize>,
+
+        #[arg(long, value_parser = ranged_usize(0, 100))]
+        max_depth: Option<usize>,
+
+        // Structural search flags
+        #[arg(long, value_name = "KIND")]
+        inside: Option<String>,
+
+        #[arg(long, value_name = "KIND")]
+        contains: Option<String>,
     },
 }
 
@@ -188,6 +202,21 @@ V2.0 AST FEATURES:
   # Search with enriched AST context (depth, parent_kind, children, decision_points)
   llmgrep --db code.db search --query "process" --with-ast-context --output json
 
+  # Find deeply nested code (complexity hotspots)
+  llmgrep --db code.db search --query ".*" --min-depth 5 --output json
+
+  # Find only top-level code
+  llmgrep --db code.db search --query "process" --max-depth 1
+
+  # Find closures within functions
+  llmgrep --db code.db search --query ".*" --inside function_item --ast-kind closure_expression
+
+  # Find functions containing async calls
+  llmgrep --db code.db search --query ".*" --contains await_expression --ast-kind function_item
+
+  # Find code at specific depth
+  llmgrep --db code.db search --query ".*" --min-depth 2 --max-depth 3
+
   AST Node Kinds:
     function_item       - Function definitions
     block               - Code blocks
@@ -196,6 +225,10 @@ V2.0 AST FEATURES:
     expression_statement - Expression statements
     attribute_item      - Attributes/macros
     mod_item            - Module declarations
+    closure_expression  - Closure/lambda expressions
+    if_expression       - If statements
+    match_expression    - Match expressions
+    await_expression    - Await expressions
 "#;
 
 fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
@@ -288,6 +321,10 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             exact_fqn,
             ast_kind,
             with_ast_context,
+            min_depth,
+            max_depth,
+            inside,
+            contains,
         } => run_search(
             cli,
             query,
@@ -316,6 +353,10 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             exact_fqn.as_ref(),
             ast_kind.as_ref(),
             *with_ast_context,
+            *min_depth,
+            *max_depth,
+            inside.as_ref().map(|s| s.as_str()),
+            contains.as_ref().map(|s| s.as_str()),
         ),
     }
 }
@@ -349,6 +390,10 @@ fn run_search(
     exact_fqn: Option<&String>,
     ast_kind: Option<&String>,
     with_ast_context: bool,
+    min_depth: Option<usize>,
+    max_depth: Option<usize>,
+    inside: Option<&str>,
+    contains: Option<&str>,
 ) -> Result<(), LlmError> {
     // Validate SymbolId format (32 hex characters)
     if let Some(sid) = symbol_id {
