@@ -644,52 +644,114 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
 
         // Enrich ast_context if --with-ast-context flag is set OR depth filtering is active
         let needs_ast_enrichment = options.ast.with_ast_context || has_depth_filter;
+        // Check if we have an active ast_kinds filter that should override the exact-match JOIN result
+        let has_ast_kind_filter = !options.ast.ast_kinds.is_empty();
         let ast_context = if needs_ast_enrichment {
             if let Some(mut ctx) = ast_context {
-                // Populate enriched fields
-                // Use decision depth when depth filtering is active, otherwise use AST depth
-                if has_depth_filter {
-                    match crate::ast::calculate_decision_depth(&conn, ctx.ast_id) {
-                        Ok(depth) => ctx.depth = depth,
+                // If ast_kinds filter is active and the current context doesn't match, use preferred lookup
+                if has_ast_kind_filter && !options.ast.ast_kinds.contains(&ctx.kind) {
+                    match crate::ast::get_ast_context_for_symbol_with_preference(
+                        &conn,
+                        &file_path,
+                        symbol.byte_start,
+                        symbol.byte_end,
+                        true, // include_enriched
+                        &options.ast.ast_kinds,
+                    ) {
+                        Ok(Some(pref_ctx)) => Some(pref_ctx),
+                        Ok(None) => {
+                            // No preferred kind found, fall back to enriching the existing context
+                            if has_depth_filter {
+                                if let Ok(depth) = crate::ast::calculate_decision_depth(&conn, ctx.ast_id) {
+                                    ctx.depth = depth;
+                                }
+                            } else {
+                                if let Ok(depth) = crate::ast::calculate_ast_depth(&conn, ctx.ast_id) {
+                                    ctx.depth = depth;
+                                }
+                            }
+                            if let Ok(kind) = crate::ast::get_parent_kind(&conn, ctx.parent_id) {
+                                ctx.parent_kind = kind;
+                            }
+                            if let Ok(children) = crate::ast::count_children_by_kind(&conn, ctx.ast_id) {
+                                ctx.children_count_by_kind = Some(children);
+                            }
+                            if let Ok(decision_points) = crate::ast::count_decision_points(&conn, ctx.ast_id) {
+                                ctx.decision_points = Some(decision_points);
+                            }
+                            Some(ctx)
+                        },
                         Err(e) => {
-                            eprintln!("Warning: Failed to calculate decision depth: {}", e);
+                            eprintln!("Warning: Failed to get preferred AST context: {}", e);
+                            if has_depth_filter {
+                                if let Ok(depth) = crate::ast::calculate_decision_depth(&conn, ctx.ast_id) {
+                                    ctx.depth = depth;
+                                }
+                            } else {
+                                if let Ok(depth) = crate::ast::calculate_ast_depth(&conn, ctx.ast_id) {
+                                    ctx.depth = depth;
+                                }
+                            }
+                            if let Ok(kind) = crate::ast::get_parent_kind(&conn, ctx.parent_id) {
+                                ctx.parent_kind = kind;
+                            }
+                            if let Ok(children) = crate::ast::count_children_by_kind(&conn, ctx.ast_id) {
+                                ctx.children_count_by_kind = Some(children);
+                            }
+                            if let Ok(decision_points) = crate::ast::count_decision_points(&conn, ctx.ast_id) {
+                                ctx.decision_points = Some(decision_points);
+                            }
+                            Some(ctx)
                         }
                     }
                 } else {
-                    match crate::ast::calculate_ast_depth(&conn, ctx.ast_id) {
-                        Ok(depth) => ctx.depth = depth,
-                        Err(e) => {
-                            eprintln!("Warning: Failed to calculate AST depth: {}", e);
+                    // Populate enriched fields
+                    // Use decision depth when depth filtering is active, otherwise use AST depth
+                    if has_depth_filter {
+                        match crate::ast::calculate_decision_depth(&conn, ctx.ast_id) {
+                            Ok(depth) => ctx.depth = depth,
+                            Err(e) => {
+                                eprintln!("Warning: Failed to calculate decision depth: {}", e);
+                            }
+                        }
+                    } else {
+                        match crate::ast::calculate_ast_depth(&conn, ctx.ast_id) {
+                            Ok(depth) => ctx.depth = depth,
+                            Err(e) => {
+                                eprintln!("Warning: Failed to calculate AST depth: {}", e);
+                            }
                         }
                     }
-                }
-                match crate::ast::get_parent_kind(&conn, ctx.parent_id) {
-                    Ok(kind) => ctx.parent_kind = kind,
-                    Err(e) => {
-                        eprintln!("Warning: Failed to get parent kind: {}", e);
+                    match crate::ast::get_parent_kind(&conn, ctx.parent_id) {
+                        Ok(kind) => ctx.parent_kind = kind,
+                        Err(e) => {
+                            eprintln!("Warning: Failed to get parent kind: {}", e);
+                        }
                     }
-                }
-                match crate::ast::count_children_by_kind(&conn, ctx.ast_id) {
-                    Ok(children) => ctx.children_count_by_kind = Some(children),
-                    Err(e) => {
-                        eprintln!("Warning: Failed to count children: {}", e);
+                    match crate::ast::count_children_by_kind(&conn, ctx.ast_id) {
+                        Ok(children) => ctx.children_count_by_kind = Some(children),
+                        Err(e) => {
+                            eprintln!("Warning: Failed to count children: {}", e);
+                        }
                     }
-                }
-                match crate::ast::count_decision_points(&conn, ctx.ast_id) {
-                    Ok(decision_points) => ctx.decision_points = Some(decision_points),
-                    Err(e) => {
-                        eprintln!("Warning: Failed to count decision points: {}", e);
+                    match crate::ast::count_decision_points(&conn, ctx.ast_id) {
+                        Ok(decision_points) => ctx.decision_points = Some(decision_points),
+                        Err(e) => {
+                            eprintln!("Warning: Failed to count decision points: {}", e);
+                        }
                     }
+                    Some(ctx)
                 }
-                Some(ctx)
             } else {
                 // Try to get AST context by symbol span if not already populated
-                match crate::ast::get_ast_context_for_symbol(
+                // Pass ast_kinds to prefer nodes matching the filter
+                match crate::ast::get_ast_context_for_symbol_with_preference(
                     &conn,
                     &file_path,
                     symbol.byte_start,
                     symbol.byte_end,
                     true, // include_enriched
+                    &options.ast.ast_kinds,
                 ) {
                     Ok(ctx) => ctx,
                     Err(e) => {
@@ -1407,17 +1469,34 @@ fn build_search_query(
         }
     }
 
-    // AST kind filter: Filter by AST node kind(s) when table exists
+    // AST kind filter: Filter by AST node kind(s) using overlap matching
+    // This uses an EXISTS subquery to handle cases where AST nodes overlap
+    // with symbol spans but don't have exact byte matches
     if !ast_kinds.is_empty() {
         if has_ast_table {
             if ast_kinds.len() == 1 {
-                // Single kind - use simple equality
-                where_clauses.push("an.kind = ?".to_string());
+                // Single kind - use EXISTS with overlap check
+                where_clauses.push(format!(
+                    "EXISTS (
+                        SELECT 1 FROM ast_nodes
+                        WHERE kind = ?
+                        AND byte_start < json_extract(s.data, '$.byte_end')
+                        AND byte_end > json_extract(s.data, '$.byte_start')
+                    )"
+                ));
                 params.push(Box::new(ast_kinds[0].clone()));
             } else {
-                // Multiple kinds - use IN clause
+                // Multiple kinds - use EXISTS with IN and overlap check
                 let placeholders = vec!["?"; ast_kinds.len()].join(",");
-                where_clauses.push(format!("an.kind IN ({})", placeholders));
+                where_clauses.push(format!(
+                    "EXISTS (
+                        SELECT 1 FROM ast_nodes
+                        WHERE kind IN ({})
+                        AND byte_start < json_extract(s.data, '$.byte_end')
+                        AND byte_end > json_extract(s.data, '$.byte_start')
+                    )",
+                    placeholders
+                ));
                 for kind in ast_kinds {
                     params.push(Box::new(kind.clone()));
                 }
@@ -1525,9 +1604,11 @@ LEFT JOIN symbol_metrics sm ON s.id = sm.symbol_id
 WHERE {where_clause}",
         select_clause = select_clause,
         ast_join = if has_ast_table {
-            "LEFT JOIN ast_nodes an ON s.id = an.id"
+            // Exact match on byte span - this is the correct approach for Magellan
+            // The get_ast_context_for_symbol() function handles overlap matching when needed
+            "LEFT JOIN ast_nodes an ON json_extract(s.data, '$.byte_start') = an.byte_start AND json_extract(s.data, '$.byte_end') = an.byte_end".to_string()
         } else {
-            "" // No JOIN when table doesn't exist
+            "".to_string()
         },
         where_clause = if where_clauses.is_empty() {
             "1=1".to_string()

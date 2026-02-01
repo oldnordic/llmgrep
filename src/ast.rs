@@ -431,9 +431,9 @@ pub fn count_decision_points(conn: &Connection, ast_id: i64) -> Result<u64> {
 ///
 /// # Finding Strategy
 ///
-/// The function finds AST nodes where the symbol's span overlaps with the node's span
-/// (symbol start >= node start AND symbol end <= node end). When multiple nodes match,
-/// the one with minimal distance is selected.
+/// The function finds AST nodes where the symbol's span overlaps with the node's span.
+/// When `preferred_kinds` is provided, nodes of those kinds are prioritized.
+/// Otherwise, the node with minimal distance is selected.
 pub fn get_ast_context_for_symbol(
     conn: &Connection,
     _file_path: &str,
@@ -441,33 +441,112 @@ pub fn get_ast_context_for_symbol(
     byte_end: u64,
     include_enriched: bool,
 ) -> Result<Option<AstContext>> {
-    // Find AST nodes that overlap with the symbol span
-    // We look for nodes where the symbol is contained within the node's byte range
-    let sql = r#"
-        SELECT id, parent_id, kind, byte_start, byte_end
-        FROM ast_nodes
-        WHERE byte_start <= ? AND byte_end >= ?
-        ORDER BY ABS(byte_start - ?) + ABS(byte_end - ?)
-        LIMIT 1
-    "#;
+    get_ast_context_for_symbol_with_preference(conn, _file_path, byte_start, byte_end, include_enriched, &[])
+}
 
+/// Get AST context for a symbol with preferred kinds.
+///
+/// When `preferred_kinds` is non-empty, this function first looks for AST nodes
+/// matching those kinds before falling back to any overlapping node.
+pub fn get_ast_context_for_symbol_with_preference(
+    conn: &Connection,
+    _file_path: &str,
+    byte_start: u64,
+    byte_end: u64,
+    include_enriched: bool,
+    preferred_kinds: &[String],
+) -> Result<Option<AstContext>> {
+    // Overlap formula: intervals [s1, e1] and [s2, e2] overlap when: s1 < e2 AND s2 < e1
     let (ast_id, parent_id, kind, ast_byte_start, ast_byte_end) =
-        match conn.query_row(
-            sql,
-            [byte_start as i64, byte_end as i64, byte_start as i64, byte_end as i64],
-            |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, Option<i64>>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, u64>(3)?,
-                    row.get::<_, u64>(4)?,
-                ))
-            },
-        ) {
-            Ok(result) => result,
-            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
-            Err(e) => return Err(e.into()),
+        if !preferred_kinds.is_empty() {
+            // First try to find a node matching one of the preferred kinds
+            // Use direct SQL construction to avoid rusqlite parameter binding issues
+            let kind_list = preferred_kinds.iter()
+                .map(|k| format!("'{}'", k.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(",");
+            let sql = format!(
+                "SELECT id, parent_id, kind, byte_start, byte_end
+                 FROM ast_nodes
+                 WHERE byte_start <= {} AND byte_end >= {} AND kind IN ({})
+                 ORDER BY ABS(byte_start - {}) + ABS(byte_end - {})
+                 LIMIT 1",
+                byte_end, byte_start, kind_list, byte_start, byte_end
+            );
+
+            match conn.query_row(
+                &sql,
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Option<i64>>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, u64>(3)?,
+                        row.get::<_, u64>(4)?,
+                    ))
+                },
+            ) {
+                Ok(result) => result,
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    // No preferred kind found, fall back to any overlapping node
+                    let fallback_sql = r#"
+                        SELECT id, parent_id, kind, byte_start, byte_end
+                        FROM ast_nodes
+                        WHERE byte_start <= ? AND byte_end >= ?
+                        ORDER BY ABS(byte_start - ?) + ABS(byte_end - ?)
+                        LIMIT 1
+                    "#;
+                    match conn.query_row(
+                        fallback_sql,
+                        [byte_end as i64, byte_start as i64, byte_start as i64, byte_end as i64],
+                        |row| {
+                            Ok((
+                                row.get::<_, i64>(0)?,
+                                row.get::<_, Option<i64>>(1)?,
+                                row.get::<_, String>(2)?,
+                                row.get::<_, u64>(3)?,
+                                row.get::<_, u64>(4)?,
+                            ))
+                        },
+                    ) {
+                        Ok(result) => result,
+                        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+                        Err(e) => return Err(e.into()),
+                    }
+                },
+                Err(e) => return Err(e.into()),
+            }
+        } else {
+            // No preference, find the closest containing node
+            // Prefer nodes that fully contain the symbol span, ordered by smallest containing span first
+            let sql = format!(
+                "SELECT id, parent_id, kind, byte_start, byte_end
+                 FROM ast_nodes
+                 WHERE byte_start <= {} AND byte_end >= {}
+                 ORDER BY
+                     CASE WHEN byte_start <= {} AND byte_end >= {} THEN 0 ELSE 1 END ASC,
+                     (byte_end - byte_start) ASC
+                 LIMIT 1",
+                byte_end, byte_start, byte_start, byte_end
+            );
+            match conn.query_row(
+                &sql,
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Option<i64>>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, u64>(3)?,
+                        row.get::<_, u64>(4)?,
+                    ))
+                },
+            ) {
+                Ok(result) => result,
+                Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+                Err(e) => return Err(e.into()),
+            }
         };
 
     let mut ctx = AstContext {

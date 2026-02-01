@@ -1,6 +1,6 @@
 # llmgrep Manual
 
-**v1.1.1** (shipped 2026-01-31)
+**v1.2.0** (shipped 2026-02-01)
 
 llmgrep is a read-only query tool for Magellan's code map. It does not build or modify the database — Magellan owns indexing and freshness.
 
@@ -47,17 +47,13 @@ llmgrep search --db <FILE> --query <STRING> [OPTIONS]
 - `--min-fan-in <N>` — Minimum incoming references
 - `--min-fan-out <N>` — Minimum outgoing calls
 
-**AST filtering (v2.0):**
+**AST filtering (v1.2):**
 - `--ast-kind <KIND>` — Filter by AST node kind (supports shorthands and specific kinds)
 - `--with-ast-context` — Include enriched AST context (depth, parent_kind, children, decision_points)
 
-**Depth filtering (v2.0):**
+**Depth filtering (v1.2):**
 - `--min-depth <N>` — Minimum nesting depth (decision points only)
 - `--max-depth <N>` — Maximum nesting depth (decision points only)
-
-**Structural search (v2.0):**
-- `--inside <KIND>` — Find symbols within parent of specific kind
-- `--contains <KIND>` — Find parents containing symbols of specific kind
 
 **Sorting:**
 - `--sort-by <MODE>` — Sort mode (default: `relevance`)
@@ -88,7 +84,7 @@ llmgrep search --db <FILE> --query <STRING> [OPTIONS]
 **Snippet options:**
 - `--max-snippet-bytes <N>` — Max snippet size in bytes (default: 200)
 
-## AST filtering (v2.0)
+## AST filtering (v1.2)
 
 ### `--ast-kind` flag
 
@@ -188,7 +184,7 @@ llmgrep --db code.db search --query "parse" --ast-kind call_expression
 - Declarations: `variable_declaration`, `type_alias_declaration`
 - Modules: `import_statement`, `export_statement`
 
-## Depth filtering (v2.0)
+## Depth filtering (v1.2)
 
 ### Decision depth
 
@@ -207,38 +203,6 @@ llmgrep --db code.db search --query "process" --max-depth 1
 
 # Find code at specific depth range
 llmgrep --db code.db search --query ".*" --min-depth 2 --max-depth 3
-```
-
-## Structural search (v2.0)
-
-### `--inside` flag
-
-Find symbols within a parent of a specific kind.
-
-```bash
-# Find closures inside functions
-llmgrep --db code.db search --query "closure" --inside function_item
-
-# Find let declarations inside blocks
-llmgrep --db code.db search --query "let" --ast-kind let_declaration --inside block
-
-# Find call expressions inside if expressions
-llmgrep --db code.db search --query "call" --ast-kind call_expression --inside if_expression
-```
-
-### `--contains` flag
-
-Find parents containing symbols of a specific kind.
-
-```bash
-# Find functions containing if expressions
-llmgrep --db code.db search --query ".*" --contains if_expression --ast-kind function_item
-
-# Find functions with multiple calls
-llmgrep --db code.db search --query ".*" --contains call_expression --sort-by fan-out
-
-# Find functions containing match expressions
-llmgrep --db code.db search --query ".*" --contains match_expression
 ```
 
 ## Enriched AST context
