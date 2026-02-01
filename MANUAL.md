@@ -47,6 +47,18 @@ llmgrep search --db <FILE> --query <STRING> [OPTIONS]
 - `--min-fan-in <N>` — Minimum incoming references
 - `--min-fan-out <N>` — Minimum outgoing calls
 
+**AST filtering (v2.0):**
+- `--ast-kind <KIND>` — Filter by AST node kind (supports shorthands and specific kinds)
+- `--with-ast-context` — Include enriched AST context (depth, parent_kind, children, decision_points)
+
+**Depth filtering (v2.0):**
+- `--min-depth <N>` — Minimum nesting depth (decision points only)
+- `--max-depth <N>` — Maximum nesting depth (decision points only)
+
+**Structural search (v2.0):**
+- `--inside <KIND>` — Find symbols within parent of specific kind
+- `--contains <KIND>` — Find parents containing symbols of specific kind
+
 **Sorting:**
 - `--sort-by <MODE>` — Sort mode (default: `relevance`)
   - `relevance` — Intelligent scoring (LLM-friendly)
@@ -75,6 +87,182 @@ llmgrep search --db <FILE> --query <STRING> [OPTIONS]
 
 **Snippet options:**
 - `--max-snippet-bytes <N>` — Max snippet size in bytes (default: 200)
+
+## AST filtering (v2.0)
+
+### `--ast-kind` flag
+
+Filter search results by AST node kind for structural code queries.
+
+**Syntax:**
+```bash
+--ast-kind <KIND|SHORTHAND>[,...]
+```
+
+**Shorthands expand to multiple node kinds:**
+
+| Shorthand | Expands To | Description |
+|-----------|------------|-------------|
+| `loops` | `for_expression,while_expression,loop_expression` | Loop constructs |
+| `conditionals` | `if_expression,match_expression,match_arm` | Conditionals |
+| `functions` | `function_item,closure_expression,async_function_item` | Functions |
+| `declarations` | `struct_item,enum_item,let_declaration,const_item,static_item,type_alias_item` | Declarations |
+| `unsafe` | `unsafe_block` | Unsafe blocks |
+| `types` | `struct_item,enum_item,type_alias_item,union_item` | Type definitions |
+| `macros` | `macro_invocation,macro_definition,macro_rule` | Macros |
+| `mods` | `mod_item` | Module declarations |
+| `traits` | `trait_item,trait_impl_item` | Trait items and impls |
+| `impls` | `impl_item` | Impl blocks |
+
+**Language-aware expansion:**
+
+When used with `--language`, shorthands expand to language-specific node kinds:
+
+| Language | Shorthand | Expands To |
+|----------|-----------|------------|
+| `rust` | `loops` | `for_expression,while_expression,loop_expression` |
+| `python` | `loops` | `for_statement,while_statement` |
+| `javascript` | `loops` | `for_statement,for_in_statement,for_of_statement,while_statement,do_statement` |
+| `typescript` | `loops` | `for_statement,for_in_statement,for_of_statement,while_statement,do_statement` |
+| `rust` | `functions` | `function_item,closure_expression,async_function_item` |
+| `python` | `functions` | `function_definition,lambda,async_function_definition` |
+| `javascript` | `functions` | `function_declaration,function_expression,arrow_function,generator_function_declaration,generator_function_expression` |
+| `typescript` | `functions` | `function_declaration,function_expression,arrow_function,generator_function_declaration,generator_function_expression` |
+| `rust` | `conditionals` | `if_expression,match_expression,match_arm` |
+| `python` | `conditionals` | `if_statement,match_statement` |
+| `javascript` | `conditionals` | `if_statement,switch_statement,catch_clause` |
+| `typescript` | `conditionals` | `if_statement,switch_statement,catch_clause` |
+| `rust` | `declarations` | `struct_item,enum_item,let_declaration,const_item,static_item,type_alias_item` |
+| `python` | `declarations` | `class_definition,type_alias_statement` |
+| `javascript` | `declarations` | `class_declaration,class_expression,variable_declaration,type_alias_declaration` |
+| `typescript` | `declarations` | `class_declaration,class_expression,variable_declaration,type_alias_declaration,interface_declaration,enum_declaration` |
+
+**Examples:**
+
+```bash
+# Find all loops using shorthand
+llmgrep --db code.db search --query ".*" --ast-kind loops
+
+# Find conditionals in Python
+llmgrep --db code.db search --query ".*" --ast-kind conditionals --language python
+
+# Combine shorthands
+llmgrep --db code.db search --query ".*" --ast-kind loops,conditionals
+
+# Mix shorthands with specific kinds
+llmgrep --db code.db search --query "process" --ast-kind loops,function_item
+
+# Find specific node kind
+llmgrep --db code.db search --query "parse" --ast-kind call_expression
+```
+
+### Language-specific node kinds
+
+**Rust (tree-sitter-rust):**
+- Control flow: `if_expression`, `match_expression`, `match_arm`, `while_expression`, `loop_expression`, `for_expression`, `if_let_expression`, `while_let_expression`, `let_else_expression`
+- Functions: `function_item`, `closure_expression`, `async_function_item`
+- Declarations: `struct_item`, `enum_item`, `let_declaration`, `const_item`, `static_item`, `type_alias_item`, `union_item`, `trait_item`, `impl_item`, `mod_item`
+- Expressions: `call_expression`, `method_call_expression`, `block`, `expression_statement`
+- unsafe: `unsafe_block`
+
+**Python (tree-sitter-python):**
+- Control flow: `if_statement`, `match_statement`, `for_statement`, `while_statement`, `with_statement`, `try_statement`, `except_clause`
+- Functions: `function_definition`, `lambda`, `async_function_definition`
+- Classes: `class_definition`, `decorated_definition`
+- Comprehensions: `list_comprehension`, `dictionary_comprehension`, `set_comprehension`, `generator_expression`
+- Declarations: `type_alias_statement`, `variable_declaration`
+- Module: `import_statement`, `import_from_statement`, `module`
+
+**JavaScript (tree-sitter-javascript):**
+- Control flow: `if_statement`, `switch_statement`, `for_statement`, `for_in_statement`, `for_of_statement`, `while_statement`, `do_statement`, `try_statement`, `catch_clause`, `finally_clause`
+- Functions: `function_declaration`, `function_expression`, `arrow_function`, `generator_function_declaration`, `generator_function_expression`, `method_definition`
+- Classes: `class_declaration`, `class_expression`
+- Declarations: `variable_declaration`, `type_alias_declaration`
+- Modules: `import_statement`, `export_statement`
+
+**TypeScript (tree-sitter-typescript):**
+- Control flow: `if_statement`, `switch_statement`, `for_statement`, `for_in_statement`, `for_of_statement`, `while_statement`, `do_statement`, `try_statement`, `catch_clause`, `finally_clause`
+- Functions: `function_declaration`, `function_expression`, `arrow_function`, `generator_function_declaration`, `generator_function_expression`, `method_definition`
+- Classes: `class_declaration`, `class_expression`
+- Type declarations: `type_alias_declaration`, `interface_declaration`, `enum_declaration`
+- Declarations: `variable_declaration`, `type_alias_declaration`
+- Modules: `import_statement`, `export_statement`
+
+## Depth filtering (v2.0)
+
+### Decision depth
+
+Depth is measured as **decision points only** (branching control flow structures):
+- `if_expression`, `match_expression`, `for_expression`, `while_expression`, `loop_expression`
+
+Root-level code has depth 0. Each decision point ancestor adds 1.
+
+**Examples:**
+```bash
+# Find deeply nested code (complexity hotspots)
+llmgrep --db code.db search --query ".*" --min-depth 5
+
+# Find only top-level code
+llmgrep --db code.db search --query "process" --max-depth 1
+
+# Find code at specific depth range
+llmgrep --db code.db search --query ".*" --min-depth 2 --max-depth 3
+```
+
+## Structural search (v2.0)
+
+### `--inside` flag
+
+Find symbols within a parent of a specific kind.
+
+```bash
+# Find closures inside functions
+llmgrep --db code.db search --query "closure" --inside function_item
+
+# Find let declarations inside blocks
+llmgrep --db code.db search --query "let" --ast-kind let_declaration --inside block
+
+# Find call expressions inside if expressions
+llmgrep --db code.db search --query "call" --ast-kind call_expression --inside if_expression
+```
+
+### `--contains` flag
+
+Find parents containing symbols of a specific kind.
+
+```bash
+# Find functions containing if expressions
+llmgrep --db code.db search --query ".*" --contains if_expression --ast-kind function_item
+
+# Find functions with multiple calls
+llmgrep --db code.db search --query ".*" --contains call_expression --sort-by fan-out
+
+# Find functions containing match expressions
+llmgrep --db code.db search --query ".*" --contains match_expression
+```
+
+## Enriched AST context
+
+### `--with-ast-context` flag
+
+Include additional structural information in results:
+
+```bash
+llmgrep --db code.db search --query "process" --with-ast-context --output json
+```
+
+**Additional fields:**
+- `depth` - Nesting depth from AST root (0 = top-level)
+- `parent_kind` - Kind of parent AST node
+- `children_count_by_kind` - Count of direct children grouped by kind
+- `decision_points` - Number of decision point children
+
+## Database compatibility
+
+AST features require Magellan databases with `ast_nodes` table. If the table doesn't exist:
+- AST filters are silently ignored (graceful degradation)
+- No errors occur
+- Results include all symbols (no AST filtering)
 
 ## Output formats
 
