@@ -1,6 +1,6 @@
 # llmgrep
 
-**v1.1.1** (shipped 2026-01-31)
+**v1.2.0** (in development)
 
 A command-line search tool for code indexed by [Magellan](https://github.com/oldnordic/magellan). Queries SQLite graph databases to find symbols, references, and call relationships. Outputs human-readable or structured JSON for programmatic use.
 
@@ -45,6 +45,21 @@ magellan watch --root /path/to/repo --db /path/to/repo.db
 - **Kind filtering**: Filter by symbol kind (Function, Struct, Method, Class, Enum, Module, etc.)
 - **Security**: ReDoS prevention, resource bounds, path traversal blocking
 - **Error codes**: LLM-E### format with remediation hints
+- **Depth filtering**: Find symbols by AST nesting depth (--min-depth, --max-depth)
+- **Structural search**: Find symbols by parent/child relationship (--inside, --contains)
+
+## v1.2.0 - Depth and Structural Search (In Development)
+
+**AST-aware search features:**
+- **Decision depth filtering**: `--min-depth` and `--max-depth` to filter by AST nesting depth
+  - Depth counts only decision points: if/match/loop/for/while expressions
+  - Use `--with-ast-context` to see depth values in results
+- **Structural search**: `--inside KIND` and `--contains KIND` for parent/child relationships
+  - `--inside function_item`: find symbols inside any function
+  - `--inside block`: find symbols inside blocks
+  - `--contains if_expression`: find functions/structures containing if expressions
+  - `--contains call_expression`: find functions with calls
+- **AST context**: `--with-ast-context` flag adds `ast_context` to results (depth, kind, parent_id, byte_range)
 
 ## v1.1.1 - Bugfix Release
 
@@ -118,6 +133,56 @@ llmgrep --db code.db search --query ".*" --sort-by fan-in --limit 20
 ### FQN pattern matching
 ```bash
 llmgrep --db code.db search --query "helper" --fqn "%module::%"
+```
+
+## v1.2.0 Examples
+
+### Find deeply nested code (code smell detection)
+```bash
+# Find closures nested 3+ levels deep (potential complexity)
+llmgrep --db code.db search --query "closure" --min-depth 3 --with-ast-context
+
+# Find functions at decision depth 0-1 (simple, testable)
+llmgrep --db code.db search --query ".*" --kind Function --max-depth 1
+```
+
+### Find symbols inside specific structures
+```bash
+# Find all closures inside functions
+llmgrep --db code.db search --query "closure" --inside function_item
+
+# Find let declarations inside blocks
+llmgrep --db code.db search --query "let" --ast-kind let_declaration --inside block
+
+# Find call expressions inside if expressions (nested logic)
+llmgrep --db code.db search --query "call" --ast-kind call_expression --inside if_expression
+```
+
+### Find parents containing specific children
+```bash
+# Find functions containing if expressions (conditional logic)
+llmgrep --db code.db search --query ".*" --contains if_expression --kind Function
+
+# Find functions with multiple calls (potential refactoring candidates)
+llmgrep --db code.db search --query ".*" --contains call_expression --sort-by fan-out
+
+# Find functions containing match expressions (pattern matching)
+llmgrep --db code.db search --query ".*" --contains match_expression
+```
+
+### Combined depth and structural filters
+```bash
+# Find closures at depth >= 1 inside functions
+llmgrep --db code.db search --query "closure" --min-depth 1 --inside function_item
+
+# Find deeply nested if expressions inside loops
+llmgrep --db code.db search --query "if" --min-depth 2 --inside loop_expression
+```
+
+### View AST context in results
+```bash
+# Search with AST context to see depth and kind
+llmgrep --db code.db search --query "process" --with-ast-context
 ```
 
 ## Compatibility
