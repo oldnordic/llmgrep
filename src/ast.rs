@@ -169,6 +169,238 @@ pub const fn ast_nodes_table_schema() -> &'static str {
     )"
 }
 
+/// Calculate the nesting depth of an AST node using recursive CTE.
+///
+/// Depth is measured by counting ancestors from root nodes (parent_id IS NULL).
+/// Root nodes have depth 0, their direct children have depth 1, etc.
+///
+/// # Arguments
+///
+/// * `conn` - SQLite connection
+/// * `ast_id` - AST node ID to calculate depth for
+///
+/// # Returns
+///
+/// * `Ok(Some(depth))` - Depth of the node
+/// * `Ok(None)` - Node not found
+/// * `Err(...)` - Database error
+///
+/// # Example
+///
+/// ```no_run
+/// use llmgrep::ast::calculate_ast_depth;
+/// use rusqlite::Connection;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let conn = Connection::open("code.db")?;
+/// if let Some(depth) = calculate_ast_depth(&conn, 42)? {
+///     println!("Node 42 is at depth {}", depth);
+/// }
+/// # Ok(())
+/// # }
+/// ```
+pub fn calculate_ast_depth(conn: &Connection, ast_id: i64) -> Result<Option<u64>> {
+    let sql = r#"
+        WITH RECURSIVE node_ancestry AS (
+            -- Base case: root nodes (parent_id IS NULL)
+            SELECT id, parent_id, 0 as depth
+            FROM ast_nodes
+            WHERE parent_id IS NULL
+            UNION ALL
+            -- Recursive case: add 1 to parent depth
+            SELECT a.id, a.parent_id, na.depth + 1
+            FROM ast_nodes a
+            JOIN node_ancestry na ON a.parent_id = na.id
+        )
+        SELECT depth FROM node_ancestry WHERE id = ?
+    "#;
+
+    match conn.query_row(sql, [ast_id], |row| row.get::<_, u64>(0)) {
+        Ok(depth) => Ok(Some(depth)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Get the kind of an AST node's parent.
+///
+/// # Arguments
+///
+/// * `conn` - SQLite connection
+/// * `parent_id` - Parent node ID (None returns None immediately)
+///
+/// # Returns
+///
+/// * `Ok(Some(kind))` - Kind string of parent node
+/// * `Ok(None)` - No parent or parent not found
+/// * `Err(...)` - Database error
+pub fn get_parent_kind(conn: &Connection, parent_id: Option<i64>) -> Result<Option<String>> {
+    let Some(pid) = parent_id else {
+        return Ok(None);
+    };
+    let sql = "SELECT kind FROM ast_nodes WHERE id = ?";
+
+    match conn.query_row(sql, [pid], |row| row.get::<_, String>(0)) {
+        Ok(kind) => Ok(Some(kind)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Count direct children of an AST node grouped by kind.
+///
+/// Returns a HashMap where keys are node kinds (e.g., "let_declaration",
+/// "if_expression") and values are the count of children of that kind.
+///
+/// # Arguments
+///
+/// * `conn` - SQLite connection
+/// * `ast_id` - AST node ID to count children for
+///
+/// # Returns
+///
+/// * `Ok(HashMap)` - Map of kind to count
+/// * `Err(...)` - Database error
+pub fn count_children_by_kind(conn: &Connection, ast_id: i64) -> Result<HashMap<String, u64>> {
+    let sql = r#"
+        SELECT kind, COUNT(*) as count
+        FROM ast_nodes
+        WHERE parent_id = ?
+        GROUP BY kind
+    "#;
+
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map([ast_id], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, u64>(1)?,
+        ))
+    })?;
+
+    let mut counts = HashMap::new();
+    for row in rows {
+        let (kind, count) = row?;
+        counts.insert(kind, count);
+    }
+    Ok(counts)
+}
+
+/// Count decision points within an AST node's direct children.
+///
+/// Decision points are branching control flow structures:
+/// - if_expression
+/// - match_expression
+/// - while_expression
+/// - for_expression
+/// - loop_expression
+/// - conditional_expression (ternary)
+///
+/// # Arguments
+///
+/// * `conn` - SQLite connection
+/// * `ast_id` - AST node ID to count decision points for
+///
+/// # Returns
+///
+/// * `Ok(count)` - Number of decision point children
+/// * `Err(...)` - Database error
+pub fn count_decision_points(conn: &Connection, ast_id: i64) -> Result<u64> {
+    let sql = r#"
+        SELECT COUNT(*) FROM ast_nodes
+        WHERE parent_id = ?
+          AND kind IN (
+              'if_expression', 'match_expression', 'while_expression',
+              'for_expression', 'loop_expression', 'conditional_expression'
+          )
+    "#;
+
+    conn.query_row(sql, [ast_id], |row| row.get(0))
+        .map_err(Into::into)
+}
+
+/// Get full AST context for a symbol by finding its overlapping AST node.
+///
+/// This function finds the AST node that overlaps with the symbol's byte span
+/// and optionally populates enriched fields (depth, parent_kind, children, decision_points).
+///
+/// # Arguments
+///
+/// * `conn` - SQLite connection
+/// * `file_path` - Path to source file
+/// * `byte_start` - Symbol's start byte offset
+/// * `byte_end` - Symbol's end byte offset
+/// * `include_enriched` - Whether to calculate enriched fields
+///
+/// # Returns
+///
+/// * `Ok(Some(ctx))` - AST context for the symbol
+/// * `Ok(None)` - No matching AST node found
+/// * `Err(...)` - Database error
+///
+/// # Finding Strategy
+///
+/// The function finds AST nodes where the symbol's span overlaps with the node's span
+/// (symbol start >= node start AND symbol end <= node end). When multiple nodes match,
+/// the one with minimal distance is selected.
+pub fn get_ast_context_for_symbol(
+    conn: &Connection,
+    _file_path: &str,
+    byte_start: u64,
+    byte_end: u64,
+    include_enriched: bool,
+) -> Result<Option<AstContext>> {
+    // Find AST nodes that overlap with the symbol span
+    // We look for nodes where the symbol is contained within the node's byte range
+    let sql = r#"
+        SELECT id, parent_id, kind, byte_start, byte_end
+        FROM ast_nodes
+        WHERE byte_start <= ? AND byte_end >= ?
+        ORDER BY ABS(byte_start - ?) + ABS(byte_end - ?)
+        LIMIT 1
+    "#;
+
+    let (ast_id, parent_id, kind, ast_byte_start, ast_byte_end) =
+        match conn.query_row(
+            sql,
+            [byte_start as i64, byte_end as i64, byte_start as i64, byte_end as i64],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<i64>>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, u64>(3)?,
+                    row.get::<_, u64>(4)?,
+                ))
+            },
+        ) {
+            Ok(result) => result,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+
+    let mut ctx = AstContext {
+        ast_id,
+        kind,
+        parent_id,
+        byte_start: ast_byte_start,
+        byte_end: ast_byte_end,
+        depth: None,
+        parent_kind: None,
+        children_count_by_kind: None,
+        decision_points: None,
+    };
+
+    if include_enriched {
+        // Populate enriched fields when requested
+        ctx.depth = Some(calculate_ast_depth(conn, ast_id)?.unwrap_or(0));
+        ctx.parent_kind = get_parent_kind(conn, parent_id)?;
+        ctx.children_count_by_kind = Some(count_children_by_kind(conn, ast_id)?);
+        ctx.decision_points = Some(count_decision_points(conn, ast_id)?);
+    }
+
+    Ok(Some(ctx))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
