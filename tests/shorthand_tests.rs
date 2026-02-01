@@ -325,3 +325,75 @@ fn test_multi_shorthand_complex_combination() {
     let closure_count = result.iter().filter(|s| s.as_str() == "closure_expression").count();
     assert_eq!(closure_count, 1);
 }
+
+// ============================================================================
+// Integration tests with actual database
+// ============================================================================
+
+#[test]
+fn test_multi_language_function_search() {
+    // Test that shorthands expand correctly for different languages
+    // This is a simpler unit test rather than full DB integration
+
+    // Rust "functions" shorthand
+    let rust_funcs = expand_shorthands("functions");
+    assert!(rust_funcs.contains(&"function_item".to_string()));
+    assert!(rust_funcs.contains(&"closure_expression".to_string()));
+
+    // Python "functions" with language-aware expansion
+    let python_funcs = expand_shorthand_with_language("functions", Some("python"));
+    assert!(python_funcs.contains(&"function_definition".to_string()));
+    assert!(python_funcs.contains(&"lambda".to_string()));
+
+    // JavaScript "functions" with language-aware expansion
+    let js_funcs = expand_shorthand_with_language("functions", Some("javascript"));
+    assert!(js_funcs.contains(&"function_declaration".to_string()));
+    assert!(js_funcs.contains(&"arrow_function".to_string()));
+
+    // Verify that language-aware expansions don't overlap
+    // (Rust function_item != Python function_definition != JavaScript function_declaration)
+    let all_funcs = expand_shorthands("functions");
+    assert!(all_funcs.contains(&"function_item".to_string()));
+    assert!(!all_funcs.contains(&"function_definition".to_string()));
+    assert!(!all_funcs.contains(&"function_declaration".to_string()));
+}
+
+#[test]
+fn test_language_detection_for_ast_kinds() {
+    // Test that language detection maps to correct node kinds
+    let python_funcs = get_node_kinds_for_language("python", "functions").expect("Should have Python functions");
+    assert!(python_funcs.contains(&"function_definition".to_string()));
+    assert!(python_funcs.contains(&"lambda".to_string()));
+
+    let js_funcs = get_node_kinds_for_language("javascript", "functions").expect("Should have JS functions");
+    assert!(js_funcs.contains(&"function_declaration".to_string()));
+    assert!(js_funcs.contains(&"arrow_function".to_string()));
+
+    let ts_funcs = get_node_kinds_for_language("typescript", "functions").expect("Should have TS functions");
+    assert!(ts_funcs.contains(&"function_declaration".to_string()));
+    assert!(ts_funcs.contains(&"arrow_function".to_string()));
+}
+
+#[test]
+fn test_shorthand_specific_combination_no_duplicates() {
+    // Query with --ast-kind loops,for_expression should not duplicate for_expression
+    let result = expand_shorthands("loops,for_expression");
+
+    // Count occurrences of for_expression
+    let for_expr_count = result.iter().filter(|s| s.as_str() == "for_expression").count();
+    assert_eq!(for_expr_count, 1, "for_expression should appear exactly once");
+
+    // But for_expression should still be present
+    assert!(result.contains(&"for_expression".to_string()));
+    assert!(result.contains(&"while_expression".to_string()));
+    assert!(result.contains(&"loop_expression".to_string()));
+}
+
+#[test]
+fn test_shorthand_expansion_preserves_order_consistently() {
+    // Multiple calls with same input should produce consistent output
+    let result1 = expand_shorthands("loops,conditionals");
+    let result2 = expand_shorthands("loops,conditionals");
+
+    assert_eq!(result1, result2, "Expansion should be deterministic");
+}

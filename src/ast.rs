@@ -565,7 +565,7 @@ pub fn get_supported_languages() -> &'static [&'static str] {
 ///
 /// let python_funcs = get_node_kinds_for_language("python", "functions");
 /// assert!(python_funcs.is_some());
-/// assert!(python_funcs.unwrap().contains(&"function_definition"));
+/// assert!(python_funcs.unwrap().iter().any(|s| s == "function_definition"));
 /// ```
 pub fn get_node_kinds_for_language(
     language: &str,
