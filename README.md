@@ -185,6 +185,76 @@ llmgrep --db code.db search --query "if" --min-depth 2 --inside loop_expression
 llmgrep --db code.db search --query "process" --with-ast-context
 ```
 
+## AST Filtering (v2.0)
+
+Filter search results by AST node kind for structural code queries.
+
+### Shorthand Groups
+
+Common patterns have memorable shorthands:
+
+```bash
+# Find all loops (for, while, loop)
+llmgrep --db code.db search --query ".*" --ast-kind loops
+
+# Find conditionals (if, match)
+llmgrep --db code.db search --query ".*" --ast-kind conditionals
+
+# Find functions and closures
+llmgrep --db code.db search --query "process" --ast-kind functions
+
+# Find all declarations (struct, enum, let, const, static)
+llmgrep --db code.db search --query "Config" --ast-kind declarations
+
+# Find unsafe blocks
+llmgrep --db code.db search --query ".*" --ast-kind unsafe
+```
+
+### Multi-Language Support
+
+Node kinds work across indexed languages:
+
+```bash
+# Python functions
+llmgrep --db code.db search --query "test" --ast-kind functions --language python
+
+# TypeScript classes
+llmgrep --db code.db search --query "Service" --ast-kind declarations --language typescript
+
+# JavaScript loops
+llmgrep --db code.db search --query ".*" --ast-kind loops --language javascript
+```
+
+### Combine Shorthands and Specific Kinds
+
+```bash
+# Combine multiple shorthands
+llmgrep --db code.db search --query ".*" --ast-kind loops,conditionals
+
+# Mix shorthands with specific kinds
+llmgrep --db code.db search --query "process" --ast-kind loops,function_item
+
+# Find both loops and closures
+llmgrep --db code.db search --query ".*" --ast-kind loops,closure_expression
+```
+
+### Available Shorthands
+
+| Shorthand   | Expands To |
+|------------|------------|
+| `loops` | Loop constructs (for, while, loop) |
+| `conditionals` | Conditionals (if, match) |
+| `functions` | Functions and closures |
+| `declarations` | Declarations (struct, enum, let, const, static) |
+| `unsafe` | Unsafe blocks |
+| `types` | Type definitions (struct, enum, type_alias, union) |
+| `macros` | Macro invocations and definitions |
+| `mods` | Module declarations |
+| `traits` | Trait items and impls |
+| `impls` | Impl blocks |
+
+See `MANUAL.md` for complete node kind reference per language.
+
 ## Compatibility
 
 - **Magellan**: v1.8.0 or later (for metrics/chunks support)
