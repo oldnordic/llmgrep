@@ -430,6 +430,9 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
     // Only compute scores for Relevance mode (Position mode skips scoring for performance)
     let compute_scores = options.sort_by == SortMode::Relevance;
 
+    // Check if depth filtering is active (needed for ast_context enrichment)
+    let has_depth_filter = options.depth.min_depth.is_some() || options.depth.max_depth.is_some();
+
     while let Some(row) = rows.next()? {
         let data: String = row.get(0)?;
         let file_path: String = row.get(1)?;
@@ -614,14 +617,25 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             .clone()
             .unwrap_or_else(|| normalize_kind_label(&symbol.kind));
 
-        // Enrich ast_context if --with-ast-context flag is set
-        let ast_context = if options.ast.with_ast_context {
+        // Enrich ast_context if --with-ast-context flag is set OR depth filtering is active
+        let needs_ast_enrichment = options.ast.with_ast_context || has_depth_filter;
+        let ast_context = if needs_ast_enrichment {
             if let Some(mut ctx) = ast_context {
                 // Populate enriched fields
-                match crate::ast::calculate_ast_depth(&conn, ctx.ast_id) {
-                    Ok(depth) => ctx.depth = depth,
-                    Err(e) => {
-                        eprintln!("Warning: Failed to calculate AST depth: {}", e);
+                // Use decision depth when depth filtering is active, otherwise use AST depth
+                if has_depth_filter {
+                    match crate::ast::calculate_decision_depth(&conn, ctx.ast_id) {
+                        Ok(depth) => ctx.depth = depth,
+                        Err(e) => {
+                            eprintln!("Warning: Failed to calculate decision depth: {}", e);
+                        }
+                    }
+                } else {
+                    match crate::ast::calculate_ast_depth(&conn, ctx.ast_id) {
+                        Ok(depth) => ctx.depth = depth,
+                        Err(e) => {
+                            eprintln!("Warning: Failed to calculate AST depth: {}", e);
+                        }
                     }
                 }
                 match crate::ast::get_parent_kind(&conn, ctx.parent_id) {
@@ -690,6 +704,38 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             cyclomatic_complexity,
             ast_context,
         });
+    }
+
+    // Apply depth filtering if min_depth or max_depth specified
+    // This is done post-query due to SQLite recursive CTE limitations
+    if has_depth_filter {
+        // Filter results by decision depth
+        results = results
+            .into_iter()
+            .filter(|result| {
+                // Only filter if we have AST context with ast_id
+                if let Some(ref ast_ctx) = result.ast_context {
+                    match crate::ast::calculate_decision_depth(&conn, ast_ctx.ast_id) {
+                        Ok(Some(depth)) => {
+                            // Check min/max bounds
+                            let min_ok = options
+                                .depth
+                                .min_depth
+                                .map_or(true, |m| (depth as usize) >= m);
+                            let max_ok = options
+                                .depth
+                                .max_depth
+                                .map_or(true, |m| (depth as usize) <= m);
+                            min_ok && max_ok
+                        }
+                        Ok(None) => true, // No depth data, keep the result
+                        Err(_) => true, // Error calculating depth, keep the result
+                    }
+                } else {
+                    true // No AST context, keep the result
+                }
+            })
+            .collect();
     }
 
     let mut partial = false;
@@ -1946,6 +1992,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should have LIKE clauses for name, display_fqn, fqn
@@ -1978,6 +2028,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should add kind filter
@@ -2006,6 +2060,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should add file path filter
@@ -2033,6 +2091,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should NOT have LIKE clauses in regex mode
@@ -2063,6 +2125,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should start with COUNT
@@ -2093,6 +2159,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should have ORDER BY
@@ -2122,6 +2192,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should ORDER BY fan_in DESC
@@ -2148,6 +2222,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should ORDER BY fan_out DESC
@@ -2174,6 +2252,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should ORDER BY cyclomatic_complexity DESC
@@ -2204,6 +2286,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should filter by min_complexity
@@ -2235,6 +2321,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should filter by max_complexity
@@ -2266,6 +2356,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should filter by min_fan_in
@@ -2293,6 +2387,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should LEFT JOIN symbol_metrics
@@ -2325,6 +2423,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should have all filter clauses
@@ -2516,6 +2618,10 @@ mod tests {
             None,
             false, // has_ast_table
             None,  // ast_kind
+            None,  // min_depth
+            None,  // max_depth
+            None,  // inside_kind
+            None,  // contains_kind
         );
 
         // Should have all filters
@@ -5526,6 +5632,10 @@ mod tests {
                 None,
                 false, // has_ast_table
                 None,  // ast_kind
+                None,  // min_depth
+                None,  // max_depth
+                None,  // inside_kind
+                None,  // contains_kind
             );
 
             // Should filter by .rs extension
@@ -5553,6 +5663,10 @@ mod tests {
                 None,
                 false, // has_ast_table
                 None,  // ast_kind
+                None,  // min_depth
+                None,  // max_depth
+                None,  // inside_kind
+                None,  // contains_kind
             );
 
             // Should NOT add language filter for unknown language
@@ -5578,6 +5692,10 @@ mod tests {
                 None,
                 false, // has_ast_table
                 None,  // ast_kind
+                None,  // min_depth
+                None,  // max_depth
+                None,  // inside_kind
+                None,  // contains_kind
             );
 
             // Should have both path, kind, and language filters
@@ -5607,6 +5725,10 @@ mod tests {
                 None,
                 false, // has_ast_table
                 None,  // ast_kind
+                None,  // min_depth
+                None,  // max_depth
+                None,  // inside_kind
+                None,  // contains_kind
             );
 
             // Should filter by .cpp extension

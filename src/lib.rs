@@ -9,7 +9,7 @@ pub mod safe_extraction;
 pub use safe_extraction::*;
 
 // Re-export AST types for external use
-pub use ast::{AstContext, check_ast_table_exists};
+pub use ast::{AstContext, calculate_decision_depth, check_ast_table_exists};
 
 use clap::ValueEnum;
 
