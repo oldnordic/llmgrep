@@ -68,6 +68,8 @@ pub struct SearchOptions<'a> {
     pub metrics: MetricsOptions,
     /// AST filtering options
     pub ast: AstOptions<'a>,
+    /// Depth filtering options
+    pub depth: DepthOptions<'a>,
     /// SymbolId for direct BLAKE3 hash lookup (overrides name-based search)
     pub symbol_id: Option<&'a str>,
     /// FQN pattern filter (LIKE match on canonical_fqn)
@@ -127,6 +129,19 @@ pub struct AstOptions<'a> {
     pub ast_kind: Option<&'a str>,
     /// Enable enriched AST context calculation (depth, parent_kind, children, decision_points)
     pub with_ast_context: bool,
+}
+
+/// Depth-based filtering options
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DepthOptions<'a> {
+    /// Minimum nesting depth (decision points only)
+    pub min_depth: Option<usize>,
+    /// Maximum nesting depth (decision points only)
+    pub max_depth: Option<usize>,
+    /// Find nodes within parent of this kind (--inside)
+    pub inside: Option<&'a str>,
+    /// Find parents containing nodes of this kind (--contains)
+    pub contains: Option<&'a str>,
 }
 
 #[derive(Debug, Deserialize)]

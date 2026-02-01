@@ -7,8 +7,8 @@ use llmgrep::output::{
 };
 use llmgrep::output_common::{format_partial_footer, format_total_header, render_json_response};
 use llmgrep::query::{
-    search_calls, search_references, search_symbols, AstOptions, ContextOptions, FqnOptions,
-    MetricsOptions, SearchOptions, SnippetOptions,
+    search_calls, search_references, search_symbols, AstOptions, ContextOptions, DepthOptions,
+    FqnOptions, MetricsOptions, SearchOptions, SnippetOptions,
 };
 use llmgrep::SortMode;
 use std::path::{Path, PathBuf};
@@ -522,6 +522,12 @@ fn run_search(
                     ast_kind: ast_kind.as_deref().map(|s| s.as_str()),
                     with_ast_context,
                 },
+                depth: DepthOptions {
+                    min_depth,
+                    max_depth,
+                    inside,
+                    contains,
+                },
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
@@ -553,6 +559,7 @@ fn run_search(
                 sort_by,
                 metrics,
                 ast: AstOptions::default(),
+                depth: DepthOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -584,6 +591,7 @@ fn run_search(
                 sort_by,
                 metrics,
                 ast: AstOptions::default(),
+                depth: DepthOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -632,6 +640,12 @@ fn run_search(
                     ast_kind: ast_kind.as_deref().map(|s| s.as_str()),
                     with_ast_context,
                 },
+                depth: DepthOptions {
+                    min_depth,
+                    max_depth,
+                    inside,
+                    contains,
+                },
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
@@ -659,6 +673,7 @@ fn run_search(
                 sort_by,
                 metrics,
                 ast: AstOptions::default(),
+                depth: DepthOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -686,6 +701,7 @@ fn run_search(
                 sort_by,
                 metrics,
                 ast: AstOptions::default(),
+                depth: DepthOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
