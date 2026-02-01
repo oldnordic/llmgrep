@@ -8,6 +8,7 @@
 //!
 //! - Filter search results by AST node kind (function_item, block, etc.)
 //! - Include AST context in results (parent_id, byte spans)
+//! - Enriched context when --with-ast-context is enabled (depth, parent_kind, children_count, decision_points)
 //! - Graceful degradation for databases without ast_nodes table
 //!
 //! # Table Schema
@@ -38,6 +39,14 @@
 //! - `attribute_item` - Attributes/macros (#[derive])
 //! - `mod_item` - Module declarations
 //!
+//! # Enriched AST Context
+//!
+//! When `--with-ast-context` flag is enabled, additional structural information is calculated:
+//! - `depth`: Nesting depth from AST root (0 = top-level)
+//! - `parent_kind`: Kind of parent AST node
+//! - `children_count_by_kind`: Count of direct children grouped by kind
+//! - `decision_points`: Number of branching control flow structures
+//!
 //! # Example
 //!
 //! ```no_run
@@ -57,11 +66,16 @@
 use anyhow::Result;
 use rusqlite::Connection;
 use serde::Serialize;
+use std::collections::HashMap;
 
 /// AST node context from Magellan's ast_nodes table.
 ///
 /// Contains structural information about a code symbol's position
 /// in the Abstract Syntax Tree.
+///
+/// Basic fields are always populated when AST data is available.
+/// Enriched fields (depth, parent_kind, children_count_by_kind, decision_points)
+/// are only populated when `--with-ast-context` flag is used.
 #[derive(Debug, Clone, Serialize)]
 pub struct AstContext {
     /// AST node ID (matches symbol ID)
@@ -74,6 +88,27 @@ pub struct AstContext {
     pub byte_start: u64,
     /// Byte end offset within source file
     pub byte_end: u64,
+
+    // Enriched fields (only populated when --with-ast-context is enabled)
+
+    /// Nesting depth from AST root (0 = top-level, 1 = one level deep, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depth: Option<u64>,
+
+    /// Kind of parent AST node (None for root nodes)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_kind: Option<String>,
+
+    /// Count of direct child nodes grouped by kind
+    /// Example: {"let_declaration": 3, "if_expression": 2, "call_expression": 5}
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children_count_by_kind: Option<HashMap<String, u64>>,
+
+    /// Number of decision points (branching control flow structures)
+    /// Counts: if_expression, match_expression, while_expression, for_expression,
+    ///         loop_expression, conditional_expression
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decision_points: Option<u64>,
 }
 
 /// Check if the ast_nodes table exists in the database.
@@ -146,6 +181,10 @@ mod tests {
             parent_id: Some(122),
             byte_start: 100,
             byte_end: 200,
+            depth: None,
+            parent_kind: None,
+            children_count_by_kind: None,
+            decision_points: None,
         };
 
         let json = serde_json::to_string(&ctx).unwrap();
@@ -154,6 +193,11 @@ mod tests {
         assert!(json.contains("\"parent_id\":122"));
         assert!(json.contains("\"byte_start\":100"));
         assert!(json.contains("\"byte_end\":200"));
+        // Enriched fields should not appear in JSON when None (skip_serializing_if)
+        assert!(!json.contains("depth"));
+        assert!(!json.contains("parent_kind"));
+        assert!(!json.contains("children_count_by_kind"));
+        assert!(!json.contains("decision_points"));
     }
 
     #[test]
@@ -164,10 +208,45 @@ mod tests {
             parent_id: None,
             byte_start: 0,
             byte_end: 50,
+            depth: None,
+            parent_kind: None,
+            children_count_by_kind: None,
+            decision_points: None,
         };
 
         let json = serde_json::to_string(&ctx).unwrap();
         assert!(json.contains("\"parent_id\":null"));
+    }
+
+    #[test]
+    fn test_ast_context_enriched_serialization() {
+        let mut children = HashMap::new();
+        children.insert("let_declaration".to_string(), 3);
+        children.insert("if_expression".to_string(), 2);
+
+        let ctx = AstContext {
+            ast_id: 42,
+            kind: "function_item".to_string(),
+            parent_id: None,
+            byte_start: 1000,
+            byte_end: 2000,
+            depth: Some(0),
+            parent_kind: None,
+            children_count_by_kind: Some(children),
+            decision_points: Some(2),
+        };
+
+        let json = serde_json::to_string(&ctx).unwrap();
+        // Basic fields
+        assert!(json.contains("\"ast_id\":42"));
+        assert!(json.contains("\"kind\":\"function_item\""));
+        // Enriched fields should appear when set
+        assert!(json.contains("\"depth\":0"));
+        assert!(json.contains("\"decision_points\":2"));
+        assert!(json.contains("\"let_declaration\":3"));
+        assert!(json.contains("\"if_expression\":2"));
+        // parent_kind should not appear (None)
+        assert!(!json.contains("parent_kind"));
     }
 
     #[test]

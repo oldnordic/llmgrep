@@ -416,6 +416,9 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         let symbol_id_from_query: Option<String> = row.get(5).ok();
 
         // Read AST columns (may be NULL if ast_nodes table doesn't exist)
+        // Basic AST context is populated from the LEFT JOIN with ast_nodes
+        // Enriched fields (depth, parent_kind, children_count_by_kind, decision_points)
+        // require additional processing via get_ast_context_for_symbol() when with_ast_context is set
         let ast_context: Option<AstContext> = match row.get::<_, String>("ast_kind").ok() {
             Some(kind) => {
                 // All AST columns should be present if ast_kind is present
@@ -426,6 +429,11 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
                         parent_id,
                         byte_start,
                         byte_end,
+                        // Enriched fields start as None - populated later if with_ast_context is set
+                        depth: None,
+                        parent_kind: None,
+                        children_count_by_kind: None,
+                        decision_points: None,
                     }),
                     _ => None,
                 }
