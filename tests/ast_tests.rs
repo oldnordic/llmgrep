@@ -194,8 +194,9 @@ fn test_ast_kind_filter() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions {
-            ast_kind: Some("function_item"),
+            ast_kinds: vec!["function_item".to_string()],
             with_ast_context: false,
+            _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions::default(),
         symbol_id: None,
@@ -273,8 +274,9 @@ fn test_backward_compat_no_ast_table() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions {
-            ast_kind: Some("function_item"),
+            ast_kinds: vec!["function_item".to_string()],
             with_ast_context: false,
+            _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions::default(),
         symbol_id: None,
@@ -379,8 +381,9 @@ fn test_multiple_ast_kinds() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions {
-            ast_kind: Some("call_expression"),
+            ast_kinds: vec!["call_expression".to_string()],
             with_ast_context: false,
+            _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions::default(),
         symbol_id: None,
@@ -412,8 +415,9 @@ fn test_multiple_ast_kinds() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions {
-            ast_kind: Some("function_item"),
+            ast_kinds: vec!["function_item".to_string()],
             with_ast_context: false,
+            _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions::default(),
         symbol_id: None,
@@ -636,8 +640,9 @@ fn test_with_ast_context_flag() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions {
-            ast_kind: None,
+            ast_kinds: vec![],
             with_ast_context: true, // Enable enriched context
+            _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions::default(),
         symbol_id: None,
@@ -736,8 +741,9 @@ fn test_ast_context_without_flag() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions {
-            ast_kind: None,
+            ast_kinds: vec![],
             with_ast_context: false, // NOT enabled
+            _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions::default(),
         symbol_id: None,
@@ -1129,8 +1135,9 @@ fn test_inside_function_item() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions {
-            ast_kind: Some("closure_expression"),
+            ast_kinds: vec!["closure_expression".to_string()],
             with_ast_context: false,
+            _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions {
             min_depth: None,
@@ -1204,8 +1211,9 @@ fn test_inside_block() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions {
-            ast_kind: Some("let_declaration"),
+            ast_kinds: vec!["let_declaration".to_string()],
             with_ast_context: false,
+            _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions {
             min_depth: None,
@@ -1282,8 +1290,9 @@ fn test_contains_if_expression() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions {
-            ast_kind: Some("function_item"),
+            ast_kinds: vec!["function_item".to_string()],
             with_ast_context: false,
+            _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions {
             min_depth: None,
@@ -1362,8 +1371,9 @@ fn test_contains_multiple_children() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions {
-            ast_kind: Some("function_item"),
+            ast_kinds: vec!["function_item".to_string()],
             with_ast_context: false,
+            _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions {
             min_depth: None,
@@ -1449,8 +1459,9 @@ fn test_combined_depth_and_inside() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions {
-            ast_kind: Some("closure_expression"),
+            ast_kinds: vec!["closure_expression".to_string()],
             with_ast_context: false,
+            _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions {
             min_depth: Some(1),  // At depth 1 or deeper
