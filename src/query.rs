@@ -125,6 +125,8 @@ pub struct MetricsOptions {
 pub struct AstOptions<'a> {
     /// Filter by AST node kind (function_item, block, call_expression, etc.)
     pub ast_kind: Option<&'a str>,
+    /// Enable enriched AST context calculation (depth, parent_kind, children, decision_points)
+    pub with_ast_context: bool,
 }
 
 #[derive(Debug, Deserialize)]

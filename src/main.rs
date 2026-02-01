@@ -118,6 +118,10 @@ enum Command {
         // AST filtering flag
         #[arg(long, value_name = "KIND")]
         ast_kind: Option<String>,
+
+        // Enriched AST context flag
+        #[arg(long)]
+        with_ast_context: bool,
     },
 }
 
@@ -180,6 +184,9 @@ V2.0 AST FEATURES:
 
   # Find only call expressions
   llmgrep --db code.db search --query "parse" --ast-kind call_expression
+
+  # Search with enriched AST context (depth, parent_kind, children, decision_points)
+  llmgrep --db code.db search --query "process" --with-ast-context --output json
 
   AST Node Kinds:
     function_item       - Function definitions
@@ -280,6 +287,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             fqn,
             exact_fqn,
             ast_kind,
+            with_ast_context,
         } => run_search(
             cli,
             query,
@@ -307,6 +315,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             fqn.as_ref(),
             exact_fqn.as_ref(),
             ast_kind.as_ref(),
+            *with_ast_context,
         ),
     }
 }
@@ -339,6 +348,7 @@ fn run_search(
     fqn: Option<&String>,
     exact_fqn: Option<&String>,
     ast_kind: Option<&String>,
+    with_ast_context: bool,
 ) -> Result<(), LlmError> {
     // Validate SymbolId format (32 hex characters)
     if let Some(sid) = symbol_id {
@@ -465,6 +475,7 @@ fn run_search(
                 metrics,
                 ast: AstOptions {
                     ast_kind: ast_kind.as_deref().map(|s| s.as_str()),
+                    with_ast_context,
                 },
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),
@@ -574,6 +585,7 @@ fn run_search(
                 metrics,
                 ast: AstOptions {
                     ast_kind: ast_kind.as_deref().map(|s| s.as_str()),
+                    with_ast_context,
                 },
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),

@@ -187,6 +187,7 @@ fn test_ast_kind_filter() {
         metrics: MetricsOptions::default(),
         ast: AstOptions {
             ast_kind: Some("function_item"),
+            with_ast_context: false,
         },
         symbol_id: None,
         fqn_pattern: None,
@@ -264,6 +265,7 @@ fn test_backward_compat_no_ast_table() {
         metrics: MetricsOptions::default(),
         ast: AstOptions {
             ast_kind: Some("function_item"),
+            with_ast_context: false,
         },
         symbol_id: None,
         fqn_pattern: None,
@@ -367,6 +369,7 @@ fn test_multiple_ast_kinds() {
         metrics: MetricsOptions::default(),
         ast: AstOptions {
             ast_kind: Some("call_expression"),
+            with_ast_context: false,
         },
         symbol_id: None,
         fqn_pattern: None,
@@ -398,6 +401,7 @@ fn test_multiple_ast_kinds() {
         metrics: MetricsOptions::default(),
         ast: AstOptions {
             ast_kind: Some("function_item"),
+            with_ast_context: false,
         },
         symbol_id: None,
         fqn_pattern: None,
