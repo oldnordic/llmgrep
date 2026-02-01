@@ -352,7 +352,38 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         options.symbol_id,
         options.fqn_pattern,
         options.exact_fqn,
+        false, // has_ast_table - set to false for now, will check properly below
+        None,  // ast_kind - set to None for now, will use options.ast.ast_kind below
     );
+
+    // Check if ast_nodes table exists for AST filtering
+    let has_ast_table = check_ast_table_exists(&conn)
+        .map_err(|e| LlmError::SearchFailed {
+            reason: format!("Failed to check ast_nodes table: {}", e),
+        })?;
+
+    // If we have AST options, rebuild query with correct AST settings
+    let (sql, params) = if options.ast.ast_kind.is_some() || has_ast_table {
+        build_search_query(
+            options.query,
+            options.path_filter,
+            options.kind_filter,
+            options.language_filter,
+            options.use_regex,
+            false,
+            options.candidates,
+            options.metrics,
+            options.sort_by,
+            options.symbol_id,
+            options.fqn_pattern,
+            options.exact_fqn,
+            has_ast_table,
+            options.ast.ast_kind,
+        )
+    } else {
+        (sql, params)
+    };
+
     let mut stmt = conn.prepare_cached(&sql)?;
 
     let mut rows = stmt.query(params_from_iter(params))?;
@@ -383,6 +414,25 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         let cyclomatic_complexity: Option<i64> = row.get(4).ok();
         // Read symbol_id column (may be NULL)
         let symbol_id_from_query: Option<String> = row.get(5).ok();
+
+        // Read AST columns (may be NULL if ast_nodes table doesn't exist)
+        let ast_context: Option<AstContext> = match row.get::<_, String>("ast_kind").ok() {
+            Some(kind) => {
+                // All AST columns should be present if ast_kind is present
+                match (row.get("ast_id"), row.get("ast_parent_id"), row.get("ast_byte_start"), row.get("ast_byte_end")) {
+                    (Ok(ast_id), Ok(parent_id), Ok(byte_start), Ok(byte_end)) => Some(AstContext {
+                        ast_id,
+                        kind,
+                        parent_id,
+                        byte_start,
+                        byte_end,
+                    }),
+                    _ => None,
+                }
+            },
+            None => None,
+        };
+
         let symbol: SymbolNodeData = serde_json::from_str(&data)?;
 
         // Use symbol_id from query if available, otherwise from JSON data
@@ -556,6 +606,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             fan_in,
             fan_out,
             cyclomatic_complexity,
+            ast_context,
         });
     }
 
@@ -579,6 +630,8 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             options.symbol_id,
             options.fqn_pattern,
             options.exact_fqn,
+            has_ast_table,
+            options.ast.ast_kind,
         );
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {
@@ -1125,6 +1178,8 @@ fn build_search_query(
     symbol_id: Option<&str>,
     fqn_pattern: Option<&str>,
     exact_fqn: Option<&str>,
+    has_ast_table: bool,
+    ast_kind: Option<&str>,
 ) -> (String, Vec<Box<dyn ToSql>>) {
     let mut params: Vec<Box<dyn ToSql>> = Vec::new();
     let mut where_clauses = Vec::new();
@@ -1191,6 +1246,16 @@ fn build_search_query(
         }
     }
 
+    // AST kind filter: Filter by AST node kind when table exists
+    if let Some(kind) = ast_kind {
+        if has_ast_table {
+            where_clauses.push("an.kind = ?".to_string());
+            params.push(Box::new(kind.to_string()));
+        }
+        // If ast_nodes table doesn't exist, we silently ignore the filter
+        // (graceful degradation)
+    }
+
     // Add metrics filter WHERE clauses
     // For filters, we use IS NOT NULL to ensure symbols have metrics
     if let Some(min_cc) = metrics.min_complexity {
@@ -1217,7 +1282,12 @@ fn build_search_query(
     let select_clause = if count_only {
         "SELECT COUNT(*)"
     } else {
-        "SELECT s.data, f.file_path, sm.fan_in, sm.fan_out, sm.cyclomatic_complexity, json_extract(s.data, '$.symbol_id') AS symbol_id"
+        // Include AST columns when ast_nodes table exists
+        if has_ast_table {
+            "SELECT s.data, f.file_path, sm.fan_in, sm.fan_out, sm.cyclomatic_complexity, json_extract(s.data, '$.symbol_id') AS symbol_id, an.id AS ast_id, an.kind AS ast_kind, an.parent_id AS ast_parent_id, an.byte_start AS ast_byte_start, an.byte_end AS ast_byte_end"
+        } else {
+            "SELECT s.data, f.file_path, sm.fan_in, sm.fan_out, sm.cyclomatic_complexity, json_extract(s.data, '$.symbol_id') AS symbol_id"
+        }
     };
 
     let mut sql = format!(
@@ -1245,8 +1315,14 @@ JOIN (
     WHERE kind = 'File'
 ) f ON f.id = e.from_id
 LEFT JOIN symbol_metrics sm ON s.id = sm.symbol_id
+{ast_join}
 WHERE {where_clause}",
         select_clause = select_clause,
+        ast_join = if has_ast_table {
+            "LEFT JOIN ast_nodes an ON s.id = an.id"
+        } else {
+            "" // No JOIN when table doesn't exist
+        },
         where_clause = if where_clauses.is_empty() {
             "1=1".to_string()
         } else {
@@ -1748,6 +1824,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should have LIKE clauses for name, display_fqn, fqn
@@ -1778,6 +1856,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should add kind filter
@@ -1804,6 +1884,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should add file path filter
@@ -1829,6 +1911,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should NOT have LIKE clauses in regex mode
@@ -1857,6 +1941,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should start with COUNT
@@ -1885,6 +1971,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should have ORDER BY
@@ -1912,6 +2000,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should ORDER BY fan_in DESC
@@ -1936,6 +2026,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should ORDER BY fan_out DESC
@@ -1960,6 +2052,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should ORDER BY cyclomatic_complexity DESC
@@ -1988,6 +2082,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should filter by min_complexity
@@ -2017,6 +2113,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should filter by max_complexity
@@ -2046,6 +2144,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should filter by min_fan_in
@@ -2071,6 +2171,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should LEFT JOIN symbol_metrics
@@ -2101,6 +2203,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should have all filter clauses
@@ -2290,6 +2394,8 @@ mod tests {
             None,
             None,
             None,
+            false, // has_ast_table
+            None,  // ast_kind
         );
 
         // Should have all filters
@@ -2423,6 +2529,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2457,6 +2564,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2487,6 +2595,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2521,6 +2630,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2552,6 +2662,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2587,6 +2698,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2621,6 +2733,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2656,6 +2769,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2686,6 +2800,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2721,6 +2836,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2773,6 +2889,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2803,6 +2920,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2833,6 +2951,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2882,6 +3001,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2921,6 +3041,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2992,6 +3113,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3029,6 +3151,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3065,6 +3188,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3096,6 +3220,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3132,6 +3257,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3163,6 +3289,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3200,6 +3327,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3237,6 +3365,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3269,6 +3398,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3300,6 +3430,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3334,6 +3465,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3367,6 +3499,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3511,6 +3644,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3545,6 +3679,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3577,6 +3712,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3610,6 +3746,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3643,6 +3780,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3675,6 +3813,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3708,6 +3847,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3740,6 +3880,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3769,6 +3910,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3802,6 +3944,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3834,6 +3977,7 @@ mod tests {
                 include_score: true,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3907,6 +4051,7 @@ mod tests {
             include_score: true,
             sort_by: SortMode::default(),
             metrics: MetricsOptions::default(),
+            ast: AstOptions::default(),
             symbol_id: None,
             fqn_pattern: None,
             exact_fqn: None,
@@ -4213,6 +4358,7 @@ mod tests {
                     min_fan_in: None,
                     min_fan_out: None,
                 },
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4267,6 +4413,7 @@ mod tests {
                     min_fan_in: None,
                     min_fan_out: None,
                 },
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4308,6 +4455,7 @@ mod tests {
                     min_fan_in: None,
                     min_fan_out: None,
                 },
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4349,6 +4497,7 @@ mod tests {
                     min_fan_in: Some(8),
                     min_fan_out: None,
                 },
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4395,6 +4544,7 @@ mod tests {
                     min_fan_in: None,
                     min_fan_out: Some(10),
                 },
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4436,6 +4586,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::FanIn,
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4483,6 +4634,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::FanOut,
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4530,6 +4682,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::Complexity,
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4577,6 +4730,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4689,6 +4843,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::FanIn, // Sort by fan_in
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4749,6 +4904,7 @@ mod tests {
                     min_fan_in: Some(5),
                     ..Default::default()
                 },
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4789,6 +4945,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: Some("sym1"),
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4826,6 +4983,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: Some("/test/file.rs%"),
                 exact_fqn: None,
@@ -4864,6 +5022,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: Some("/test/file.rs::test_func"),
@@ -4906,6 +5065,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5013,6 +5173,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5116,6 +5277,7 @@ mod tests {
                 include_score: false,
                 sort_by: SortMode::default(),
                 metrics: MetricsOptions::default(),
+                ast: AstOptions::default(),
                 symbol_id: Some("target_parse"),
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5186,6 +5348,8 @@ mod tests {
                 None,
                 None,
                 None,
+                false, // has_ast_table
+                None,  // ast_kind
             );
 
             // Should filter by .rs extension
@@ -5211,6 +5375,8 @@ mod tests {
                 None,
                 None,
                 None,
+                false, // has_ast_table
+                None,  // ast_kind
             );
 
             // Should NOT add language filter for unknown language
@@ -5234,6 +5400,8 @@ mod tests {
                 None,
                 None,
                 None,
+                false, // has_ast_table
+                None,  // ast_kind
             );
 
             // Should have both path, kind, and language filters
@@ -5261,6 +5429,8 @@ mod tests {
                 None,
                 None,
                 None,
+                false, // has_ast_table
+                None,  // ast_kind
             );
 
             // Should filter by .cpp extension

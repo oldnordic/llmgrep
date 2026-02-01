@@ -1,3 +1,4 @@
+use crate::ast::AstContext;
 use chrono::Utc;
 use clap::ValueEnum;
 use serde::Serialize;
@@ -102,6 +103,9 @@ pub struct SymbolMatch {
     pub fan_out: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cyclomatic_complexity: Option<u64>,
+    // AST fields (from ast_nodes table)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ast_context: Option<AstContext>,
 }
 
 #[derive(Serialize)]
