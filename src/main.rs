@@ -10,6 +10,7 @@ use llmgrep::query::{
     search_calls, search_references, search_symbols, AstOptions, ContextOptions, DepthOptions,
     FqnOptions, MetricsOptions, SearchOptions, SnippetOptions,
 };
+use llmgrep::ast::{expand_shorthand_with_language, expand_shorthands};
 use llmgrep::SortMode;
 use std::path::{Path, PathBuf};
 
@@ -193,11 +194,14 @@ V1.1 FEATURES:
   llmgrep --db code.db search --query "test" --fqn "%module::tests::%"
 
 V2.0 AST FEATURES:
-  # Filter by AST node kind
-  llmgrep --db code.db search --query ".*" --ast-kind function_item
+  # Filter by AST node kind using shorthands
+  llmgrep --db code.db search --query ".*" --ast-kind loops
 
-  # Find only call expressions
+  # Filter by specific node kind
   llmgrep --db code.db search --query "parse" --ast-kind call_expression
+
+  # Combine multiple shorthands and kinds
+  llmgrep --db code.db search --query "process" --ast-kind loops,conditionals
 
   # Search with enriched AST context (depth, parent_kind, children, decision_points)
   llmgrep --db code.db search --query "process" --with-ast-context --output json
@@ -217,18 +221,30 @@ V2.0 AST FEATURES:
   # Find code at specific depth
   llmgrep --db code.db search --query ".*" --min-depth 2 --max-depth 3
 
-  AST Node Kinds:
-    function_item       - Function definitions
-    block               - Code blocks
-    call_expression     - Function calls
-    let_declaration     - Variable declarations
-    expression_statement - Expression statements
-    attribute_item      - Attributes/macros
-    mod_item            - Module declarations
-    closure_expression  - Closure/lambda expressions
-    if_expression       - If statements
-    match_expression    - Match expressions
-    await_expression    - Await expressions
+  AST Shorthands (expand to multiple node kinds):
+    loops              - Loop constructs (for_expression, while_expression, loop_expression)
+    conditionals       - Conditionals (if_expression, match_expression, match_arm)
+    functions          - Functions and closures (function_item, closure_expression)
+    declarations       - Declarations (struct, enum, let, const, static, type_alias)
+    unsafe             - Unsafe blocks
+    types              - Type definitions (struct, enum, type_alias, union)
+    macros             - Macro invocations and definitions
+    mods               - Module declarations
+    traits             - Trait items and impls
+    impls              - Impl blocks
+
+    Language-aware shorthands (with --language):
+    --ast-kind functions --language python    - function_definition, lambda, async_function_definition
+    --ast-kind functions --language javascript - function_declaration, arrow_function, etc.
+    --ast-kind functions --language typescript - function_declaration, arrow_function, etc.
+
+  Specific node kinds also supported:
+    function_item, block, call_expression, let_declaration, expression_statement,
+    attribute_item, mod_item, closure_expression, if_expression, match_expression,
+    await_expression, and many more.
+
+  Use --ast-kind multiple times or comma-separate for combined filters.
+  See MANUAL.md for complete node kind reference per language.
 "#;
 
 fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
@@ -414,6 +430,27 @@ fn run_search(
     // Normalize and validate language filter
     let normalized_language = language.as_ref().map(|lang| normalize_language(lang));
 
+    // Expand AST shorthands with language-aware expansion
+    let expanded_ast_kind = if let Some(kind_input) = ast_kind {
+        // Use language-aware expansion if language is specified
+        let kinds = if normalized_language.is_some() {
+            expand_shorthand_with_language(
+                kind_input,
+                normalized_language.as_deref(),
+            )
+        } else {
+            // Use Rust shorthands by default
+            expand_shorthands(kind_input)
+        };
+        if !kinds.is_empty() {
+            Some(kinds.join(","))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // Normalize kind value (handles comma-separated values for future use)
     // For now, we still pass single kind to SearchOptions but normalize it
     let normalized_kind = kind.as_ref().map(|k| {
@@ -519,7 +556,7 @@ fn run_search(
                 sort_by,
                 metrics,
                 ast: AstOptions {
-                    ast_kind: ast_kind.as_deref().map(|s| s.as_str()),
+                    ast_kind: expanded_ast_kind.as_deref(),
                     with_ast_context,
                 },
                 depth: DepthOptions {
@@ -637,7 +674,7 @@ fn run_search(
                 sort_by,
                 metrics,
                 ast: AstOptions {
-                    ast_kind: ast_kind.as_deref().map(|s| s.as_str()),
+                    ast_kind: expanded_ast_kind.as_deref(),
                     with_ast_context,
                 },
                 depth: DepthOptions {
