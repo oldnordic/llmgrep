@@ -222,6 +222,75 @@ pub fn calculate_ast_depth(conn: &Connection, ast_id: i64) -> Result<Option<u64>
     }
 }
 
+/// Calculate the decision point depth of an AST node.
+///
+/// Unlike `calculate_ast_depth` (which counts all ancestors), this counts
+/// only decision points (control flow branching structures):
+/// - if_expression
+/// - match_expression
+/// - for_expression
+/// - while_expression
+/// - loop_expression
+///
+/// Root level nodes have depth 0. Each decision point ancestor adds 1.
+///
+/// # Arguments
+///
+/// * `conn` - SQLite connection
+/// * `ast_id` - AST node ID to calculate decision depth for
+///
+/// # Returns
+///
+/// * `Ok(Some(depth))` - Decision point depth of the node
+/// * `Ok(None)` - Node not found
+/// * `Err(...)` - Database error
+///
+/// # Example
+///
+/// ```no_run
+/// use llmgrep::ast::calculate_decision_depth;
+/// use rusqlite::Connection;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let conn = Connection::open("code.db")?;
+/// if let Some(depth) = calculate_decision_depth(&conn, 42)? {
+///     println!("Node 42 has decision depth {}", depth);
+/// }
+/// # Ok(())
+/// # }
+/// ```
+pub fn calculate_decision_depth(conn: &Connection, ast_id: i64) -> Result<Option<u64>> {
+    let sql = r#"
+        WITH RECURSIVE decision_ancestry AS (
+            -- Base case: start from the node itself, count 1 if it's a decision point
+            SELECT id, parent_id,
+                   CASE WHEN kind IN (
+                       'if_expression', 'match_expression', 'for_expression',
+                       'while_expression', 'loop_expression'
+                   ) THEN 1 ELSE 0 END as depth
+            FROM ast_nodes
+            WHERE id = ?
+            UNION ALL
+            -- Recursive case: traverse to parent, add 1 if parent is a decision point
+            SELECT a.id, a.parent_id,
+                   da.depth + CASE WHEN a.kind IN (
+                       'if_expression', 'match_expression', 'for_expression',
+                       'while_expression', 'loop_expression'
+                   ) THEN 1 ELSE 0 END
+            FROM ast_nodes a
+            JOIN decision_ancestry da ON a.id = da.parent_id
+            WHERE a.parent_id IS NOT NULL
+        )
+        SELECT MAX(depth) FROM decision_ancestry
+    "#;
+
+    match conn.query_row(sql, [ast_id], |row| row.get::<_, u64>(0)) {
+        Ok(depth) => Ok(Some(depth)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
 /// Get the kind of an AST node's parent.
 ///
 /// # Arguments
@@ -522,5 +591,64 @@ mod tests {
 
         let result = check_ast_table_exists(&conn).unwrap();
         assert!(!result, "Should return false when only other tables exist");
+    }
+
+    #[test]
+    fn test_calculate_decision_depth() {
+        use super::*;
+
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(ast_nodes_table_schema(), []).unwrap();
+
+        // Create a tree structure with decision points:
+        // id=1: mod_item (parent_id=NULL) -> decision depth 0 (not a decision point)
+        // id=2: function_item (parent_id=1) -> decision depth 0
+        // id=3: if_expression (parent_id=2) -> decision depth 1
+        // id=4: loop_expression (parent_id=3) -> decision depth 2
+        // id=5: let_declaration (parent_id=4) -> decision depth 2 (not a decision point)
+        // id=6: match_expression (parent_id=5) -> decision depth 3
+        conn.execute(
+            "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+            (1, NULL, 'mod_item', 0, 1000),
+            (2, 1, 'function_item', 100, 900),
+            (3, 2, 'if_expression', 150, 800),
+            (4, 3, 'loop_expression', 200, 700),
+            (5, 4, 'let_declaration', 250, 600),
+            (6, 5, 'match_expression', 300, 500)",
+            [],
+        )
+        .unwrap();
+
+        // Test decision depth calculation
+        assert_eq!(
+            calculate_decision_depth(&conn, 1).unwrap().unwrap(),
+            0,
+            "mod_item at root should have decision depth 0"
+        );
+        assert_eq!(
+            calculate_decision_depth(&conn, 2).unwrap().unwrap(),
+            0,
+            "function_item (child of mod) should have decision depth 0"
+        );
+        assert_eq!(
+            calculate_decision_depth(&conn, 3).unwrap().unwrap(),
+            1,
+            "if_expression should have decision depth 1"
+        );
+        assert_eq!(
+            calculate_decision_depth(&conn, 4).unwrap().unwrap(),
+            2,
+            "loop_expression (child of if) should have decision depth 2"
+        );
+        assert_eq!(
+            calculate_decision_depth(&conn, 5).unwrap().unwrap(),
+            2,
+            "let_declaration (child of loop) should have decision depth 2"
+        );
+        assert_eq!(
+            calculate_decision_depth(&conn, 6).unwrap().unwrap(),
+            3,
+            "match_expression (child of let) should have decision depth 3"
+        );
     }
 }

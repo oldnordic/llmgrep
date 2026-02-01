@@ -4,8 +4,8 @@
 
 use llmgrep::ast::{check_ast_table_exists, AstContext, ast_nodes_table_schema};
 use llmgrep::query::{
-    search_symbols, AstOptions, ContextOptions, FqnOptions, MetricsOptions, SearchOptions,
-    SnippetOptions,
+    search_symbols, AstOptions, ContextOptions, DepthOptions, FqnOptions, MetricsOptions,
+    SearchOptions, SnippetOptions,
 };
 use rusqlite::{params, Connection};
 use std::path::PathBuf;
@@ -197,6 +197,7 @@ fn test_ast_kind_filter() {
             ast_kind: Some("function_item"),
             with_ast_context: false,
         },
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -275,6 +276,7 @@ fn test_backward_compat_no_ast_table() {
             ast_kind: Some("function_item"),
             with_ast_context: false,
         },
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -321,6 +323,7 @@ fn test_ast_context_population() {
         sort_by: llmgrep::SortMode::default(),
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -379,6 +382,7 @@ fn test_multiple_ast_kinds() {
             ast_kind: Some("call_expression"),
             with_ast_context: false,
         },
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -411,6 +415,7 @@ fn test_multiple_ast_kinds() {
             ast_kind: Some("function_item"),
             with_ast_context: false,
         },
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -634,6 +639,7 @@ fn test_with_ast_context_flag() {
             ast_kind: None,
             with_ast_context: true, // Enable enriched context
         },
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -733,6 +739,7 @@ fn test_ast_context_without_flag() {
             ast_kind: None,
             with_ast_context: false, // NOT enabled
         },
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -830,6 +837,7 @@ fn test_sort_by_ast_complexity() {
         sort_by: llmgrep::SortMode::AstComplexity, // New sort mode
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,

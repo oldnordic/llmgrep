@@ -9,8 +9,8 @@
 /// - Ambiguity detection
 /// - Label filtering
 use llmgrep::query::{
-    search_chunks_by_span, search_symbols, AstOptions, ContextOptions, FqnOptions, MetricsOptions,
-    SearchOptions, SnippetOptions,
+    search_chunks_by_span, search_symbols, AstOptions, ContextOptions, DepthOptions, FqnOptions,
+    MetricsOptions, SearchOptions, SnippetOptions,
 };
 use rusqlite::{params, Connection};
 use serde_json::json;
@@ -212,6 +212,7 @@ fn process_emoji(input: &str) -> String {
         sort_by: llmgrep::SortMode::Relevance,
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -316,6 +317,7 @@ fn test_chunk_retrieval_with_hash() {
         sort_by: llmgrep::SortMode::Relevance,
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -391,6 +393,7 @@ fn test_metrics_filtering() {
             min_fan_out: None,
         },
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -462,6 +465,7 @@ fn test_symbol_id_lookup() {
         sort_by: llmgrep::SortMode::Relevance,
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: Some(known_symbol_id),
         fqn_pattern: None,
         exact_fqn: None,
@@ -521,6 +525,7 @@ fn test_language_filtering() {
         sort_by: llmgrep::SortMode::Relevance,
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -576,6 +581,7 @@ fn test_multi_kind_filtering() {
         sort_by: llmgrep::SortMode::Relevance,
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -606,6 +612,7 @@ fn test_multi_kind_filtering() {
         sort_by: llmgrep::SortMode::Relevance,
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -663,6 +670,7 @@ fn test_sort_by_fan_in() {
         sort_by: llmgrep::SortMode::FanIn,
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -759,6 +767,7 @@ fn test_fqn_pattern_filtering() {
         sort_by: llmgrep::SortMode::Relevance,
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: Some("%module_a%"), // Use LIKE wildcard pattern
         exact_fqn: None,
@@ -835,6 +844,7 @@ fn test_combined_metrics_and_language_filter() {
             min_fan_out: None,
         },
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -887,6 +897,7 @@ fn test_metrics_present_in_search_results() {
         sort_by: llmgrep::SortMode::FanIn,
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
+        depth: DepthOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
