@@ -36,7 +36,7 @@ pub struct CodeChunk {
 }
 
 /// Options for all search functions
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SearchOptions<'a> {
     /// Database path
     pub db_path: &'a Path,
@@ -123,12 +123,37 @@ pub struct MetricsOptions {
 }
 
 /// AST-based filtering options
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct AstOptions<'a> {
-    /// Filter by AST node kind (function_item, block, call_expression, etc.)
-    pub ast_kind: Option<&'a str>,
+    /// Filter by AST node kind(s) - can be multiple kinds
+    /// When --ast-kind is specified with shorthands or comma-separated values,
+    /// this contains the expanded list of node kind strings.
+    pub ast_kinds: Vec<String>,
     /// Enable enriched AST context calculation (depth, parent_kind, children, decision_points)
     pub with_ast_context: bool,
+    /// Phantom data for lifetime parameter (for future use if needed)
+    pub _phantom: std::marker::PhantomData<&'a ()>,
+}
+
+impl<'a> AstOptions<'a> {
+    /// Create empty AstOptions
+    pub fn new() -> Self {
+        Self {
+            ast_kinds: Vec::new(),
+            with_ast_context: false,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Check if any AST kinds are specified
+    pub fn has_ast_kinds(&self) -> bool {
+        !self.ast_kinds.is_empty()
+    }
+
+    /// Get the first AST kind (for backward compatibility)
+    pub fn first_ast_kind(&self) -> Option<&str> {
+        self.ast_kinds.first().map(|s| s.as_str())
+    }
 }
 
 /// Depth-based filtering options
@@ -370,7 +395,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         options.fqn_pattern,
         options.exact_fqn,
         false, // has_ast_table - set to false for now, will check properly below
-        None,  // ast_kind - set to None for now, will use options.ast.ast_kind below
+        &[],   // ast_kinds - set to empty for now, will use options.ast.ast_kinds below
         None,  // min_depth
         None,  // max_depth
         None,  // inside_kind
@@ -384,7 +409,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         })?;
 
     // If we have AST options, rebuild query with correct AST settings
-    let (sql, params) = if options.ast.ast_kind.is_some() || has_ast_table || options.depth.min_depth.is_some() || options.depth.max_depth.is_some() || options.depth.inside.is_some() || options.depth.contains.is_some() {
+    let (sql, params) = if !options.ast.ast_kinds.is_empty() || has_ast_table || options.depth.min_depth.is_some() || options.depth.max_depth.is_some() || options.depth.inside.is_some() || options.depth.contains.is_some() {
         build_search_query(
             options.query,
             options.path_filter,
@@ -399,7 +424,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             options.fqn_pattern,
             options.exact_fqn,
             has_ast_table,
-            options.ast.ast_kind,
+            &options.ast.ast_kinds,
             options.depth.min_depth,
             options.depth.max_depth,
             options.depth.inside,
@@ -759,7 +784,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             options.fqn_pattern,
             options.exact_fqn,
             has_ast_table,
-            options.ast.ast_kind,
+            &options.ast.ast_kinds,
             options.depth.min_depth,
             options.depth.max_depth,
             options.depth.inside,
@@ -1311,7 +1336,7 @@ fn build_search_query(
     fqn_pattern: Option<&str>,
     exact_fqn: Option<&str>,
     has_ast_table: bool,
-    ast_kind: Option<&str>,
+    ast_kinds: &[String],
     min_depth: Option<usize>,
     max_depth: Option<usize>,
     inside_kind: Option<&str>,
@@ -1382,11 +1407,21 @@ fn build_search_query(
         }
     }
 
-    // AST kind filter: Filter by AST node kind when table exists
-    if let Some(kind) = ast_kind {
+    // AST kind filter: Filter by AST node kind(s) when table exists
+    if !ast_kinds.is_empty() {
         if has_ast_table {
-            where_clauses.push("an.kind = ?".to_string());
-            params.push(Box::new(kind.to_string()));
+            if ast_kinds.len() == 1 {
+                // Single kind - use simple equality
+                where_clauses.push("an.kind = ?".to_string());
+                params.push(Box::new(ast_kinds[0].clone()));
+            } else {
+                // Multiple kinds - use IN clause
+                let placeholders = vec!["?"; ast_kinds.len()].join(",");
+                where_clauses.push(format!("an.kind IN ({})", placeholders));
+                for kind in ast_kinds {
+                    params.push(Box::new(kind.clone()));
+                }
+            }
         }
         // If ast_nodes table doesn't exist, we silently ignore the filter
         // (graceful degradation)
@@ -2006,7 +2041,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2042,7 +2077,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2074,7 +2109,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2105,7 +2140,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2139,7 +2174,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2173,7 +2208,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2206,7 +2241,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2236,7 +2271,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2266,7 +2301,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2300,7 +2335,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2335,7 +2370,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2370,7 +2405,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2401,7 +2436,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2437,7 +2472,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -2632,7 +2667,7 @@ mod tests {
             None,
             None,
             false, // has_ast_table
-            None,  // ast_kind
+            &[],   // ast_kinds
             None,  // min_depth
             None,  // max_depth
             None,  // inside_kind
@@ -5646,7 +5681,7 @@ mod tests {
                 None,
                 None,
                 false, // has_ast_table
-                None,  // ast_kind
+                &[],   // ast_kinds
                 None,  // min_depth
                 None,  // max_depth
                 None,  // inside_kind
@@ -5677,7 +5712,7 @@ mod tests {
                 None,
                 None,
                 false, // has_ast_table
-                None,  // ast_kind
+                &[],   // ast_kinds
                 None,  // min_depth
                 None,  // max_depth
                 None,  // inside_kind
@@ -5706,7 +5741,7 @@ mod tests {
                 None,
                 None,
                 false, // has_ast_table
-                None,  // ast_kind
+                &[],   // ast_kinds
                 None,  // min_depth
                 None,  // max_depth
                 None,  // inside_kind
@@ -5739,7 +5774,7 @@ mod tests {
                 None,
                 None,
                 false, // has_ast_table
-                None,  // ast_kind
+                &[],   // ast_kinds
                 None,  // min_depth
                 None,  // max_depth
                 None,  // inside_kind

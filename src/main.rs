@@ -556,8 +556,12 @@ fn run_search(
                 sort_by,
                 metrics,
                 ast: AstOptions {
-                    ast_kind: expanded_ast_kind.as_deref(),
+                    ast_kinds: expanded_ast_kind
+                        .as_ref()
+                        .map(|k| k.split(',').map(|s| s.trim().to_string()).collect())
+                        .unwrap_or_default(),
                     with_ast_context,
+                    _phantom: std::marker::PhantomData,
                 },
                 depth: DepthOptions {
                     min_depth,
@@ -674,8 +678,12 @@ fn run_search(
                 sort_by,
                 metrics,
                 ast: AstOptions {
-                    ast_kind: expanded_ast_kind.as_deref(),
+                    ast_kinds: expanded_ast_kind
+                        .as_ref()
+                        .map(|k| k.split(',').map(|s| s.trim().to_string()).collect())
+                        .unwrap_or_default(),
                     with_ast_context,
+                    _phantom: std::marker::PhantomData,
                 },
                 depth: DepthOptions {
                     min_depth,
