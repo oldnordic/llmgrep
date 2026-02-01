@@ -591,6 +591,55 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             .clone()
             .unwrap_or_else(|| normalize_kind_label(&symbol.kind));
 
+        // Enrich ast_context if --with-ast-context flag is set
+        let ast_context = if options.ast.with_ast_context {
+            if let Some(mut ctx) = ast_context {
+                // Populate enriched fields
+                match crate::ast::calculate_ast_depth(&conn, ctx.ast_id) {
+                    Ok(depth) => ctx.depth = depth,
+                    Err(e) => {
+                        eprintln!("Warning: Failed to calculate AST depth: {}", e);
+                    }
+                }
+                match crate::ast::get_parent_kind(&conn, ctx.parent_id) {
+                    Ok(kind) => ctx.parent_kind = kind,
+                    Err(e) => {
+                        eprintln!("Warning: Failed to get parent kind: {}", e);
+                    }
+                }
+                match crate::ast::count_children_by_kind(&conn, ctx.ast_id) {
+                    Ok(children) => ctx.children_count_by_kind = Some(children),
+                    Err(e) => {
+                        eprintln!("Warning: Failed to count children: {}", e);
+                    }
+                }
+                match crate::ast::count_decision_points(&conn, ctx.ast_id) {
+                    Ok(decision_points) => ctx.decision_points = Some(decision_points),
+                    Err(e) => {
+                        eprintln!("Warning: Failed to count decision points: {}", e);
+                    }
+                }
+                Some(ctx)
+            } else {
+                // Try to get AST context by symbol span if not already populated
+                match crate::ast::get_ast_context_for_symbol(
+                    &conn,
+                    &file_path,
+                    symbol.byte_start,
+                    symbol.byte_end,
+                    true, // include_enriched
+                ) {
+                    Ok(ctx) => ctx,
+                    Err(e) => {
+                        eprintln!("Warning: Failed to get AST context: {}", e);
+                        None
+                    }
+                }
+            }
+        } else {
+            ast_context
+        };
+
         results.push(SymbolMatch {
             match_id,
             span,
