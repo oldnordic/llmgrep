@@ -27,4 +27,8 @@ pub enum SortMode {
     FanOut,
     /// Sort by cyclomatic complexity descending
     Complexity,
+    /// Sort by AST nesting depth descending (deepest first)
+    NestingDepth,
+    /// Sort by AST complexity (decision points) descending
+    AstComplexity,
 }

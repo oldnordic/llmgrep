@@ -1355,6 +1355,16 @@ WHERE {where_clause}",
                 // Sort by cyclomatic_complexity descending, NULLs last
                 "COALESCE(sm.cyclomatic_complexity, 0) DESC, s.start_line, s.start_col, s.byte_start, s.byte_end, s.id"
             }
+            SortMode::AstComplexity => {
+                // Sort by AST complexity (cyclomatic_complexity), same as Complexity mode
+                "COALESCE(sm.cyclomatic_complexity, 0) DESC, s.start_line, s.start_col, s.byte_start, s.byte_end, s.id"
+            }
+            SortMode::NestingDepth => {
+                // Nesting depth requires post-query calculation
+                // Fall back to position ordering for now
+                // Future: batch depth calculation then in-memory sort
+                "s.start_line, s.start_col, s.byte_start, s.byte_end, s.id"
+            }
             SortMode::Position => {
                 // Position-based ordering (faster, pure SQL)
                 "s.start_line, s.start_col, s.byte_start, s.byte_end, s.id"
