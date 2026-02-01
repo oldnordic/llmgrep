@@ -859,3 +859,684 @@ fn test_sort_by_ast_complexity() {
         "Lower complexity should come second"
     );
 }
+
+// ============================================================================
+// Phase 9 Tests: Depth and Structural Search
+// ============================================================================
+
+// Test 1: test_calculate_decision_depth (already exists in src/ast.rs)
+
+// Test 2: test_min_depth_filter
+#[test]
+fn test_min_depth_filter() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&conn, file_id, "src/test.rs");
+
+    // Create AST nodes at different decision depths
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (100, NULL, 'function_item', 100, 500),  -- depth 0 (root level function)
+        (101, 100, 'let_declaration', 150, 200),
+        (102, 100, 'if_expression', 250, 350),  -- depth 1 (inside function)
+        (103, 102, 'loop_expression', 260, 340), -- depth 2 (inside if)
+        (104, 100, 'let_declaration', 400, 450), -- depth 0 (sibling of if)
+        (105, 100, 'match_expression', 460, 490), -- depth 1 (inside function)
+        (106, 105, 'if_expression', 470, 480), -- depth 2 (inside match)
+        (107, 106, 'loop_expression', 472, 478), -- depth 3 (inside if, inside match)
+        (108, 100, 'let_declaration', 500, 520)  -- depth 0 (sibling)",
+        [],
+    )
+    .expect("insert ast nodes");
+
+    // Insert symbols matching the AST nodes
+    for ast_id in [100, 102, 103, 105, 106, 107] {
+        insert_symbol(&conn, ast_id, &format!("symbol_{}", ast_id), "Function", file_id);
+        insert_define_edge(&conn, file_id, ast_id);
+    }
+
+    // Search with min_depth=2 should return only symbols at depth 2 or 3
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "symbol_",
+        path_filter: None,
+        kind_filter: None,
+        limit: 100,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
+        ast: AstOptions::default(),
+        depth: DepthOptions {
+            min_depth: Some(2),
+            max_depth: None,
+            inside: None,
+            contains: None,
+        },
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+
+    // Should find symbols at depth >= 2
+    // symbol_103 (loop inside if) = depth 2
+    // symbol_107 (if inside match) = depth 2  
+    // symbol_108 (loop inside if inside match) = depth 3
+    assert!(
+        response.results.len() >= 2,
+        "Should find at least 2 symbols with depth >= 2"
+    );
+}
+
+// Test 3: test_max_depth_filter
+#[test]
+fn test_max_depth_filter() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&conn, file_id, "src/test.rs");
+
+    // Create AST nodes at different depths
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (100, NULL, 'function_item', 100, 600),
+        (101, 100, 'if_expression', 150, 250),   -- depth 1
+        (102, 101, 'loop_expression', 160, 240), -- depth 2
+        (103, 102, 'match_expression', 170, 230), -- depth 3
+        (104, 103, 'if_expression', 180, 220),   -- depth 4
+        (105, 100, 'let_declaration', 260, 300)",
+        [],
+    )
+    .expect("insert ast nodes");
+
+    // Insert symbols - use "test" prefix so query matches both
+    insert_symbol(&conn, 100, "test_func_depth0", "Function", file_id);
+    insert_define_edge(&conn, file_id, 100);
+    insert_symbol(&conn, 101, "test_if_depth1", "Function", file_id);
+    insert_define_edge(&conn, file_id, 101);
+    insert_symbol(&conn, 102, "test_loop_depth2", "Function", file_id);
+    insert_define_edge(&conn, file_id, 102);
+
+    // Search with max_depth=1 should return only symbols at depth <= 1
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "test",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
+        ast: AstOptions::default(),
+        depth: DepthOptions {
+            min_depth: None,
+            max_depth: Some(1),
+            inside: None,
+            contains: None,
+        },
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+
+    // Should find test_func_depth0 (depth 0) and test_if_depth1 (depth 1)
+    // But NOT test_loop_depth2 (depth 2)
+    assert!(
+        response.results.len() >= 2,
+        "Should find at least 2 symbols with depth <= 1"
+    );
+    let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
+    assert!(names.contains(&"test_func_depth0"), "Should include depth 0 symbol");
+    assert!(names.contains(&"test_if_depth1"), "Should include depth 1 symbol");
+}
+
+// Test 4: test_min_max_depth_range
+#[test]
+fn test_min_max_depth_range() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&conn, file_id, "src/test.rs");
+
+    // Create AST nodes at depths 0-4
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (100, NULL, 'function_item', 100, 800),
+        (101, 100, 'if_expression', 150, 250),   -- depth 1
+        (102, 101, 'loop_expression', 160, 240), -- depth 2
+        (103, 102, 'match_expression', 170, 230), -- depth 3
+        (104, 103, 'if_expression', 180, 220),   -- depth 4
+        (105, 100, 'let_declaration', 260, 300)",
+        [],
+    )
+    .expect("insert ast nodes");
+
+    // Insert symbols for each depth level
+    for ast_id in [100, 101, 102, 103, 104] {
+        insert_symbol(&conn, ast_id, &format!("depth{}", ast_id - 100), "Function", file_id);
+        insert_define_edge(&conn, file_id, ast_id);
+    }
+
+    // Search with min_depth=1, max_depth=2
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "depth",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
+        ast: AstOptions::default(),
+        depth: DepthOptions {
+            min_depth: Some(1),
+            max_depth: Some(2),
+            inside: None,
+            contains: None,
+        },
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+
+    // Should find depth1 (depth 1) and depth2 (depth 2)
+    // But NOT depth0 (depth 0) or depth3/depth4 (depth 3+)
+    assert!(
+        response.results.len() >= 2,
+        "Should find symbols in range [1, 2]"
+    );
+}
+
+// Test 5: test_inside_function_item
+#[test]
+fn test_inside_function_item() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&conn, file_id, "src/test.rs");
+
+    // Create AST structure: function -> block -> closure_expression
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (100, NULL, 'function_item', 100, 600),
+        (101, 100, 'block', 150, 550),
+        (102, 101, 'closure_expression', 200, 250),
+        (103, 101, 'let_declaration', 260, 300),
+        (104, NULL, 'function_item', 700, 900),  -- Different function, no closure
+        (105, 104, 'closure_expression', 750, 850),  -- Closure in different function
+        (106, 101, 'call_expression', 310, 350)",
+        [],
+    )
+    .expect("insert ast nodes");
+
+    // Insert symbols
+    insert_symbol(&conn, 102, "closure_inside_func", "Function", file_id);
+    insert_define_edge(&conn, file_id, 102);
+    insert_symbol(&conn, 103, "let_inside_func", "Function", file_id);
+    insert_define_edge(&conn, file_id, 103);
+    insert_symbol(&conn, 105, "closure_other", "Function", file_id);
+    insert_define_edge(&conn, file_id, 105);
+
+    // Search for closures inside function_item
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "closure",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
+        ast: AstOptions {
+            ast_kind: Some("closure_expression"),
+            with_ast_context: false,
+        },
+        depth: DepthOptions {
+            min_depth: None,
+            max_depth: None,
+            inside: Some("function_item"),
+            contains: None,
+        },
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+
+    // Should find closure_inside_func (inside function with id 100)
+    // And closure_other (inside function with id 104)
+    // But NOT the let_declaration which is also inside function_item
+    assert!(
+        response.results.len() >= 2,
+        "Should find at least 2 closure_expression nodes inside function_item"
+    );
+
+    let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
+    assert!(names.contains(&"closure_inside_func"), "Should find closure in first function");
+    assert!(names.contains(&"closure_other"), "Should find closure in other function");
+}
+
+// Test 6: test_inside_block
+#[test]
+fn test_inside_block() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&conn, file_id, "src/test.rs");
+
+    // Create AST structure: function -> block -> let_declaration
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (100, NULL, 'function_item', 100, 500),
+        (101, 100, 'block', 150, 450),
+        (102, 101, 'let_declaration', 200, 250),
+        (103, 100, 'let_declaration', 460, 480),  -- Let at function level (not in block)
+        (104, 101, 'call_expression', 300, 350)",
+        [],
+    )
+    .expect("insert ast nodes");
+
+    // Insert symbols
+    insert_symbol(&conn, 102, "let_in_block", "Function", file_id);
+    insert_define_edge(&conn, file_id, 102);
+    insert_symbol(&conn, 103, "let_at_func_level", "Function", file_id);
+    insert_define_edge(&conn, file_id, 103);
+
+    // Search for let_declarations inside block
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "let",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
+        ast: AstOptions {
+            ast_kind: Some("let_declaration"),
+            with_ast_context: false,
+        },
+        depth: DepthOptions {
+            min_depth: None,
+            max_depth: None,
+            inside: Some("block"),
+            contains: None,
+        },
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+
+    // Should find let_in_block (inside block)
+    // Should NOT find let_at_func_level (direct child of function, not block)
+    assert!(
+        response.results.len() >= 1,
+        "Should find let_declaration inside block"
+    );
+
+    let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
+    assert!(names.contains(&"let_in_block"), "Should include let_in_block");
+}
+
+// Test 7: test_contains_if_expression
+#[test]
+fn test_contains_if_expression() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&conn, file_id, "src/test.rs");
+
+    // Create AST: function with if_expression child
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (100, NULL, 'function_item', 100, 400),
+        (101, 100, 'if_expression', 150, 300),
+        (102, 101, 'let_declaration', 160, 200),
+        (200, NULL, 'function_item', 500, 700), -- Function without if
+        (201, 200, 'let_declaration', 510, 550),
+        (300, NULL, 'function_item', 800, 1000), -- Function with multiple if expressions
+        (301, 300, 'if_expression', 850, 950),
+        (302, 300, 'if_expression', 960, 990)",
+        [],
+    )
+    .expect("insert ast nodes");
+
+    // Insert symbols
+    insert_symbol(&conn, 100, "func_with_if", "Function", file_id);
+    insert_define_edge(&conn, file_id, 100);
+    insert_symbol(&conn, 200, "func_plain", "Function", file_id);
+    insert_define_edge(&conn, file_id, 200);
+    insert_symbol(&conn, 300, "func_with_multiple_ifs", "Function", file_id);
+    insert_define_edge(&conn, file_id, 300);
+
+    // Search for functions containing if_expression
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "func",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
+        ast: AstOptions {
+            ast_kind: Some("function_item"),
+            with_ast_context: false,
+        },
+        depth: DepthOptions {
+            min_depth: None,
+            max_depth: None,
+            inside: None,
+            contains: Some("if_expression"),
+        },
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+
+    // Should find func_with_if and func_with_multiple_ifs
+    // Should NOT find func_plain (no if_expression children)
+    assert!(
+        response.results.len() >= 2,
+        "Should find functions containing if_expression"
+    );
+
+    let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
+    assert!(names.contains(&"func_with_if"), "Should include func_with_if");
+    assert!(names.contains(&"func_with_multiple_ifs"), "Should include func_with_multiple_ifs");
+}
+
+// Test 8: test_contains_multiple_children
+#[test]
+fn test_contains_multiple_children() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let _conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&_conn, file_id, "src/test.rs");
+
+    // Create AST: function with multiple call_expression children
+    _conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (100, NULL, 'function_item', 100, 800),
+        (101, 100, 'call_expression', 150, 200),
+        (102, 100, 'call_expression', 250, 300),
+        (103, 100, 'call_expression', 350, 400),
+        (104, 100, 'let_declaration', 450, 500),
+        (200, NULL, 'function_item', 900, 1200), -- Function with single call
+        (201, 200, 'call_expression', 950, 1000),
+        (300, NULL, 'function_item', 1300, 1500), -- Function with no calls
+        (301, 300, 'let_declaration', 1350, 1400)",
+        [],
+    )
+    .expect("insert ast nodes");
+
+    // Insert symbols
+    insert_symbol(&_conn, 100, "func_many_calls", "Function", file_id);
+    insert_define_edge(&_conn, file_id, 100);
+    insert_symbol(&_conn, 200, "func_one_call", "Function", file_id);
+    insert_define_edge(&_conn, file_id, 200);
+    insert_symbol(&_conn, 300, "func_no_calls", "Function", file_id);
+    insert_define_edge(&_conn, file_id, 300);
+
+    // Search for functions containing call_expression
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "func",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
+        ast: AstOptions {
+            ast_kind: Some("function_item"),
+            with_ast_context: false,
+        },
+        depth: DepthOptions {
+            min_depth: None,
+            max_depth: None,
+            inside: None,
+            contains: Some("call_expression"),
+        },
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+
+    // Should find func_many_calls and func_one_call
+    // Should NOT find func_no_calls
+    assert!(
+        response.results.len() >= 2,
+        "Should find functions with call_expression children"
+    );
+
+    let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
+    assert!(names.contains(&"func_many_calls"), "Should include func_many_calls");
+    assert!(names.contains(&"func_one_call"), "Should include func_one_call");
+}
+
+// Test 9: test_combined_depth_and_inside
+#[test]
+fn test_combined_depth_and_inside() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&conn, file_id, "src/test.rs");
+
+    // Create nested structure with varying depths
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (100, NULL, 'function_item', 100, 1000),  -- func_outer, depth 0
+        (101, 100, 'if_expression', 150, 800),     -- depth 1
+        (102, 101, 'block', 160, 700),          -- depth 1
+        (103, 102, 'closure_expression', 200, 300), -- depth 1, inside block
+        (104, 101, 'if_expression', 350, 600),     -- depth 2, inside outer if
+        (105, 104, 'match_expression', 400, 500),    -- depth 3, inside nested if
+        (106, 102, 'let_declaration', 310, 320),     -- depth 1, inside block
+        (107, 100, 'let_declaration', 820, 850),     -- depth 0, at function level
+        (108, NULL, 'function_item', 1100, 1500), -- func_other, depth 0
+        (109, 108, 'if_expression', 1200, 1400),    -- depth 1
+        (110, 108, 'let_declaration', 1250, 1300),    -- depth 1,
+        (111, 109, 'closure_expression', 1300, 1350),   -- depth 2, inside if
+        (112, 109, 'block', 1210, 1390),            -- depth 1
+        (113, 112, 'let_declaration', 1310, 1320),   -- depth 1, inside block
+        (114, 112, 'closure_expression', 1330, 1340),   -- depth 1, inside block inside if
+        (115, NULL, 'block', 2000, 2500),            -- orphan block, depth 0
+        (116, 115, 'if_expression', 2100, 2200),       -- depth 1, inside orphan block
+        (117, 115, 'let_declaration', 2300, 2350)",
+        [],
+    )
+    .expect("insert ast nodes");
+
+    // Insert symbols for closures at various depths
+    for ast_id in [103, 111, 114, 116] {
+        insert_symbol(&conn, ast_id, &format!("closure_{}", ast_id), "Function", file_id);
+        insert_define_edge(&conn, file_id, ast_id);
+    }
+
+    // Search for closures at depth >= 1 inside function_item
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "closure",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
+        ast: AstOptions {
+            ast_kind: Some("closure_expression"),
+            with_ast_context: false,
+        },
+        depth: DepthOptions {
+            min_depth: Some(1),  // At depth 1 or deeper
+            max_depth: None,
+            inside: Some("function_item"), // Inside function_item
+            contains: None,
+        },
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+
+    // Should find:
+    // - closure_103 (depth 1, inside block inside func_outer)
+    // - closure_111 (depth 2, inside if inside func_other)
+    // Should NOT find:
+    // - closure_114 (depth 1, inside block inside if, but block is NOT inside function_item directly)
+    // - closure_116 (depth 1, inside orphan block, no function parent)
+    assert!(
+        response.results.len() >= 2,
+        "Should find closures at depth >= 1 inside function_item"
+    );
+
+    let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
+    assert!(names.contains(&"closure_103"), "Should include closure_103");
+}
+
+// Test 10: test_backward_compat_no_depth_filter
+#[test]
+fn test_backward_compat_no_depth_filter() {
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+    let conn = setup_db_with_ast(&db_path);
+
+    // Insert file
+    let file_id = 1i64;
+    insert_file(&conn, file_id, "src/test.rs");
+
+    // Create AST nodes
+    conn.execute(
+        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+        (100, NULL, 'function_item', 100, 500),
+        (101, 100, 'let_declaration', 150, 200),
+        (102, 100, 'if_expression', 250, 350)",
+        [],
+    )
+    .expect("insert ast nodes");
+
+    // Insert symbols
+    insert_symbol(&conn, 100, "my_function", "Function", file_id);
+    insert_define_edge(&conn, file_id, 100);
+
+    // Search without depth flags - should work as before
+    let options = SearchOptions {
+        db_path: &db_path,
+        query: "my_function",
+        path_filter: None,
+        kind_filter: None,
+        limit: 10,
+        use_regex: false,
+        candidates: 100,
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::default(),
+        metrics: MetricsOptions::default(),
+        ast: AstOptions::default(),
+        depth: DepthOptions::default(), // No depth filtering
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+        language_filter: None,
+    };
+
+    let (response, _partial) = search_symbols(options).expect("search should succeed");
+
+    assert_eq!(response.results.len(), 1);
+    assert_eq!(response.results[0].name, "my_function");
+    // ast_context should be present but depth should NOT be populated
+    let ast_ctx = response.results[0]
+        .ast_context
+        .as_ref()
+        .expect("ast_context should be present");
+    assert_eq!(ast_ctx.depth, None, "Depth should not be populated without depth filtering or --with-ast-context");
+}

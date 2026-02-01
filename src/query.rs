@@ -1415,10 +1415,25 @@ fn build_search_query(
         params.push(Box::new(min_fo as i64));
     }
 
-    // Structural search: --inside KIND (find children within parent of type KIND)
+    // Structural search: --inside KIND (find descendants within any ancestor of type KIND)
     if let Some(inside_kind) = inside_kind {
         if has_ast_table {
-            where_clauses.push("an.parent_id IN (SELECT id FROM ast_nodes WHERE kind = ?)".to_string());
+            // Use a correlated EXISTS subquery with recursive CTE to check all ancestors
+            // This handles nested structures like: function -> block -> closure
+            where_clauses.push(format!(
+                "EXISTS (
+                    WITH RECURSIVE ancestors AS (
+                        SELECT id, parent_id FROM ast_nodes WHERE id = an.id
+                        UNION ALL
+                        SELECT a.id, a.parent_id FROM ast_nodes a
+                        JOIN ancestors anc ON a.id = anc.parent_id
+                        WHERE a.parent_id IS NOT NULL
+                    )
+                    SELECT 1 FROM ast_nodes p
+                    JOIN ancestors anc ON p.id = anc.parent_id
+                    WHERE p.kind = ?
+                )"
+            ));
             params.push(Box::new(inside_kind.to_string()));
         }
     }
