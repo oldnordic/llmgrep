@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-02-03
+
+### Added
+
+**Structural search features:**
+- `--inside <KIND>` flag to find symbols within a parent of specific kind
+  - Example: `--inside function_item --ast-kind closure_expression` finds closures within functions
+- `--contains <KIND>` flag to find symbols containing specific children
+  - Example: `--contains await_expression --ast-kind function_item` finds async functions
+
+### Changed
+
+**Documentation updates:**
+- Added structural search examples to MANUAL.md
+- Added structural search examples to README.md
+- Fixed compiler warnings (unused variables prefixed with underscore)
+
+**Full feature set:**
+All AST filtering features are included:
+- `--ast-kind <KIND>` flag with shorthands and language-aware expansion
+- `--with-ast-context` flag for enriched AST context
+- `--min-depth` / `--max-depth` flags for depth filtering
+- `--inside` / `--contains` flags for structural search
+
 ## [1.2.0] - 2026-02-01
 
 ### Added
@@ -23,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--max-depth <N>` flag to filter by maximum nesting depth
   - Depth counts decision points only: if/match/loop/for/while expressions
   - Root-level code has depth 0
+- `--inside <KIND>` flag to find symbols within a parent of specific kind
+  - Example: `--inside function_item --ast-kind closure_expression` finds closures within functions
+- `--contains <KIND>` flag to find symbols containing specific children
+  - Example: `--contains await_expression --ast-kind function_item` finds async functions
 
 **New function:**
 - `get_ast_context_for_symbol_with_preference()` in `src/ast.rs`

@@ -1399,8 +1399,8 @@ fn build_search_query(
     exact_fqn: Option<&str>,
     has_ast_table: bool,
     ast_kinds: &[String],
-    min_depth: Option<usize>,
-    max_depth: Option<usize>,
+    _min_depth: Option<usize>,
+    _max_depth: Option<usize>,
     inside_kind: Option<&str>,
     contains_kind: Option<&str>,
 ) -> (String, Vec<Box<dyn ToSql>>) {

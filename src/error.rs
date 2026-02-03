@@ -130,6 +130,10 @@ impl LlmError {
             LlmError::RegexRejected { .. } => "error",
             LlmError::ResourceLimitExceeded { .. } => "error",
             LlmError::PathValidationFailed { .. } => "error",
+            LlmError::MagellanNotFound => "error",
+            LlmError::AmbiguousSymbolName { .. } => "error",
+            LlmError::MagellanVersionMismatch { .. } => "error",
+            LlmError::MagellanExecutionFailed { .. } => "error",
             _ => "error",
         }
     }

@@ -1,6 +1,6 @@
 # llmgrep Manual
 
-**v1.2.0** (shipped 2026-02-01)
+**v1.3.0** (shipped 2026-02-03)
 
 llmgrep is a read-only query tool for Magellan's code map. It does not build or modify the database — Magellan owns indexing and freshness.
 
@@ -47,13 +47,17 @@ llmgrep search --db <FILE> --query <STRING> [OPTIONS]
 - `--min-fan-in <N>` — Minimum incoming references
 - `--min-fan-out <N>` — Minimum outgoing calls
 
-**AST filtering (v1.2):**
+**AST filtering (v1.3):**
 - `--ast-kind <KIND>` — Filter by AST node kind (supports shorthands and specific kinds)
 - `--with-ast-context` — Include enriched AST context (depth, parent_kind, children, decision_points)
 
-**Depth filtering (v1.2):**
+**Depth filtering (v1.3):**
 - `--min-depth <N>` — Minimum nesting depth (decision points only)
 - `--max-depth <N>` — Maximum nesting depth (decision points only)
+
+**Structural search (v1.3):**
+- `--inside <KIND>` — Find symbols within a parent of specific kind (e.g., `--inside function_item` finds closures)
+- `--contains <KIND>` — Find symbols containing specific children (e.g., `--contains await_expression` finds async functions)
 
 **Sorting:**
 - `--sort-by <MODE>` — Sort mode (default: `relevance`)
@@ -184,7 +188,7 @@ llmgrep --db code.db search --query "parse" --ast-kind call_expression
 - Declarations: `variable_declaration`, `type_alias_declaration`
 - Modules: `import_statement`, `export_statement`
 
-## Depth filtering (v1.2)
+## Depth filtering (v1.3)
 
 ### Decision depth
 
@@ -203,6 +207,48 @@ llmgrep --db code.db search --query "process" --max-depth 1
 
 # Find code at specific depth range
 llmgrep --db code.db search --query ".*" --min-depth 2 --max-depth 3
+```
+
+## Structural search (v1.3)
+
+### `--inside` flag
+
+Find symbols that are children of a parent with a specific AST node kind.
+
+```bash
+# Find closures within functions
+llmgrep --db code.db search --query ".*" --inside function_item --ast-kind closure_expression
+
+# Find local variables inside functions
+llmgrep --db code.db search --query ".*" --inside function_item --ast-kind let_declaration
+
+# Find methods within impl blocks
+llmgrep --db code.db search --query ".*" --inside impl_item --ast-kind function_item
+```
+
+### `--contains` flag
+
+Find symbols that contain children with a specific AST node kind.
+
+```bash
+# Find functions containing async calls
+llmgrep --db code.db search --query ".*" --contains await_expression --ast-kind function_item
+
+# Find functions with loops
+llmgrep --db code.db search --query ".*" --contains for_expression --ast-kind function_item
+
+# Find functions with unsafe blocks
+llmgrep --db code.db search --query ".*" --contains unsafe_block --ast-kind function_item
+```
+
+### Combining structural filters
+
+```bash
+# Find functions inside impls that contain async calls
+llmgrep --db code.db search --query ".*" --inside impl_item --contains await_expression --ast-kind function_item
+
+# Find closures inside functions that contain loops
+llmgrep --db code.db search --query ".*" --inside function_item --contains for_expression --ast-kind closure_expression
 ```
 
 ## Enriched AST context

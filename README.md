@@ -1,6 +1,6 @@
 # llmgrep
 
-**v1.2.0** (shipped 2026-02-01)
+**v1.3.0** (shipped 2026-02-03)
 
 A command-line search tool for code indexed by [Magellan](https://github.com/oldnordic/magellan). Queries SQLite graph databases to find symbols, references, and call relationships. Outputs human-readable or structured JSON for programmatic use.
 
@@ -48,8 +48,9 @@ magellan watch --root /path/to/repo --db /path/to/repo.db
 - **AST filtering**: Filter by AST node kind with overlap matching (--ast-kind)
 - **AST context**: Include enriched AST context with depth and parent info (--with-ast-context)
 - **Depth filtering**: Find symbols by AST nesting depth (--min-depth, --max-depth)
+- **Structural search**: Find symbols by parent/child relationships (--inside, --contains)
 
-## v1.2.0 - AST Filtering (2026-02-01)
+## v1.3.0 - AST Structural Search (2026-02-03)
 
 **AST-aware search features:**
 - **AST node kind filtering**: `--ast-kind` flag to filter by AST node type
@@ -139,7 +140,7 @@ llmgrep --db code.db search --query ".*" --sort-by fan-in --limit 20
 llmgrep --db code.db search --query "helper" --fqn "%module::%"
 ```
 
-## v1.2.0 Examples
+## v1.3.0 Examples
 
 ### AST kind filtering
 ```bash
@@ -168,7 +169,22 @@ llmgrep --db code.db search --query ".*" --kind Function --max-depth 1
 llmgrep --db code.db search --query "process" --with-ast-context
 ```
 
-## AST Filtering (v1.2)
+### Structural search (find by parent/child relationships)
+```bash
+# Find closures within functions
+llmgrep --db code.db search --query ".*" --inside function_item --ast-kind closure_expression
+
+# Find functions containing async calls
+llmgrep --db code.db search --query ".*" --contains await_expression --ast-kind function_item
+
+# Find functions with loops
+llmgrep --db code.db search --query ".*" --contains for_expression --ast-kind function_item
+
+# Combine: find closures inside functions that contain loops
+llmgrep --db code.db search --query ".*" --inside function_item --contains for_expression --ast-kind closure_expression
+```
+
+## AST Filtering (v1.3)
 
 Filter search results by AST node kind for structural code queries.
 
