@@ -1,3 +1,4 @@
+use crate::algorithm::{apply_algorithm_filters, create_symbol_set_temp_table, symbol_set_filter_strategy, AlgorithmOptions, SymbolSetStrategy};
 use crate::ast::{check_ast_table_exists, AstContext};
 use crate::error::LlmError;
 use crate::output::{
@@ -70,6 +71,8 @@ pub struct SearchOptions<'a> {
     pub ast: AstOptions<'a>,
     /// Depth filtering options
     pub depth: DepthOptions<'a>,
+    /// Algorithm-based filtering options
+    pub algorithm: AlgorithmOptions<'a>,
     /// SymbolId for direct BLAKE3 hash lookup (overrides name-based search)
     pub symbol_id: Option<&'a str>,
     /// FQN pattern filter (LIKE match on canonical_fqn)
@@ -381,7 +384,17 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         other => LlmError::from(other),
     })?;
 
-    let (sql, params) = build_search_query(
+    // Apply algorithm filters (pre-computed or one-shot execution)
+    let symbol_set_filter = if options.algorithm.is_active() {
+        Some(apply_algorithm_filters(options.db_path, &options.algorithm)?)
+    } else {
+        None
+    };
+
+    // Flatten Option<Vec<String>> to Option<&Vec<String>>
+    let symbol_set_ref = symbol_set_filter.as_ref();
+
+    let (sql, params, symbol_set_strategy) = build_search_query(
         options.query,
         options.path_filter,
         options.kind_filter,
@@ -400,6 +413,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
+        symbol_set_ref,
     );
 
     // Check if ast_nodes table exists for AST filtering
@@ -409,7 +423,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         })?;
 
     // If we have AST options, rebuild query with correct AST settings
-    let (sql, params) = if !options.ast.ast_kinds.is_empty() || has_ast_table || options.depth.min_depth.is_some() || options.depth.max_depth.is_some() || options.depth.inside.is_some() || options.depth.contains.is_some() {
+    let (sql, params, symbol_set_strategy) = if !options.ast.ast_kinds.is_empty() || has_ast_table || options.depth.min_depth.is_some() || options.depth.max_depth.is_some() || options.depth.inside.is_some() || options.depth.contains.is_some() {
         build_search_query(
             options.query,
             options.path_filter,
@@ -429,9 +443,21 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             options.depth.max_depth,
             options.depth.inside,
             options.depth.contains,
+            symbol_set_ref,
         )
     } else {
-        (sql, params)
+        (sql, params, symbol_set_strategy)
+    };
+
+    // Note: temp_table_name will be used in Plan 11-04 for JOIN logic
+    let temp_table_name = if symbol_set_strategy == SymbolSetStrategy::TempTable {
+        if let Some(ids) = symbol_set_ref {
+            Some(create_symbol_set_temp_table(&conn, ids)?)
+        } else {
+            None
+        }
+    } else {
+        None
     };
 
     let mut stmt = conn.prepare_cached(&sql)?;
@@ -832,7 +858,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         }
         results.len() as u64
     } else {
-        let (count_sql, count_params) = build_search_query(
+        let (count_sql, count_params, _symbol_set_strategy) = build_search_query(
             options.query,
             options.path_filter,
             options.kind_filter,
@@ -851,6 +877,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             options.depth.max_depth,
             options.depth.inside,
             options.depth.contains,
+            None,  // symbol_set_filter - will be populated in Plan 11-04
         );
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {
@@ -906,6 +933,11 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
                 break; // Only warn once per query
             }
         }
+    }
+
+    // Cleanup temporary table if it was created
+    if let Some(table_name) = temp_table_name {
+        let _ = conn.execute(&format!("DROP TABLE IF EXISTS {}", table_name), []);
     }
 
     Ok((
@@ -1403,7 +1435,8 @@ fn build_search_query(
     _max_depth: Option<usize>,
     inside_kind: Option<&str>,
     contains_kind: Option<&str>,
-) -> (String, Vec<Box<dyn ToSql>>) {
+    symbol_set_filter: Option<&Vec<String>>,
+) -> (String, Vec<Box<dyn ToSql>>, SymbolSetStrategy) {
     let mut params: Vec<Box<dyn ToSql>> = Vec::new();
     let mut where_clauses = Vec::new();
 
@@ -1564,6 +1597,26 @@ fn build_search_query(
     // due to SQLite recursive CTE limitations in WHERE clauses.
     // See Task 6 for post-query filtering implementation.
 
+    // SymbolSet filter condition
+    let symbol_set_strategy = if let Some(symbol_ids) = symbol_set_filter {
+        let strategy = symbol_set_filter_strategy(symbol_ids);
+        match strategy {
+            SymbolSetStrategy::InClause if !symbol_ids.is_empty() => {
+                let placeholders = symbol_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+                where_clauses.push(format!("json_extract(s.data, '$.symbol_id') IN ({})", placeholders));
+                params.extend(symbol_ids.iter().map(|id| Box::new(id.clone()) as Box<dyn ToSql>));
+            }
+            SymbolSetStrategy::TempTable => {
+                // Will be handled via JOIN in execution (Plan 11-04)
+                where_clauses.push("EXISTS (SELECT 1 FROM symbol_set_filter WHERE symbol_set_filter.symbol_id = json_extract(s.data, '$.symbol_id'))".to_string());
+            }
+            _ => {}
+        }
+        strategy
+    } else {
+        SymbolSetStrategy::None
+    };
+
     let select_clause = if count_only {
         "SELECT COUNT(*)"
     } else {
@@ -1656,7 +1709,7 @@ WHERE {where_clause}",
         params.push(Box::new(limit as u64));
     }
 
-    (sql, params)
+    (sql, params, symbol_set_strategy)
 }
 
 fn build_reference_query(
@@ -2108,7 +2161,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_basic() {
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             None,
             None,
@@ -2127,6 +2180,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should have LIKE clauses for name, display_fqn, fqn
@@ -2144,7 +2198,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_kind_filter() {
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             None,
             Some("Function"),
@@ -2163,6 +2217,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should add kind filter
@@ -2176,7 +2231,7 @@ mod tests {
     #[test]
     fn test_build_search_query_with_path_filter() {
         let path = PathBuf::from("/src/module");
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             Some(&path),
             None,
@@ -2195,6 +2250,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should add file path filter
@@ -2207,7 +2263,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_regex_mode() {
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test.*",
             None,
             None,
@@ -2226,6 +2282,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should NOT have LIKE clauses in regex mode
@@ -2241,7 +2298,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_count_only() {
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             None,
             None,
@@ -2260,6 +2317,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should start with COUNT
@@ -2275,7 +2333,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_regular_query() {
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             None,
             None,
@@ -2294,6 +2352,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should have ORDER BY
@@ -2308,7 +2367,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_fan_in_sort() {
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             None,
             None,
@@ -2327,6 +2386,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should ORDER BY fan_in DESC
@@ -2338,7 +2398,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_fan_out_sort() {
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             None,
             None,
@@ -2357,6 +2417,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should ORDER BY fan_out DESC
@@ -2368,7 +2429,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_complexity_sort() {
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             None,
             None,
@@ -2387,6 +2448,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should ORDER BY cyclomatic_complexity DESC
@@ -2402,7 +2464,7 @@ mod tests {
             min_complexity: Some(5),
             ..Default::default()
         };
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             None,
             None,
@@ -2421,6 +2483,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should filter by min_complexity
@@ -2437,7 +2500,7 @@ mod tests {
             max_complexity: Some(20),
             ..Default::default()
         };
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             None,
             None,
@@ -2456,6 +2519,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should filter by max_complexity
@@ -2472,7 +2536,7 @@ mod tests {
             min_fan_in: Some(10),
             ..Default::default()
         };
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             None,
             None,
@@ -2491,6 +2555,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should filter by min_fan_in
@@ -2539,7 +2604,7 @@ mod tests {
             min_fan_in: Some(10),
             ..Default::default()
         };
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             None,
             None,
@@ -2558,6 +2623,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should have all filter clauses
@@ -2734,7 +2800,7 @@ mod tests {
     #[test]
     fn test_build_search_query_combined_filters_path_kind() {
         let path = PathBuf::from("/src/module");
-        let (sql, params) = build_search_query(
+        let (sql, params, _strategy) = build_search_query(
             "test",
             Some(&path),
             Some("Function"),
@@ -2753,6 +2819,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should have all filters
@@ -5748,7 +5815,7 @@ mod tests {
         #[test]
         fn test_build_search_query_with_language_filter() {
             // Test that language filter adds file extension filter
-            let (sql, params) = build_search_query(
+            let (sql, params, _strategy) = build_search_query(
                 "test",
                 None,
                 None,
@@ -5808,7 +5875,7 @@ mod tests {
         #[test]
         fn test_build_search_query_combined_language_and_kind() {
             let path = PathBuf::from("/src/module");
-            let (sql, params) = build_search_query(
+            let (sql, params, _strategy) = build_search_query(
                 "test",
                 Some(&path),
                 Some("Function"),
@@ -5841,7 +5908,7 @@ mod tests {
         #[test]
         fn test_build_search_query_with_cpp_language() {
             // Test C++ language alias handling
-            let (sql, params) = build_search_query(
+            let (sql, params, _strategy) = build_search_query(
                 "test",
                 None,
                 None,
