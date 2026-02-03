@@ -267,6 +267,105 @@ llmgrep --db code.db search --query "process" --with-ast-context --output json
 - `children_count_by_kind` - Count of direct children grouped by kind
 - `decision_points` - Number of decision point children
 
+## Magellan Algorithm Integration (v1.4)
+
+### `--from-symbol-set` FILE
+
+Load a pre-computed SymbolSet from a JSON file and filter search results to only include symbols in the set.
+
+**SymbolSet file format:**
+```json
+{
+  "symbol_ids": [
+    "abc123def456789012345678901234ab",
+    "0123456789abcdef0123456789abcdef"
+  ]
+}
+```
+
+**Example:**
+```bash
+# Generate reachable set with magellan
+magellan reachable --from main --db code.db --output reachable.json
+
+# Search only reachable symbols
+llmgrep --db code.db search --query "handler" --from-symbol-set reachable.json
+```
+
+### `--reachable-from` SYMBOL
+
+One-shot filter: find all symbols reachable from the specified symbol.
+
+**Example:**
+```bash
+# Find all functions called from main (directly or transitively)
+llmgrep --db code.db search --query ".*" --reachable-from main
+```
+
+### `--dead-code-in` SYMBOL
+
+One-shot filter: find all symbols NOT reachable from the specified symbol (dead code).
+
+**Example:**
+```bash
+# Find unused functions
+llmgrep --db code.db search --query ".*" --kind Function --dead-code-in main
+```
+
+### `--in-cycle` SYMBOL
+
+One-shot filter: find all symbols that participate in a dependency cycle with the specified symbol.
+
+**Example:**
+```bash
+# Find functions in dependency cycles
+llmgrep --db code.db search --query ".*" --kind Function --in-cycle process
+```
+
+### `--slice-backward-from` SYMBOL
+
+One-shot filter: find all symbols that affect the specified symbol (backward slice).
+
+**Example:**
+```bash
+# Find code that affects error handling
+llmgrep --db code.db search --query "parse" --slice-backward-from handle_error
+```
+
+### `--slice-forward-from` SYMBOL
+
+One-shot filter: find all symbols affected by the specified symbol (forward slice).
+
+**Example:**
+```bash
+# Find code affected by configuration loading
+llmgrep --db code.db search --query "validate" --slice-forward-from load_config
+```
+
+### Error Codes
+
+- **LLM-E105**: Magellan CLI not found. Install magellan to use algorithm features.
+- **LLM-E106**: Ambiguous symbol name. Multiple symbols match the provided name. Use `--symbol-id` for unambiguous reference.
+- **LLM-E107**: Magellan version mismatch. Required version not available.
+- **LLM-E108**: Magellan execution failed. The algorithm command exited with an error.
+
+### Composed Workflow Example
+
+```bash
+# Step 1: Run magellan condense to reduce graph to important symbols
+magellan condense --db code.db --output condense.json
+
+# Step 2: Run backward slice from entry point
+magellan slice --db code.db --target main --direction backward --output slice.json
+
+# Step 3: Search within sliced symbols for specific pattern
+llmgrep --db code.db search --from-symbol-set slice.json --query "error" --output json
+
+# Step 4: Pipe results to LLM for analysis
+llmgrep --db code.db search --from-symbol-set slice.json --query "error" --output json | llm "Analyze these error handling patterns"
+```
+
+
 ## Database compatibility
 
 AST features require Magellan databases with `ast_nodes` table. If the table doesn't exist:

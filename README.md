@@ -49,6 +49,7 @@ magellan watch --root /path/to/repo --db /path/to/repo.db
 - **AST context**: Include enriched AST context with depth and parent info (--with-ast-context)
 - **Depth filtering**: Find symbols by AST nesting depth (--min-depth, --max-depth)
 - **Structural search**: Find symbols by parent/child relationships (--inside, --contains)
+- **Magellan algorithm integration**: Filter by Magellan graph algorithm results (--from-symbol-set, --reachable-from, --dead-code-in, --in-cycle, --slice-backward-from, --slice-forward-from)
 
 ## v1.3.0 - AST Structural Search (2026-02-03)
 
@@ -253,6 +254,57 @@ llmgrep --db code.db search --query ".*" --ast-kind loops,closure_expression
 | `impls` | Impl blocks |
 
 See `MANUAL.md` for complete node kind reference per language.
+
+
+## Magellan Algorithm Integration (v1.4)
+
+Filter search results using Magellan's graph analysis algorithms.
+
+### Filter by Pre-computed SymbolSet
+
+```bash
+# Run magellan reachable to find all symbols reachable from main
+magellan reachable --from main --db code.db --output reachable.json
+
+# Filter llmgrep search to only show reachable symbols
+llmgrep --db code.db search --query "handler" --from-symbol-set reachable.json
+```
+
+### One-shot: Find Dead Code
+
+```bash
+# Find symbols not reachable from main (dead code)
+llmgrep --db code.db search --query ".*" --dead-code-in main
+
+# Find unused utility functions
+llmgrep --db code.db search --query "util_" --kind Function --dead-code-in main
+```
+
+### One-shot: Find Symbols in Dependency Cycles
+
+```bash
+# Find all functions participating in dependency cycles
+llmgrep --db code.db search --query ".*" --kind Function --in-cycle process
+```
+
+### One-shot: Backward/Forward Slicing
+
+```bash
+# Backward slice: find all code that affects error handling
+llmgrep --db code.db search --query "parse" --slice-backward-from handle_error
+
+# Forward slice: find all code affected by configuration
+llmgrep --db code.db search --query "validate" --slice-forward-from load_config
+```
+
+### Composed Workflow
+
+```bash
+# Complex analysis: condense -> slice -> reachable -> llmgrep -> LLM
+magellan condense --db code.db --output condense.json
+magellan slice --db code.db --target main --direction backward --output slice.json
+llmgrep --db code.db search --from-symbol-set slice.json --query "error" --output json | llm ...
+```
 
 ## Compatibility
 
