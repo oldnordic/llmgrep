@@ -397,6 +397,79 @@ impl<'a> AlgorithmOptions<'a> {
     }
 }
 
+/// Apply algorithm filters and return SymbolSet for search filtering
+///
+/// Handles:
+/// - Pre-computed SymbolSet from file (--from-symbol-set)
+/// - One-shot algorithm execution (--reachable-from, --dead-code-in, etc.)
+/// - FQN resolution for simple names (resolves to SymbolId before shelling out)
+///
+/// Returns: Vec<String> of SymbolIds (empty if no active filters)
+pub fn apply_algorithm_filters(
+    db_path: &Path,
+    options: &AlgorithmOptions<'_>,
+) -> Result<Vec<String>, LlmError> {
+    // Priority 1: Pre-computed SymbolSet from file
+    if let Some(file_path) = options.from_symbol_set {
+        let symbol_set = parse_symbol_set_file(Path::new(file_path))?;
+        symbol_set.validate()?;
+        return Ok(symbol_set.symbol_ids);
+    }
+
+    // Priority 2: One-shot algorithm execution (only one allowed)
+    // Check for exactly one active one-shot filter
+    let active_count = [
+        options.reachable_from.is_some(),
+        options.dead_code_in.is_some(),
+        options.in_cycle.is_some(),
+        options.slice_backward_from.is_some(),
+        options.slice_forward_from.is_some(),
+    ]
+    .iter()
+    .filter(|&&x| x)
+    .count();
+
+    if active_count > 1 {
+        return Err(LlmError::InvalidQuery {
+            query: "Only one one-shot algorithm filter may be specified. Use --from-symbol-set for composed filters.".to_string(),
+        });
+    }
+
+    // Execute the active one-shot algorithm
+    if let Some(symbol) = options.reachable_from {
+        let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
+        let args = ["--from", &symbol_id];
+        return Ok(run_magellan_algorithm(db_path, "reachable", &args)?.symbol_ids);
+    }
+
+    if let Some(symbol) = options.dead_code_in {
+        let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
+        let args = ["--entry", &symbol_id];
+        return Ok(run_magellan_algorithm(db_path, "dead-code", &args)?.symbol_ids);
+    }
+
+    if let Some(symbol) = options.in_cycle {
+        let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
+        let args = ["--symbol", &symbol_id];
+        return Ok(run_magellan_algorithm(db_path, "cycles", &args)?.symbol_ids);
+    }
+
+    if let Some(symbol) = options.slice_backward_from {
+        let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
+        let args = ["--target", &symbol_id, "--direction", "backward"];
+        return Ok(run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids);
+    }
+
+    if let Some(symbol) = options.slice_forward_from {
+        let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
+        let args = ["--target", &symbol_id, "--direction", "forward"];
+        return Ok(run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids);
+    }
+
+    // No active filters
+    Ok(Vec::new())
+}
+
 /// Resolve a simple symbol name to its SymbolId using `magellan find`.
 ///
 /// When users provide a simple name (e.g., "main") instead of a full SymbolId,
