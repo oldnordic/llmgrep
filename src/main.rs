@@ -138,6 +138,25 @@ enum Command {
 
         #[arg(long, value_name = "KIND")]
         contains: Option<String>,
+
+        // Algorithm-based filtering flags
+        #[arg(long, value_name = "FILE")]
+        from_symbol_set: Option<String>,
+
+        #[arg(long, value_name = "SYMBOL")]
+        reachable_from: Option<String>,
+
+        #[arg(long, value_name = "SYMBOL")]
+        dead_code_in: Option<String>,
+
+        #[arg(long, value_name = "SYMBOL")]
+        in_cycle: Option<String>,
+
+        #[arg(long, value_name = "SYMBOL")]
+        slice_backward_from: Option<String>,
+
+        #[arg(long, value_name = "SYMBOL")]
+        slice_forward_from: Option<String>,
     },
 }
 
@@ -342,6 +361,12 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             max_depth,
             inside,
             contains,
+            from_symbol_set,
+            reachable_from,
+            dead_code_in,
+            in_cycle,
+            slice_backward_from,
+            slice_forward_from,
         } => run_search(
             cli,
             query,
@@ -374,6 +399,12 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             *max_depth,
             inside.as_ref().map(|s| s.as_str()),
             contains.as_ref().map(|s| s.as_str()),
+            from_symbol_set.as_ref(),
+            reachable_from.as_ref(),
+            dead_code_in.as_ref(),
+            in_cycle.as_ref(),
+            slice_backward_from.as_ref(),
+            slice_forward_from.as_ref(),
         ),
     }
 }
@@ -411,6 +442,12 @@ fn run_search(
     max_depth: Option<usize>,
     inside: Option<&str>,
     contains: Option<&str>,
+    from_symbol_set: Option<&String>,
+    reachable_from: Option<&String>,
+    dead_code_in: Option<&String>,
+    in_cycle: Option<&String>,
+    slice_backward_from: Option<&String>,
+    slice_forward_from: Option<&String>,
 ) -> Result<(), LlmError> {
     // Validate SymbolId format (32 hex characters)
     if let Some(sid) = symbol_id {
@@ -570,7 +607,14 @@ fn run_search(
                     inside,
                     contains,
                 },
-                algorithm: AlgorithmOptions::default(),
+                algorithm: AlgorithmOptions {
+                    from_symbol_set: from_symbol_set.map(|s| s.as_str()),
+                    reachable_from: reachable_from.map(|s| s.as_str()),
+                    dead_code_in: dead_code_in.map(|s| s.as_str()),
+                    in_cycle: in_cycle.map(|s| s.as_str()),
+                    slice_backward_from: slice_backward_from.map(|s| s.as_str()),
+                    slice_forward_from: slice_forward_from.map(|s| s.as_str()),
+                },
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
