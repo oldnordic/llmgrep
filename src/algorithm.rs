@@ -1,0 +1,544 @@
+//! Algorithm integration module for Magellan 2.0 graph algorithms.
+//!
+//! This module provides integration with Magellan's executable graph algorithms
+//! through a shell-out pattern. It supports:
+//!
+//! - Loading pre-computed SymbolSet files from JSON
+//! - Running Magellan algorithms (reachable, dead-code, slice, cycles) and extracting SymbolIds
+//! - Resolving simple symbol names to SymbolIds via `magellan find`
+//!
+//! The SymbolSet type is the core abstraction for algorithm-based filtering.
+//! It represents a collection of SymbolIds (32-char BLAKE3 hashes) that can be
+//! used to filter search results.
+
+use crate::error::LlmError;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::path::Path;
+use std::process::Command;
+
+/// SymbolSet - a collection of SymbolIds for filtering search results.
+///
+/// This type represents a set of symbols identified by their 32-character
+/// BLAKE3 hash SymbolIds. It can be loaded from JSON files or extracted
+/// from Magellan algorithm outputs.
+///
+/// # JSON Format
+///
+/// ```json
+/// {
+///   "symbol_ids": [
+///     "abc123def456789012345678901234ab",
+///     "def456789012345678901234abcd1234",
+///     ...
+///   ]
+/// }
+/// ```
+///
+/// # Example
+///
+/// ```no_run
+/// use llmgrep::algorithm::SymbolSet;
+/// use std::path::Path;
+///
+/// let symbol_set = SymbolSet::from_file(Path::new("symbols.json"))?;
+/// symbol_set.validate()?;
+/// # Ok::<(), llmgrep::error::LlmError>(())
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SymbolSet {
+    /// List of SymbolIds (32-char BLAKE3 hashes)
+    pub symbol_ids: Vec<String>,
+}
+
+impl SymbolSet {
+    /// Load SymbolSet from a JSON file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the JSON file containing SymbolSet data
+    ///
+    /// # Returns
+    ///
+    /// A validated SymbolSet if the file exists and contains valid JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns `LlmError::IoError` if the file cannot be read.
+    /// Returns `LlmError::JsonError` if the JSON is invalid or malformed.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use llmgrep::algorithm::SymbolSet;
+    /// use std::path::Path;
+    ///
+    /// let symbol_set = SymbolSet::from_file(Path::new("reachable.json"))?;
+    /// # Ok::<(), llmgrep::error::LlmError>(())
+    /// ```
+    pub fn from_file(path: &Path) -> Result<Self, LlmError> {
+        let content = std::fs::read_to_string(path).map_err(LlmError::IoError)?;
+        serde_json::from_str(&content).map_err(LlmError::JsonError)
+    }
+
+    /// Validate that all SymbolIds are in the correct format (32 hex characters).
+    ///
+    /// Magellan SymbolIds are 32-character BLAKE3 hashes represented as lowercase
+    /// hexadecimal strings. This method validates that format.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if all SymbolIds are valid.
+    ///
+    /// # Errors
+    ///
+    /// Returns `LlmError::InvalidQuery` if any SymbolId has an invalid format.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use llmgrep::algorithm::SymbolSet;
+    ///
+    /// let symbol_set = SymbolSet {
+    ///     symbol_ids: vec![
+    ///         "abc123def456789012345678901234ab".to_string(),
+    ///     ],
+    /// };
+    /// assert!(symbol_set.validate().is_ok());
+    /// ```
+    pub fn validate(&self) -> Result<(), LlmError> {
+        for symbol_id in &self.symbol_ids {
+            if symbol_id.len() != 32 {
+                return Err(LlmError::InvalidQuery {
+                    query: format!(
+                        "Invalid SymbolId format: '{}'. Expected 32 hex characters.",
+                        symbol_id
+                    ),
+                });
+            }
+            if !symbol_id.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(LlmError::InvalidQuery {
+                    query: format!(
+                        "Invalid SymbolId format: '{}'. Expected only hexadecimal characters.",
+                        symbol_id
+                    ),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Check if the SymbolSet is empty.
+    pub fn is_empty(&self) -> bool {
+        self.symbol_ids.is_empty()
+    }
+
+    /// Return the number of SymbolIds in the set.
+    pub fn len(&self) -> usize {
+        self.symbol_ids.len()
+    }
+}
+
+/// Run a Magellan algorithm and extract SymbolIds from its JSON output.
+///
+/// This function shells out to the Magellan CLI, executes the specified algorithm,
+/// and parses the JSON output to extract SymbolIds. The extraction logic handles
+/// the different JSON structures returned by each algorithm.
+///
+/// # Arguments
+///
+/// * `db_path` - Path to the Magellan code graph database
+/// * `algorithm` - Algorithm name: "reachable", "dead-code", "slice", "cycles"
+/// * `args` - Algorithm-specific arguments (e.g., ["--symbol-id", "abc123..."])
+///
+/// # Returns
+///
+/// A `SymbolSet` containing the SymbolIds extracted from the algorithm output.
+///
+/// # Errors
+///
+/// Returns `LlmError::SearchFailed` if:
+/// - Magellan CLI is not found in PATH
+/// - The algorithm execution fails (non-zero exit code)
+/// - The JSON output cannot be parsed
+///
+/// # Supported Algorithms
+///
+/// - **reachable**: Extracts from `result.symbols[].symbol_id`
+/// - **dead-code**: Extracts from `result.dead_symbols[].symbol.symbol_id`
+/// - **slice**: Extracts from `result.included_symbols[].symbol_id`
+/// - **cycles**: Extracts from `result.cycles[].members[].symbol_id`
+///
+/// # Example
+///
+/// ```no_run
+/// use llmgrep::algorithm::run_magellan_algorithm;
+/// use std::path::Path;
+///
+/// let db_path = Path::new(".codemcp/codegraph.db");
+/// let symbol_set = run_magellan_algorithm(
+///     db_path,
+///     "reachable",
+///     &["--symbol-id", "abc123def456789012345678901234ab"],
+/// )?;
+/// # Ok::<(), llmgrep::error::LlmError>(())
+/// ```
+pub fn run_magellan_algorithm(
+    db_path: &Path,
+    algorithm: &str,
+    args: &[&str],
+) -> Result<SymbolSet, LlmError> {
+    // Check if magellan is available
+    let check_result = Command::new("magellan")
+        .arg("--version")
+        .output();
+
+    match check_result {
+        Ok(output) if output.status.success() => {
+            // Magellan is available, continue
+        }
+        Ok(_) => {
+            return Err(LlmError::MagellanExecutionFailed {
+                algorithm: "version check".to_string(),
+                stderr: "magellan --version returned non-zero exit code".to_string(),
+            });
+        }
+        Err(_) => {
+            return Err(LlmError::MagellanNotFound);
+        }
+    }
+
+    // Build magellan command
+    let mut cmd = Command::new("magellan");
+    cmd.arg(algorithm)
+        .arg("--db")
+        .arg(db_path)
+        .arg("--output")
+        .arg("json")
+        .args(args);
+
+    // Execute and capture output
+    let output = cmd.output().map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
+        _ => LlmError::MagellanExecutionFailed {
+            algorithm: algorithm.to_string(),
+            stderr: e.to_string(),
+        },
+    })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(LlmError::MagellanExecutionFailed {
+            algorithm: algorithm.to_string(),
+            stderr: stderr.to_string(),
+        });
+    }
+
+    // Parse JSON response and extract SymbolIds
+    let json_str = String::from_utf8_lossy(&output.stdout);
+    extract_symbol_ids_from_magellan_json(&json_str, algorithm)
+}
+
+/// Extract SymbolIds from Magellan algorithm JSON output.
+///
+/// Each Magellan algorithm has a different JSON structure. This function
+/// parses the algorithm-specific format and extracts all SymbolIds into
+/// a unified SymbolSet.
+///
+/// # JSON Structures by Algorithm
+///
+/// - **reachable**: `{"result": {"symbols": [{"symbol_id": "..."}, ...]}}`
+/// - **dead-code**: `{"result": {"dead_symbols": [{"symbol": {"symbol_id": "..."}}, ...]}}`
+/// - **slice**: `{"result": {"included_symbols": [{"symbol_id": "..."}, ...]}}`
+/// - **cycles**: `{"result": {"cycles": [{"members": [{"symbol_id": "..."}, ...]}]}}`
+///
+/// # Arguments
+///
+/// * `json` - The raw JSON string from Magellan's stdout
+/// * `algorithm` - The algorithm name (determines which parser to use)
+///
+/// # Returns
+///
+/// A `SymbolSet` containing all extracted SymbolIds.
+fn extract_symbol_ids_from_magellan_json(
+    json: &str,
+    algorithm: &str,
+) -> Result<SymbolSet, LlmError> {
+    let parsed: Value = serde_json::from_str(json).map_err(LlmError::JsonError)?;
+
+    // Extract symbol_ids based on algorithm type
+    let symbol_ids = match algorithm {
+        "reachable" => {
+            let symbols = parsed["result"]["symbols"]
+                .as_array()
+                .ok_or_else(|| LlmError::InvalidQuery {
+                    query: "Missing 'symbols' array in reachable output".to_string(),
+                })?;
+            symbols
+                .iter()
+                .filter_map(|s| s["symbol_id"].as_str().map(|id| id.to_string()))
+                .collect()
+        }
+        "dead-code" => {
+            let dead_symbols = parsed["result"]["dead_symbols"]
+                .as_array()
+                .ok_or_else(|| LlmError::InvalidQuery {
+                    query: "Missing 'dead_symbols' array in dead-code output".to_string(),
+                })?;
+            dead_symbols
+                .iter()
+                .filter_map(|s| s["symbol"]["symbol_id"].as_str().map(|id| id.to_string()))
+                .collect()
+        }
+        "slice" => {
+            let included_symbols = parsed["result"]["included_symbols"]
+                .as_array()
+                .ok_or_else(|| LlmError::InvalidQuery {
+                    query: "Missing 'included_symbols' array in slice output".to_string(),
+                })?;
+            included_symbols
+                .iter()
+                .filter_map(|s| s["symbol_id"].as_str().map(|id| id.to_string()))
+                .collect()
+        }
+        "cycles" => {
+            let cycles = parsed["result"]["cycles"]
+                .as_array()
+                .ok_or_else(|| LlmError::InvalidQuery {
+                    query: "Missing 'cycles' array in cycles output".to_string(),
+                })?;
+            let mut ids = Vec::new();
+            for cycle in cycles {
+                if let Some(members) = cycle["members"].as_array() {
+                    for member in members {
+                        if let Some(id) = member["symbol_id"].as_str() {
+                            ids.push(id.to_string());
+                        }
+                    }
+                }
+            }
+            ids
+        }
+        _ => {
+            return Err(LlmError::InvalidQuery {
+                query: format!("Unknown algorithm: {}", algorithm),
+            });
+        }
+    };
+
+    Ok(SymbolSet { symbol_ids })
+}
+
+/// Parse a SymbolSet from a JSON file and validate its format.
+///
+/// This is a convenience function that combines `SymbolSet::from_file`
+/// and `SymbolSet::validate` into a single call.
+///
+/// # Arguments
+///
+/// * `path` - Path to the SymbolSet JSON file
+///
+/// # Returns
+///
+/// A validated `SymbolSet`.
+///
+/// # Errors
+///
+/// Returns `LlmError::IoError` if the file cannot be read.
+/// Returns `LlmError::JsonError` if the JSON is invalid.
+/// Returns `LlmError::InvalidQuery` if SymbolId format is invalid.
+///
+/// # Example
+///
+/// ```no_run
+/// use llmgrep::algorithm::parse_symbol_set_file;
+/// use std::path::Path;
+///
+/// let symbol_set = parse_symbol_set_file(Path::new("symbols.json"))?;
+/// # Ok::<(), llmgrep::error::LlmError>(())
+/// ```
+pub fn parse_symbol_set_file(path: &Path) -> Result<SymbolSet, LlmError> {
+    let symbol_set = SymbolSet::from_file(path)?;
+    symbol_set.validate()?;
+    Ok(symbol_set)
+}
+
+/// Resolve a simple symbol name to its SymbolId using `magellan find`.
+///
+/// When users provide a simple name (e.g., "main") instead of a full SymbolId,
+/// this function queries Magellan's database to find matching symbols.
+///
+/// # Ambiguity Detection
+///
+/// If multiple symbols match the given name, this function returns
+/// `LlmError::AmbiguousSymbolName` with the count of matches. The user must
+/// then provide a more specific identifier (full SymbolId or path-qualified name).
+///
+/// # Arguments
+///
+/// * `db_path` - Path to the Magellan code graph database
+/// * `name` - Simple symbol name to resolve (e.g., "main", "process_request")
+///
+/// # Returns
+///
+/// The SymbolId of the first matching symbol (if unique).
+///
+/// # Errors
+///
+/// Returns `LlmError::MagellanNotFound` if magellan CLI is not available.
+/// Returns `LlmError::AmbiguousSymbolName` if multiple symbols match the name.
+/// Returns `LlmError::InvalidQuery` (LLM-E011) if no symbols match.
+/// Returns `LlmError::SearchFailed` if the `magellan find` command fails.
+///
+/// # Example
+///
+/// ```no_run
+/// use llmgrep::algorithm::resolve_fqn_to_symbol_id;
+/// use std::path::Path;
+///
+/// let db_path = Path::new(".codemcp/codegraph.db");
+/// let symbol_id = resolve_fqn_to_symbol_id(db_path, "main")?;
+/// println!("Resolved to: {}", symbol_id);
+/// # Ok::<(), llmgrep::error::LlmError>(())
+/// ```
+pub fn resolve_fqn_to_symbol_id(db_path: &Path, name: &str) -> Result<String, LlmError> {
+    // Check if magellan is available
+    let check_result = Command::new("magellan")
+        .arg("--version")
+        .output();
+
+    match check_result {
+        Ok(output) if output.status.success() => {
+            // Magellan is available, continue
+        }
+        Ok(_) => {
+            return Err(LlmError::MagellanExecutionFailed {
+                algorithm: "version check".to_string(),
+                stderr: "magellan --version returned non-zero exit code".to_string(),
+            });
+        }
+        Err(_) => {
+            return Err(LlmError::MagellanNotFound);
+        }
+    }
+
+    // Run magellan find
+    let output = Command::new("magellan")
+        .args(["find", "--db", &db_path.to_string_lossy(), "--name", name, "--output", "json"])
+        .output()
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
+            _ => LlmError::SearchFailed {
+                reason: format!("Failed to execute magellan find: {}", e),
+            },
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(LlmError::SearchFailed {
+            reason: format!("magellan find failed: {}", stderr),
+        });
+    }
+
+    // Parse JSON response
+    let json: Value = serde_json::from_slice(&output.stdout).map_err(LlmError::JsonError)?;
+
+    // Check for matches array
+    let matches = json["matches"]
+        .as_array()
+        .ok_or_else(|| LlmError::InvalidQuery {
+            query: "Invalid magellan find output: missing 'matches' array".to_string(),
+        })?;
+
+    // Handle ambiguity
+    if matches.len() > 1 {
+        return Err(LlmError::AmbiguousSymbolName {
+            name: name.to_string(),
+            count: matches.len(),
+        });
+    }
+
+    // Handle not found
+    if matches.is_empty() {
+        return Err(LlmError::InvalidQuery {
+            query: format!("Symbol '{}' not found in database", name),
+        });
+    }
+
+    // Extract symbol_id from first match
+    matches[0]["symbol_id"]
+        .as_str()
+        .map(|id| id.to_string())
+        .ok_or_else(|| LlmError::InvalidQuery {
+            query: format!(
+                "Symbol '{}' found but missing symbol_id in magellan output",
+                name
+            ),
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_symbol_set_validation_valid() {
+        let symbol_set = SymbolSet {
+            symbol_ids: vec![
+                "abc123def456789012345678901234ab".to_string(),
+                "0123456789abcdef0123456789abcdef".to_string(),
+                "ffffffffffffffffffffffffffffffff".to_string(),
+            ],
+        };
+        assert!(symbol_set.validate().is_ok());
+        assert_eq!(symbol_set.len(), 3);
+        assert!(!symbol_set.is_empty());
+    }
+
+    #[test]
+    fn test_symbol_set_validation_invalid_length() {
+        let symbol_set = SymbolSet {
+            symbol_ids: vec!["abc123".to_string()],
+        };
+        assert!(symbol_set.validate().is_err());
+    }
+
+    #[test]
+    fn test_symbol_set_validation_invalid_chars() {
+        let symbol_set = SymbolSet {
+            symbol_ids: vec!["abc123def456789012345678901234g!".to_string()],
+        };
+        assert!(symbol_set.validate().is_err());
+    }
+
+    #[test]
+    fn test_symbol_set_empty() {
+        let symbol_set = SymbolSet {
+            symbol_ids: vec![],
+        };
+        assert!(symbol_set.validate().is_ok());
+        assert_eq!(symbol_set.len(), 0);
+        assert!(symbol_set.is_empty());
+    }
+
+    #[test]
+    fn test_symbol_set_json_deserialize() {
+        let json = r#"{"symbol_ids": ["abc123def456789012345678901234ab"]}"#;
+        let symbol_set: SymbolSet = serde_json::from_str(json).unwrap();
+        assert_eq!(symbol_set.symbol_ids.len(), 1);
+        assert_eq!(
+            symbol_set.symbol_ids[0],
+            "abc123def456789012345678901234ab"
+        );
+    }
+
+    #[test]
+    fn test_symbol_set_json_serialize() {
+        let symbol_set = SymbolSet {
+            symbol_ids: vec!["abc123def456789012345678901234ab".to_string()],
+        };
+        let json = serde_json::to_string(&symbol_set).unwrap();
+        assert!(json.contains("symbol_ids"));
+        assert!(json.contains("abc123def456789012345678901234ab"));
+    }
+}
