@@ -10,7 +10,10 @@ pub mod safe_extraction;
 pub use safe_extraction::*;
 
 // Re-export algorithm types for external use
-pub use algorithm::{SymbolSet, parse_symbol_set_file, resolve_fqn_to_symbol_id};
+pub use algorithm::{
+    AlgorithmOptions, parse_symbol_set_file, resolve_fqn_to_symbol_id, run_magellan_algorithm,
+    SymbolSet, SymbolSetStrategy,
+};
 
 // Re-export AST types for external use
 pub use ast::{
