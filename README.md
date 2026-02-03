@@ -1,6 +1,6 @@
 # llmgrep
 
-**v1.3.0** (shipped 2026-02-03)
+**v1.4.0** (shipped 2026-02-03)
 
 A command-line search tool for code indexed by [Magellan](https://github.com/oldnordic/magellan). Queries SQLite graph databases to find symbols, references, and call relationships. Outputs human-readable or structured JSON for programmatic use.
 

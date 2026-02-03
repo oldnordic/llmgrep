@@ -1,6 +1,6 @@
 # llmgrep Manual
 
-**v1.3.0** (shipped 2026-02-03)
+**v1.4.0** (shipped 2026-02-03)
 
 llmgrep is a read-only query tool for Magellan's code map. It does not build or modify the database — Magellan owns indexing and freshness.
 
@@ -58,6 +58,14 @@ llmgrep search --db <FILE> --query <STRING> [OPTIONS]
 **Structural search (v1.3):**
 - `--inside <KIND>` — Find symbols within a parent of specific kind (e.g., `--inside function_item` finds closures)
 - `--contains <KIND>` — Find symbols containing specific children (e.g., `--contains await_expression` finds async functions)
+
+**Algorithm filtering (v1.4):**
+- `--from-symbol-set <FILE>` — Load pre-computed SymbolSet from JSON file
+- `--reachable-from <SYMBOL>` — One-shot: find symbols reachable from specified symbol
+- `--dead-code-in <SYMBOL>` — One-shot: find dead code (unreachable symbols)
+- `--in-cycle <SYMBOL>` — One-shot: find symbols in dependency cycles
+- `--slice-backward-from <SYMBOL>` — One-shot: backward slice (code affecting target)
+- `--slice-forward-from <SYMBOL>` — One-shot: forward slice (code affected by target)
 
 **Sorting:**
 - `--sort-by <MODE>` — Sort mode (default: `relevance`)

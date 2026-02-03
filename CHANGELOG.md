@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-02-03
+
+### Added
+
+**Magellan 2.0 Algorithm Integration:**
+- `--from-symbol-set <FILE>` flag — Load pre-computed SymbolSet from JSON file for filtering
+- `--reachable-from <SYMBOL>` flag — One-shot filter: find symbols reachable from specified symbol
+- `--dead-code-in <SYMBOL>` flag — One-shot filter: find dead code (unreachable symbols)
+- `--in-cycle <SYMBOL>` flag — One-shot filter: find symbols in dependency cycles
+- `--slice-backward-from <SYMBOL>` flag — One-shot filter: backward slice (code affecting target)
+- `--slice-forward-from <SYMBOL>` flag — One-shot filter: forward slice (code affected by target)
+
+**SymbolSet module (src/algorithm.rs):**
+- SymbolSet type with JSON serialization/deserialization
+- `run_magellan_algorithm()` — Shell-out helper for Mag CLI algorithms
+- `parse_symbol_set_file()` — Load and validate SymbolSet JSON files
+- `resolve_fqn_to_symbol_id()` — FQN to SymbolId resolution via `magellan find`
+- Temporary table optimization for large SymbolSets (>1000 items)
+
+**SQL filtering extensions:**
+- `WHERE symbol_id IN (...)` clause for small SymbolSets
+- Temporary table JOIN strategy for large SymbolSets
+- `apply_algorithm_filters()` — Orchestrates pre-computed and one-shot filters
+
+**Error codes (LLM-E1xx series):**
+- `LLM-E105`: Magellan CLI not found
+- `LLM-E106`: Ambiguous symbol name
+- `LLM-E107`: Magellan version mismatch
+- `LLM-E108`: Magellan algorithm execution failed
+
+**New tests:**
+- 33 new algorithm integration tests (561 lines) covering all algorithm types
+- Tests for SymbolSet parsing, validation, FQN resolution, and error handling
+- Total: 310 tests passing (up from 277)
+
+**Documentation:**
+- README.md updated with Magellan Algorithm Integration examples
+- MANUAL.md updated with complete algorithm flag reference and composed workflow
+- SymbolSet file format documented
+
+**Changed**
+- Updated Magellan dependency to support algorithm commands
+- Updated Magellan CLI integration for `--output json` format parsing
+
+**Compatibility**
+- Magellan 2.0.0 or later recommended for algorithm features
+- Backward compatible with v1.3 databases (graceful degradation for missing ast_nodes)
+- SymbolSet file format: `{"symbol_ids": ["abc123...", ...]}`
+
+### Test Coverage
+
+- 310 tests passing
+- Algorithm tests: SymbolSet parsing, validation, FQN resolution, temp table optimization
+- Integration tests for all algorithm types (reachable, dead-code, slice, cycles)
+
 ## [1.3.0] - 2026-02-03
 
 ### Added
