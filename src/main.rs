@@ -1,5 +1,6 @@
 use clap::builder::{RangedI64ValueParser, TypedValueParser};
 use clap::{Parser, Subcommand, ValueEnum};
+use llmgrep::algorithm::AlgorithmOptions;
 use llmgrep::error::LlmError;
 use llmgrep::output::{
     json_response, json_response_with_partial, CallSearchResponse, CombinedSearchResponse,
@@ -569,6 +570,7 @@ fn run_search(
                     inside,
                     contains,
                 },
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
@@ -601,6 +603,7 @@ fn run_search(
                 metrics,
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -633,6 +636,7 @@ fn run_search(
                 metrics,
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -691,6 +695,7 @@ fn run_search(
                     inside,
                     contains,
                 },
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
@@ -719,6 +724,7 @@ fn run_search(
                 metrics,
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -747,6 +753,7 @@ fn run_search(
                 metrics,
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,

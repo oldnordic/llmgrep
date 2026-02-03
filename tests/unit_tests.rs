@@ -2,6 +2,7 @@ use llmgrep::query::{
     search_symbols, AstOptions, ContextOptions, DepthOptions, FqnOptions, MetricsOptions,
     SearchOptions, SnippetOptions,
 };
+use llmgrep::AlgorithmOptions;
 /// Unit tests for v1.1 features - internal logic testing
 ///
 /// Tests for:
@@ -238,6 +239,7 @@ fn test_api_metrics_filtering() {
         },
         ast: AstOptions::default(),
         depth: DepthOptions::default(),
+        algorithm: AlgorithmOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -287,6 +289,7 @@ fn test_api_metrics_sorting() {
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
         depth: DepthOptions::default(),
+        algorithm: AlgorithmOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -335,6 +338,7 @@ fn test_api_fqn_field_population() {
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
         depth: DepthOptions::default(),
+        algorithm: AlgorithmOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -394,6 +398,7 @@ fn test_api_language_filtering() {
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
         depth: DepthOptions::default(),
+        algorithm: AlgorithmOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -445,6 +450,7 @@ fn test_api_position_mode_sorting() {
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
         depth: DepthOptions::default(),
+        algorithm: AlgorithmOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -515,6 +521,7 @@ fn test_api_symbol_id_lookup() {
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
         depth: DepthOptions::default(),
+        algorithm: AlgorithmOptions::default(),
         symbol_id: Some(known_symbol_id),
         fqn_pattern: None,
         exact_fqn: None,
@@ -612,6 +619,7 @@ fn test_api_fqn_pattern_filtering() {
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
         depth: DepthOptions::default(),
+        algorithm: AlgorithmOptions::default(),
         symbol_id: None,
         fqn_pattern: Some("%module_a%"), // LIKE pattern
         exact_fqn: None,

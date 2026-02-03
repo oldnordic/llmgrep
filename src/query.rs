@@ -2568,7 +2568,7 @@ mod tests {
 
     #[test]
     fn test_build_search_query_with_metrics_join() {
-        let (sql, _) = build_search_query(
+        let (sql, _, _) = build_search_query(
             "test",
             None,
             None,
@@ -2587,6 +2587,7 @@ mod tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
+            None,  // symbol_set_filter
         );
 
         // Should LEFT JOIN symbol_metrics
@@ -2955,6 +2956,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -2991,6 +2993,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3023,6 +3026,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3059,6 +3063,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3092,6 +3097,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3129,6 +3135,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3165,6 +3172,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3202,6 +3210,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3234,6 +3243,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3271,6 +3281,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3325,6 +3336,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3357,6 +3369,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3389,6 +3402,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3440,6 +3454,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3481,6 +3496,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3554,6 +3570,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3593,6 +3610,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3631,6 +3649,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3664,6 +3683,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3702,6 +3722,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3735,6 +3756,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3774,6 +3796,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3813,6 +3836,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3847,6 +3871,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3880,6 +3905,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3916,6 +3942,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -3951,6 +3978,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4097,6 +4125,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4133,6 +4162,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4167,6 +4197,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4202,6 +4233,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4237,6 +4269,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4271,6 +4304,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4306,6 +4340,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4340,6 +4375,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4371,6 +4407,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4406,6 +4443,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4440,6 +4478,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4515,6 +4554,7 @@ mod tests {
             metrics: MetricsOptions::default(),
             ast: AstOptions::default(),
             depth: DepthOptions::default(),
+            algorithm: AlgorithmOptions::default(),
             symbol_id: None,
             fqn_pattern: None,
             exact_fqn: None,
@@ -4823,6 +4863,7 @@ mod tests {
                 },
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4879,6 +4920,7 @@ mod tests {
                 },
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4922,6 +4964,7 @@ mod tests {
                 },
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -4965,6 +5008,7 @@ mod tests {
                 },
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5013,6 +5057,7 @@ mod tests {
                 },
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5056,6 +5101,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5105,6 +5151,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5154,6 +5201,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5203,6 +5251,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5317,6 +5366,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5379,6 +5429,7 @@ mod tests {
                 },
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5421,6 +5472,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: Some("sym1"),
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5460,6 +5512,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: Some("/test/file.rs%"),
                 exact_fqn: None,
@@ -5500,6 +5553,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: Some("/test/file.rs::test_func"),
@@ -5544,6 +5598,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5653,6 +5708,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5758,6 +5814,7 @@ mod tests {
                 metrics: MetricsOptions::default(),
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
                 symbol_id: Some("target_parse"),
                 fqn_pattern: None,
                 exact_fqn: None,
@@ -5834,7 +5891,8 @@ mod tests {
                 None,  // max_depth
                 None,  // inside_kind
                 None,  // contains_kind
-            );
+            None,  // symbol_set_filter
+        );
 
             // Should filter by .rs extension
             assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));
@@ -5846,7 +5904,7 @@ mod tests {
         #[test]
         fn test_build_search_query_with_unknown_language() {
             // Test that unknown language doesn't add filter
-            let (_sql, params) = build_search_query(
+            let (_sql, params, _) = build_search_query(
                 "test",
                 None,
                 None,
@@ -5865,7 +5923,8 @@ mod tests {
                 None,  // max_depth
                 None,  // inside_kind
                 None,  // contains_kind
-            );
+            None,  // symbol_set_filter
+        );
 
             // Should NOT add language filter for unknown language
             // Should have 4 params: 3 LIKE + 1 LIMIT (no extra language param)
@@ -5894,7 +5953,8 @@ mod tests {
                 None,  // max_depth
                 None,  // inside_kind
                 None,  // contains_kind
-            );
+            None,  // symbol_set_filter
+        );
 
             // Should have both path, kind, and language filters
             assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));
@@ -5927,7 +5987,8 @@ mod tests {
                 None,  // max_depth
                 None,  // inside_kind
                 None,  // contains_kind
-            );
+            None,  // symbol_set_filter
+        );
 
             // Should filter by .cpp extension
             assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));

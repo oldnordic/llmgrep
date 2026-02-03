@@ -4,10 +4,10 @@
 
 use llmgrep::ast::{check_ast_table_exists, AstContext, ast_nodes_table_schema};
 use llmgrep::query::{
-use llmgrep::AlgorithmOptions;
     search_symbols, AstOptions, ContextOptions, DepthOptions, FqnOptions, MetricsOptions,
     SearchOptions, SnippetOptions,
 };
+use llmgrep::AlgorithmOptions;
 use rusqlite::{params, Connection};
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -1584,6 +1584,7 @@ fn test_backward_compat_no_depth_filter() {
         metrics: MetricsOptions::default(),
         ast: AstOptions::default(),
         depth: DepthOptions::default(), // No depth filtering
+        algorithm: AlgorithmOptions::default(),
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
