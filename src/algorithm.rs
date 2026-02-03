@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::Path;
 use std::process::Command;
+use rusqlite::Connection;
 
 /// SymbolSet - a collection of SymbolIds for filtering search results.
 ///
@@ -468,6 +469,60 @@ pub fn apply_algorithm_filters(
 
     // No active filters
     Ok(Vec::new())
+}
+
+/// Threshold for using temporary table instead of IN clause
+const SYMBOL_SET_TEMP_TABLE_THRESHOLD: usize = 1000;
+
+/// Create temporary table for large SymbolSet filtering
+///
+/// For SymbolSets larger than SYMBOL_SET_TEMP_TABLE_THRESHOLD,
+/// creates a temp table and returns table name for JOIN.
+pub fn create_symbol_set_temp_table(
+    conn: &Connection,
+    symbol_ids: &[String],
+) -> Result<String, LlmError> {
+    let table_name = format!("symbol_set_filter_{}", std::process::id());
+
+    // Create temporary table
+    conn.execute(
+        &format!("CREATE TEMP TABLE {} (symbol_id TEXT PRIMARY KEY)", table_name),
+        [],
+    )
+    .map_err(|e| LlmError::SqliteError(e))?;
+
+    // Insert all symbol_ids
+    let mut stmt = conn
+        .prepare(&format!("INSERT INTO {} (symbol_id) VALUES (?)", table_name))
+        .map_err(|e| LlmError::SqliteError(e))?;
+
+    for symbol_id in symbol_ids {
+        stmt.execute([symbol_id]).map_err(|e| LlmError::SqliteError(e))?;
+    }
+
+    Ok(table_name)
+}
+
+/// Get the appropriate filtering strategy for a SymbolSet
+pub fn symbol_set_filter_strategy(symbol_ids: &[String]) -> SymbolSetStrategy {
+    if symbol_ids.is_empty() {
+        SymbolSetStrategy::None
+    } else if symbol_ids.len() > SYMBOL_SET_TEMP_TABLE_THRESHOLD {
+        SymbolSetStrategy::TempTable
+    } else {
+        SymbolSetStrategy::InClause
+    }
+}
+
+/// Strategy for filtering by SymbolSet
+#[derive(Debug, Clone, PartialEq)]
+pub enum SymbolSetStrategy {
+    /// No filtering needed
+    None,
+    /// Use SQL IN clause (for <= 1000 items)
+    InClause,
+    /// Use temporary table with JOIN (for > 1000 items)
+    TempTable,
 }
 
 /// Resolve a simple symbol name to its SymbolId using `magellan find`.
