@@ -363,6 +363,40 @@ pub fn parse_symbol_set_file(path: &Path) -> Result<SymbolSet, LlmError> {
     Ok(symbol_set)
 }
 
+/// Algorithm-based filtering options for search
+#[derive(Debug, Clone, Default)]
+pub struct AlgorithmOptions<'a> {
+    /// Load pre-computed SymbolSet from JSON file
+    pub from_symbol_set: Option<&'a str>,
+    /// One-shot: reachable from symbol (shell-out to magellan reachable)
+    pub reachable_from: Option<&'a str>,
+    /// One-shot: dead code from entry point (shell-out to magellan dead-code)
+    pub dead_code_in: Option<&'a str>,
+    /// One-shot: symbols in cycle (shell-out to magellan cycles)
+    pub in_cycle: Option<&'a str>,
+    /// One-shot: backward slice from target (shell-out to magellan slice)
+    pub slice_backward_from: Option<&'a str>,
+    /// One-shot: forward slice from target (shell-out to magellan slice)
+    pub slice_forward_from: Option<&'a str>,
+}
+
+impl<'a> AlgorithmOptions<'a> {
+    /// Check if any algorithm filter is active
+    pub fn is_active(&self) -> bool {
+        self.from_symbol_set.is_some()
+            || self.reachable_from.is_some()
+            || self.dead_code_in.is_some()
+            || self.in_cycle.is_some()
+            || self.slice_backward_from.is_some()
+            || self.slice_forward_from.is_some()
+    }
+
+    /// Create empty AlgorithmOptions
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 /// Resolve a simple symbol name to its SymbolId using `magellan find`.
 ///
 /// When users provide a simple name (e.g., "main") instead of a full SymbolId,
