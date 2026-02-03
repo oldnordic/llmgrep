@@ -7,6 +7,10 @@
 //!   - LLM-E101: Regex pattern rejection (ReDoS prevention)
 //!   - LLM-E102: Resource limit exceeded
 //!   - LLM-E103: Path validation failure
+//!   - LLM-E105: Magellan CLI not found
+//!   - LLM-E106: Ambiguous symbol name
+//!   - LLM-E107: Magellan version mismatch
+//!   - LLM-E108: Magellan execution failed
 //! - **LLM-E200 to LLM-E299**: Search execution errors
 //! - **LLM-E300 to LLM-E399**: Path and argument validation errors
 //! - **LLM-E900 to LLM-E999**: Internal and miscellaneous errors
@@ -75,6 +79,22 @@ pub enum LlmError {
     /// Regex compilation error occurred.
     #[error("Regex error: {0}")]
     RegexError(#[from] regex::Error),
+
+    /// Magellan CLI not found in PATH.
+    #[error("magellan CLI not found. Install magellan to use algorithm features.")]
+    MagellanNotFound,
+
+    /// Symbol name is ambiguous (multiple matches).
+    #[error("Ambiguous symbol name '{name}': {count} matches. Use --symbol-id with full SymbolId.")]
+    AmbiguousSymbolName { name: String, count: usize },
+
+    /// Magellan version is incompatible.
+    #[error("Magellan version {current} is incompatible. Required: {required}")]
+    MagellanVersionMismatch { current: String, required: String },
+
+    /// Magellan algorithm execution failed.
+    #[error("Magellan {algorithm} execution failed: {stderr}")]
+    MagellanExecutionFailed { algorithm: String, stderr: String },
 }
 
 impl LlmError {
@@ -95,6 +115,10 @@ impl LlmError {
             LlmError::SqliteError(_) => "LLM-E902",
             LlmError::JsonError(_) => "LLM-E903",
             LlmError::RegexError(_) => "LLM-E904",
+            LlmError::MagellanNotFound => "LLM-E105",
+            LlmError::AmbiguousSymbolName { .. } => "LLM-E106",
+            LlmError::MagellanVersionMismatch { .. } => "LLM-E107",
+            LlmError::MagellanExecutionFailed { .. } => "LLM-E108",
         }
     }
 
@@ -146,6 +170,18 @@ impl LlmError {
             }
             LlmError::PathValidationFailed { .. } => {
                 Some("Check that the path exists and is within the allowed directory structure")
+            }
+            LlmError::MagellanNotFound => {
+                Some("Install magellan: cargo install magellan-cli")
+            }
+            LlmError::AmbiguousSymbolName { .. } => {
+                Some("Use --symbol-id with full 32-character SymbolId for unambiguous reference.")
+            }
+            LlmError::MagellanVersionMismatch { .. } => {
+                Some("Update magellan: cargo install magellan-cli --force")
+            }
+            LlmError::MagellanExecutionFailed { .. } => {
+                Some("Check magellan --version and database compatibility.")
             }
         }
     }
