@@ -1,3 +1,4 @@
+pub mod algorithm;
 pub mod ast;
 pub mod error;
 pub mod output;
@@ -7,6 +8,9 @@ pub mod safe_extraction;
 
 // Re-export safe extraction functions for testing and external use
 pub use safe_extraction::*;
+
+// Re-export algorithm types for external use
+pub use algorithm::{SymbolSet, parse_symbol_set_file, resolve_fqn_to_symbol_id};
 
 // Re-export AST types for external use
 pub use ast::{
