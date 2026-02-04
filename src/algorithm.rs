@@ -140,6 +140,147 @@ impl SymbolSet {
     }
 }
 
+/// Check if Magellan CLI is available and at the correct version.
+///
+/// This function implements the fail-fast approach: check availability
+/// before attempting any algorithm shell-out. Returns Ok(()) if Magellan
+/// is available and version is acceptable, otherwise returns an error
+/// with helpful installation instructions.
+///
+/// # Errors
+///
+/// Returns `LlmError::MagellanNotFound` if magellan CLI is not in PATH.
+/// Returns `LlmError::MagellanVersionMismatch` if version is less than 2.1.0.
+///
+/// # Example
+///
+/// ```no_run
+/// use llmgrep::algorithm::check_magellan_available;
+///
+/// check_magellan_available()?;
+/// # Ok::<(), llmgrep::error::LlmError>(())
+/// ```
+pub fn check_magellan_available() -> Result<(), LlmError> {
+    check_magellan_version()
+}
+
+/// Check Magellan version is 2.1.0 or higher.
+///
+/// Parses `magellan --version` output and enforces minimum version.
+/// Magellan output format: "magellan VERSION (DATE) rustc RUSTC_VERSION"
+fn check_magellan_version() -> Result<(), LlmError> {
+    use std::thread;
+    use std::time::Duration;
+
+    let child = Command::new("magellan")
+        .arg("--version")
+        .spawn();
+
+    let output = match child {
+        Ok(mut child) => {
+            let timeout = Duration::from_secs(5);
+            let start = std::time::Instant::now();
+
+            loop {
+                if let Ok(status) = child.try_wait() {
+                    match status {
+                        Some(status) => {
+                            // Process has exited, get output
+                            break child.wait_with_output();
+                        }
+                        None => {
+                            // Still running, check timeout
+                            if start.elapsed() >= timeout {
+                                child.kill().ok();
+                                return Err(LlmError::MagellanExecutionFailed {
+                                    algorithm: "version check".to_string(),
+                                    stderr: "Version check timed out after 5 seconds".to_string(),
+                                });
+                            }
+                            thread::sleep(Duration::from_millis(100));
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => return Err(match e.kind() {
+            std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
+            _ => LlmError::MagellanExecutionFailed {
+                algorithm: "version check".to_string(),
+                stderr: e.to_string(),
+            },
+        }),
+    };
+
+    let output = output.map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
+        _ => LlmError::MagellanExecutionFailed {
+            algorithm: "version check".to_string(),
+            stderr: e.to_string(),
+        },
+    })?;
+
+    if !output.status.success() {
+        return Err(LlmError::MagellanExecutionFailed {
+            algorithm: "version check".to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        });
+    }
+
+    // Parse version from output: "magellan 2.1.0 (2024-01-15) rustc 1.75.0"
+    let version_str = String::from_utf8_lossy(&output.stdout);
+    let version = parse_magellan_version(&version_str)?;
+
+    // Require 2.1.0 or higher
+    if version < (2, 1, 0) {
+        return Err(LlmError::MagellanVersionMismatch {
+            current: format!("{}.{}.{}", version.0, version.1, version.2),
+            required: "2.1.0".to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Parse Magellan version string into (major, minor, patch) tuple.
+///
+/// Expected format: "magellan X.Y.Z (DATE) rustc VERSION"
+fn parse_magellan_version(output: &str) -> Result<(u32, u32, u32), LlmError> {
+    // Extract the version number after "magellan"
+    let first_line = output.lines().next().unwrap_or("");
+    let version_part = first_line
+        .strip_prefix("magellan")
+        .unwrap_or("")
+        .trim()
+        .split_whitespace()
+        .next()
+        .unwrap_or("");
+
+    // Parse X.Y.Z format
+    let parts: Vec<&str> = version_part.split('.').collect();
+    if parts.len() != 3 {
+        return Err(LlmError::MagellanExecutionFailed {
+            algorithm: "version parsing".to_string(),
+            stderr: format!("Unable to parse version from: {}", first_line),
+        });
+    }
+
+    let major: u32 = parts[0].parse().map_err(|_| LlmError::MagellanExecutionFailed {
+        algorithm: "version parsing".to_string(),
+        stderr: format!("Invalid major version: {}", parts[0]),
+    })?;
+    let minor: u32 = parts[1].parse().map_err(|_| LlmError::MagellanExecutionFailed {
+        algorithm: "version parsing".to_string(),
+        stderr: format!("Invalid minor version: {}", parts[1]),
+    })?;
+    let patch: u32 = parts[2].parse().map_err(|_| LlmError::MagellanExecutionFailed {
+        algorithm: "version parsing".to_string(),
+        stderr: format!("Invalid patch version: {}", parts[2]),
+    })?;
+
+    Ok((major, minor, patch))
+}
+
 /// Run a Magellan algorithm and extract SymbolIds from its JSON output.
 ///
 /// This function shells out to the Magellan CLI, executes the specified algorithm,
