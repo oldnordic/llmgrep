@@ -106,6 +106,9 @@ pub struct SymbolMatch {
     // AST fields (from ast_nodes table)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ast_context: Option<AstContext>,
+    // Condense fields (SCC membership from magellan condense)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supernode_id: Option<String>,
 }
 
 #[derive(Serialize)]
