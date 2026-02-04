@@ -342,7 +342,7 @@ pub fn search_chunks_by_span(
     }
 }
 
-pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), LlmError> {
+pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool, bool), LlmError> {
     let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
     {
         Ok(conn) => conn,
@@ -385,10 +385,10 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
     })?;
 
     // Apply algorithm filters (pre-computed or one-shot execution)
-    let (algorithm_symbol_ids, supernode_map) = if options.algorithm.is_active() {
+    let (algorithm_symbol_ids, supernode_map, paths_bounded) = if options.algorithm.is_active() {
         apply_algorithm_filters(options.db_path, &options.algorithm)?
     } else {
-        (Vec::new(), HashMap::new())
+        (Vec::new(), HashMap::new(), false)
     };
 
     // Convert to Option<&Vec<String>> for existing code
@@ -958,6 +958,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             notice: None,
         },
         partial,
+        paths_bounded,
     ))
 }
 
