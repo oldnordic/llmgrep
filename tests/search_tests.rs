@@ -724,7 +724,7 @@ fn test_combined_response_counts_match() {
 
     insert_call(&conn, "src/lib.rs", "caller_fn", "callee_fn", (3, 12));
 
-    let (symbols, _) = {
+    let (symbols, _, _) = {
         let options = SearchOptions {
             db_path: &db_path,
             query: "target",

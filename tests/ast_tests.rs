@@ -210,7 +210,7 @@ fn test_ast_kind_filter() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
     // Debug: print results
     for result in &response.results {
         eprintln!("Result: {} -> ast_context: {:?}", result.name, result.ast_context.as_ref().map(|c| &c.kind));
@@ -299,7 +299,7 @@ fn test_backward_compat_no_ast_table() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
     assert_eq!(response.results.len(), 1);
     assert_eq!(response.results[0].name, "my_function");
     // ast_context should be None when table doesn't exist
@@ -347,7 +347,7 @@ fn test_ast_context_population() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
     assert_eq!(response.results.len(), 1);
 
     let ast_ctx = response.results[0]
@@ -408,7 +408,7 @@ fn test_multiple_ast_kinds() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
     assert_eq!(
         response.results.len(),
         0,
@@ -443,7 +443,7 @@ fn test_multiple_ast_kinds() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
     assert_eq!(
         response.results.len(),
         2,
@@ -669,7 +669,7 @@ fn test_with_ast_context_flag() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
     assert_eq!(response.results.len(), 1, "Should find the function");
 
     let ast_ctx = response.results[0]
@@ -771,7 +771,7 @@ fn test_ast_context_without_flag() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
     assert_eq!(response.results.len(), 1, "Should find the function");
 
     let ast_ctx = response.results[0]
@@ -870,7 +870,7 @@ fn test_sort_by_ast_complexity() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
     assert_eq!(response.results.len(), 2, "Should find both functions");
 
     // Should be sorted by complexity descending (complex_func first)
@@ -968,7 +968,7 @@ fn test_min_depth_filter() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
 
     // Should find symbols at depth >= 2
     // symbol_103 (loop inside if) = depth 2
@@ -1041,7 +1041,7 @@ fn test_max_depth_filter() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
 
     // Should find test_func_depth0 (depth 0) and test_if_depth1 (depth 1)
     // But NOT test_loop_depth2 (depth 2)
@@ -1120,7 +1120,7 @@ fn test_min_max_depth_range() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
 
     // Should find depth1 (depth 1) and depth2 (depth 2)
     // But NOT depth0 (depth 0) or depth3/depth4 (depth 3+)
@@ -1196,7 +1196,7 @@ fn test_inside_function_item() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
 
     // Should find closure_inside_func (inside function with id 100)
     // And closure_other (inside function with id 104)
@@ -1273,7 +1273,7 @@ fn test_inside_block() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
 
     // Should find let_in_block (inside block)
     // Should NOT find let_at_func_level (direct child of function, not block)
@@ -1353,7 +1353,7 @@ fn test_contains_if_expression() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
 
     // Should find func_with_if and func_with_multiple_ifs
     // Should NOT find func_plain (no if_expression children)
@@ -1435,7 +1435,7 @@ fn test_contains_multiple_children() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
 
     // Should find func_many_calls and func_one_call
     // Should NOT find func_no_calls
@@ -1525,7 +1525,7 @@ fn test_combined_depth_and_inside() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
 
     // Should find:
     // - closure_103 (depth 1, inside block inside func_outer)
@@ -1591,7 +1591,7 @@ fn test_backward_compat_no_depth_filter() {
         language_filter: None,
     };
 
-    let (response, _partial) = search_symbols(options).expect("search should succeed");
+    let (response, _partial, _) = search_symbols(options).expect("search should succeed");
 
     assert_eq!(response.results.len(), 1);
     assert_eq!(response.results[0].name, "my_function");
