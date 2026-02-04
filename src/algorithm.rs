@@ -688,25 +688,8 @@ pub enum SymbolSetStrategy {
 /// # Ok::<(), llmgrep::error::LlmError>(())
 /// ```
 pub fn resolve_fqn_to_symbol_id(db_path: &Path, name: &str) -> Result<String, LlmError> {
-    // Check if magellan is available
-    let check_result = Command::new("magellan")
-        .arg("--version")
-        .output();
-
-    match check_result {
-        Ok(output) if output.status.success() => {
-            // Magellan is available, continue
-        }
-        Ok(_) => {
-            return Err(LlmError::MagellanExecutionFailed {
-                algorithm: "version check".to_string(),
-                stderr: "magellan --version returned non-zero exit code".to_string(),
-            });
-        }
-        Err(_) => {
-            return Err(LlmError::MagellanNotFound);
-        }
-    }
+    // Check Magellan availability and version
+    check_magellan_available()?;
 
     // Run magellan find
     let output = Command::new("magellan")
