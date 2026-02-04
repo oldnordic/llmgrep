@@ -454,6 +454,101 @@ fn extract_symbol_ids_from_magellan_json(
     Ok(SymbolSet { symbol_ids })
 }
 
+/// Parse magellan condense output and extract SCC membership.
+///
+/// This function parses the JSON output from `magellan condense` and extracts:
+/// - All symbol_ids from SCC members
+/// - A mapping of symbol_id -> supernode_id for output decoration
+///
+/// # Condense JSON Structure
+///
+/// ```json
+/// {
+///   "supernodes": [
+///     {
+///       "id": "supernode_0",
+///       "members": [
+///         {"symbol_id": "abc123def456789012345678901234ab"},
+///         {"symbol_id": "def456789012345678901234abcd1234"}
+///       ]
+///     },
+///     ...
+///   ]
+/// }
+/// ```
+///
+/// # Arguments
+///
+/// * `json` - The raw JSON string from Magellan's stdout
+///
+/// # Returns
+///
+/// A tuple of:
+/// - Vec<String> of all symbol_ids from all SCC members
+/// - HashMap<String, String> mapping symbol_id -> supernode_id
+///
+/// # Errors
+///
+/// Returns `LlmError::MagellanExecutionFailed` (LLM-E002) if JSON structure is invalid.
+/// Returns empty Vec/HashMap if supernodes array is empty (not an error).
+///
+/// # Example
+///
+/// ```no_run
+/// use llmgrep::algorithm::parse_condense_output;
+///
+/// let json = r#"{"supernodes": [{"id": "supernode_0", "members": [{"symbol_id": "abc123..."}]}]}"#;
+/// let (symbol_ids, supernode_map) = parse_condense_output(json)?;
+/// # Ok::<(), llmgrep::error::LlmError>(())
+/// ```
+pub fn parse_condense_output(json: &str) -> Result<(Vec<String>, std::collections::HashMap<String, String>), LlmError> {
+    use std::collections::HashMap;
+
+    let parsed: Value = serde_json::from_str(json).map_err(LlmError::JsonError)?;
+
+    // Extract supernodes array
+    let supernodes = parsed["supernodes"]
+        .as_array()
+        .ok_or_else(|| LlmError::MagellanExecutionFailed {
+            algorithm: "condense".to_string(),
+            stderr: "Missing 'supernodes' array in condense output".to_string(),
+        })?;
+
+    let mut all_symbol_ids = Vec::new();
+    let mut supernode_map = HashMap::new();
+
+    // Extract members from each supernode
+    for supernode in supernodes {
+        let supernode_id = supernode["id"]
+            .as_str()
+            .ok_or_else(|| LlmError::MagellanExecutionFailed {
+                algorithm: "condense".to_string(),
+                stderr: "Supernode missing 'id' field".to_string(),
+            })?;
+
+        let members = supernode["members"]
+            .as_array()
+            .ok_or_else(|| LlmError::MagellanExecutionFailed {
+                algorithm: "condense".to_string(),
+                stderr: "Supernode missing 'members' array".to_string(),
+            })?;
+
+        for member in members {
+            let symbol_id = member["symbol_id"]
+                .as_str()
+                .ok_or_else(|| LlmError::MagellanExecutionFailed {
+                    algorithm: "condense".to_string(),
+                    stderr: "Member missing 'symbol_id' field".to_string(),
+                })?;
+
+            all_symbol_ids.push(symbol_id.to_string());
+            supernode_map.insert(symbol_id.to_string(), supernode_id.to_string());
+        }
+    }
+
+    Ok((all_symbol_ids, supernode_map))
+}
+
 /// Parse a SymbolSet from a JSON file and validate its format.
 ///
 /// This is a convenience function that combines `SymbolSet::from_file`
