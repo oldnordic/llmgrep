@@ -535,7 +535,7 @@ fn run_search(
         );
     }
 
-    if query.trim().is_empty() && symbol_id.is_none() && !condense {
+    if query.trim().is_empty() && symbol_id.is_none() && !condense && paths_from.is_none() {
         return Err(LlmError::EmptyQuery);
     }
 
