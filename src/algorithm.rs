@@ -693,6 +693,10 @@ pub struct AlgorithmOptions<'a> {
     pub slice_forward_from: Option<&'a str>,
     /// One-shot: condense SCC detection (shell-out to magellan condense)
     pub condense: bool,
+    /// One-shot: paths from start symbol (shell-out to magellan paths)
+    pub paths_from: Option<&'a str>,
+    /// Optional end symbol for path enumeration (shell-out to magellan paths --end)
+    pub paths_to: Option<&'a str>,
 }
 
 impl<'a> AlgorithmOptions<'a> {
@@ -705,6 +709,7 @@ impl<'a> AlgorithmOptions<'a> {
             || self.slice_backward_from.is_some()
             || self.slice_forward_from.is_some()
             || self.condense
+            || self.paths_from.is_some()
     }
 
     /// Create empty AlgorithmOptions
@@ -742,6 +747,7 @@ pub fn apply_algorithm_filters(
         options.slice_backward_from.is_some(),
         options.slice_forward_from.is_some(),
         options.condense,
+        options.paths_from.is_some(),
     ]
     .iter()
     .filter(|&&x| x)
