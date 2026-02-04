@@ -14,6 +14,7 @@
 use crate::error::LlmError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 use rusqlite::Connection;
@@ -627,16 +628,17 @@ impl<'a> AlgorithmOptions<'a> {
 /// - One-shot algorithm execution (--reachable-from, --dead-code-in, etc.)
 /// - FQN resolution for simple names (resolves to SymbolId before shelling out)
 ///
-/// Returns: Vec<String> of SymbolIds (empty if no active filters)
+/// Returns: (Vec<String> of SymbolIds, HashMap<String, String> of symbol_id -> supernode_id)
+///         Both empty if no active filters
 pub fn apply_algorithm_filters(
     db_path: &Path,
     options: &AlgorithmOptions<'_>,
-) -> Result<Vec<String>, LlmError> {
+) -> Result<(Vec<String>, HashMap<String, String>), LlmError> {
     // Priority 1: Pre-computed SymbolSet from file
     if let Some(file_path) = options.from_symbol_set {
         let symbol_set = parse_symbol_set_file(Path::new(file_path))?;
         symbol_set.validate()?;
-        return Ok(symbol_set.symbol_ids);
+        return Ok((symbol_set.symbol_ids, HashMap::new()));
     }
 
     // Priority 2: One-shot algorithm execution (only one allowed)
@@ -647,6 +649,7 @@ pub fn apply_algorithm_filters(
         options.in_cycle.is_some(),
         options.slice_backward_from.is_some(),
         options.slice_forward_from.is_some(),
+        options.condense,
     ]
     .iter()
     .filter(|&&x| x)
@@ -662,35 +665,65 @@ pub fn apply_algorithm_filters(
     if let Some(symbol) = options.reachable_from {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--from", &symbol_id];
-        return Ok(run_magellan_algorithm(db_path, "reachable", &args)?.symbol_ids);
+        return Ok((run_magellan_algorithm(db_path, "reachable", &args)?.symbol_ids, HashMap::new()));
     }
 
     if let Some(symbol) = options.dead_code_in {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--entry", &symbol_id];
-        return Ok(run_magellan_algorithm(db_path, "dead-code", &args)?.symbol_ids);
+        return Ok((run_magellan_algorithm(db_path, "dead-code", &args)?.symbol_ids, HashMap::new()));
     }
 
     if let Some(symbol) = options.in_cycle {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--symbol", &symbol_id];
-        return Ok(run_magellan_algorithm(db_path, "cycles", &args)?.symbol_ids);
+        return Ok((run_magellan_algorithm(db_path, "cycles", &args)?.symbol_ids, HashMap::new()));
     }
 
     if let Some(symbol) = options.slice_backward_from {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--target", &symbol_id, "--direction", "backward"];
-        return Ok(run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids);
+        return Ok((run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids, HashMap::new()));
     }
 
     if let Some(symbol) = options.slice_forward_from {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--target", &symbol_id, "--direction", "forward"];
-        return Ok(run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids);
+        return Ok((run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids, HashMap::new()));
+    }
+
+    // Condense SCC detection
+    if options.condense {
+        let output = Command::new("magellan")
+            .args(["condense", "--db", &db_path.to_string_lossy(), "--output", "json"])
+            .output()
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
+                _ => LlmError::MagellanExecutionFailed {
+                    algorithm: "condense".to_string(),
+                    stderr: format!("{}\n\nTry running: magellan condense --db {} for more details",
+                        e, db_path.to_string_lossy()),
+                },
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(LlmError::MagellanExecutionFailed {
+                algorithm: "condense".to_string(),
+                stderr: format!("{}\n\nTry running: magellan condense --db {} for more details",
+                    stderr, db_path.to_string_lossy()),
+            });
+        }
+
+        let json = String::from_utf8_lossy(&output.stdout);
+        let (symbol_ids, supernode_map) = parse_condense_output(&json)?;
+
+        // Return both symbol_ids for filtering and supernode_map for output decoration
+        return Ok((symbol_ids, supernode_map));
     }
 
     // No active filters
-    Ok(Vec::new())
+    Ok((Vec::new(), HashMap::new()))
 }
 
 /// Threshold for using temporary table instead of IN clause
