@@ -561,6 +561,87 @@ pub fn parse_condense_output(json: &str) -> Result<(Vec<String>, std::collection
     Ok((all_symbol_ids, supernode_map))
 }
 
+/// Parse magellan paths output and extract execution path symbols.
+///
+/// This function parses the JSON output from `magellan paths` command and extracts
+/// all unique SymbolIds from the returned execution paths. The paths command
+/// enumerates all possible execution paths between symbols using bounded depth-first
+/// search.
+///
+/// # Arguments
+///
+/// * `json` - The raw JSON string from Magellan's stdout
+///
+/// # Returns
+///
+/// A tuple of:
+/// - Vec<String> of all unique symbol_ids from all paths
+/// - bool indicating if bounded enumeration hit limits (bounded_hit)
+///
+/// # Errors
+///
+/// Returns `LlmError::MagellanExecutionFailed` (LLM-E002) if JSON structure is invalid.
+/// Returns empty Vec and bounded_flag=false if paths array is empty (not an error).
+///
+/// # Example
+///
+/// ```no_run
+/// use llmgrep::algorithm::parse_paths_output;
+///
+/// let json = r#"{"paths": [{"symbols": [{"symbol_id": "abc123..."}], "length": 1}], "bounded_hit": false}"#;
+/// let (symbol_ids, bounded_hit) = parse_paths_output(json)?;
+/// # Ok::<(), llmgrep::error::LlmError>(())
+/// ```
+pub fn parse_paths_output(json: &str) -> Result<(Vec<String>, bool), LlmError> {
+    use std::collections::HashSet;
+
+    let parsed: Value = serde_json::from_str(json).map_err(LlmError::JsonError)?;
+
+    // Handle magellan wrapper structure: {"data": {"paths": [...]}}
+    // Fall back to direct structure for backward compatibility
+    let paths = if parsed["data"]["paths"].is_array() {
+        parsed["data"]["paths"].as_array()
+    } else {
+        parsed["paths"].as_array()
+    }
+    .ok_or_else(|| LlmError::MagellanExecutionFailed {
+        algorithm: "paths".to_string(),
+        stderr: "Missing 'paths' array in output".to_string(),
+    })?;
+
+    let mut all_symbol_ids = HashSet::new();
+
+    // Extract symbol_ids from all paths
+    for path in paths {
+        let symbols = path["symbols"]
+            .as_array()
+            .ok_or_else(|| LlmError::MagellanExecutionFailed {
+                algorithm: "paths".to_string(),
+                stderr: "Path missing 'symbols' array".to_string(),
+            })?;
+
+        for symbol in symbols {
+            let symbol_id = symbol["symbol_id"]
+                .as_str()
+                .ok_or_else(|| LlmError::MagellanExecutionFailed {
+                    algorithm: "paths".to_string(),
+                    stderr: "Symbol missing 'symbol_id' field".to_string(),
+                })?;
+
+            all_symbol_ids.insert(symbol_id.to_string());
+        }
+    }
+
+    // Extract bounded_hit flag from JSON (indicates if max-depth or max-paths was hit)
+    let bounded_hit = parsed["bounded_hit"]
+        .as_bool()
+        .or_else(|| parsed["data"]["bounded_hit"].as_bool())
+        .unwrap_or(false);
+
+    // Convert HashSet to Vec for return
+    Ok((all_symbol_ids.into_iter().collect(), bounded_hit))
+}
+
 /// Parse a SymbolSet from a JSON file and validate its format.
 ///
 /// This is a convenience function that combines `SymbolSet::from_file`
