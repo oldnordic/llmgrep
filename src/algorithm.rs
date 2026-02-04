@@ -725,17 +725,17 @@ impl<'a> AlgorithmOptions<'a> {
 /// - One-shot algorithm execution (--reachable-from, --dead-code-in, etc.)
 /// - FQN resolution for simple names (resolves to SymbolId before shelling out)
 ///
-/// Returns: (Vec<String> of SymbolIds, HashMap<String, String> of symbol_id -> supernode_id)
-///         Both empty if no active filters
+/// Returns: (Vec<String> of SymbolIds, HashMap<String, String> of symbol_id -> supernode_id, bool paths_bounded)
+///         All empty if no active filters
 pub fn apply_algorithm_filters(
     db_path: &Path,
     options: &AlgorithmOptions<'_>,
-) -> Result<(Vec<String>, HashMap<String, String>), LlmError> {
+) -> Result<(Vec<String>, HashMap<String, String>, bool), LlmError> {
     // Priority 1: Pre-computed SymbolSet from file
     if let Some(file_path) = options.from_symbol_set {
         let symbol_set = parse_symbol_set_file(Path::new(file_path))?;
         symbol_set.validate()?;
-        return Ok((symbol_set.symbol_ids, HashMap::new()));
+        return Ok((symbol_set.symbol_ids, HashMap::new(), false));
     }
 
     // Priority 2: One-shot algorithm execution (only one allowed)
@@ -763,31 +763,31 @@ pub fn apply_algorithm_filters(
     if let Some(symbol) = options.reachable_from {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--from", &symbol_id];
-        return Ok((run_magellan_algorithm(db_path, "reachable", &args)?.symbol_ids, HashMap::new()));
+        return Ok((run_magellan_algorithm(db_path, "reachable", &args)?.symbol_ids, HashMap::new(), false));
     }
 
     if let Some(symbol) = options.dead_code_in {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--entry", &symbol_id];
-        return Ok((run_magellan_algorithm(db_path, "dead-code", &args)?.symbol_ids, HashMap::new()));
+        return Ok((run_magellan_algorithm(db_path, "dead-code", &args)?.symbol_ids, HashMap::new(), false));
     }
 
     if let Some(symbol) = options.in_cycle {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--symbol", &symbol_id];
-        return Ok((run_magellan_algorithm(db_path, "cycles", &args)?.symbol_ids, HashMap::new()));
+        return Ok((run_magellan_algorithm(db_path, "cycles", &args)?.symbol_ids, HashMap::new(), false));
     }
 
     if let Some(symbol) = options.slice_backward_from {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--target", &symbol_id, "--direction", "backward"];
-        return Ok((run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids, HashMap::new()));
+        return Ok((run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids, HashMap::new(), false));
     }
 
     if let Some(symbol) = options.slice_forward_from {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--target", &symbol_id, "--direction", "forward"];
-        return Ok((run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids, HashMap::new()));
+        return Ok((run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids, HashMap::new(), false));
     }
 
     // Condense SCC detection
@@ -817,7 +817,8 @@ pub fn apply_algorithm_filters(
         let (symbol_ids, supernode_map) = parse_condense_output(&json)?;
 
         // Return both symbol_ids for filtering and supernode_map for output decoration
-        return Ok((symbol_ids, supernode_map));
+        // Condense doesn't have bounded_hit (always false)
+        return Ok((symbol_ids, supernode_map, false));
     }
 
     // Path enumeration
@@ -872,15 +873,13 @@ pub fn apply_algorithm_filters(
         let json = String::from_utf8_lossy(&output.stdout);
         let (symbol_ids, bounded_hit) = parse_paths_output(&json)?;
 
-        // bounded_hit is returned but not used here - will be handled in main.rs for warning
-        let _ = bounded_hit; // Suppress unused warning for now (used in 14-03)
-
+        // bounded_hit is propagated to main.rs for warning display
         // No decoration map needed for paths (unlike condense)
-        return Ok((symbol_ids, HashMap::new()));
+        return Ok((symbol_ids, HashMap::new(), bounded_hit));
     }
 
     // No active filters
-    Ok((Vec::new(), HashMap::new()))
+    Ok((Vec::new(), HashMap::new(), false))
 }
 
 /// Threshold for using temporary table instead of IN clause
