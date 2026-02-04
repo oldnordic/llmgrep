@@ -297,6 +297,27 @@ llmgrep --db code.db search --query "parse" --slice-backward-from handle_error
 llmgrep --db code.db search --query "validate" --slice-forward-from load_config
 ```
 
+### Path Enumeration (v2.1)
+
+Find symbols on execution paths using `--paths-from` (start symbol) and optional `--paths-to` (end symbol):
+
+```bash
+# Find all symbols reachable from main via execution paths
+llmgrep --db code.db search --paths-from main --query ".*"
+
+# Find symbols on paths from parse to execute
+llmgrep --db code.db search --paths-from parse --paths-to execute --output json
+
+# Combine with other filters
+llmgrep --db code.db search --paths-from main --kind Function --min-complexity 10
+```
+
+**Notes:**
+- Path enumeration uses bounded DFS (max-depth=100, max-paths=1000) to prevent explosion
+- A warning is shown if bounds are hit (results may be incomplete)
+- Empty paths (no path between symbols) returns empty results with info message
+- Use `magellan paths` directly for advanced bounds configuration
+
 ### Composed Workflow
 
 ```bash
