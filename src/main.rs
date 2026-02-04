@@ -167,6 +167,24 @@ enum Command {
         #[arg(long, value_name = "SYMBOL")]
         paths_to: Option<String>,
     },
+
+    #[command(after_help = AST_EXAMPLES)]
+    Ast {
+        #[arg(long)]
+        file: PathBuf,
+
+        #[arg(long)]
+        position: Option<usize>,
+
+        #[arg(long, default_value_t = 10000, value_parser = ranged_usize(1, 100000))]
+        limit: usize,
+    },
+
+    #[command(after_help = FIND_AST_EXAMPLES)]
+    FindAst {
+        #[arg(long)]
+        kind: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -289,6 +307,38 @@ V2.1 PATHS FEATURES:
   llmgrep --db code.db search --paths-from main --kind Function --output json
 "#;
 
+const AST_EXAMPLES: &str = r#"
+EXAMPLES:
+  # Get full AST tree for a file
+  llmgrep --db code.db ast --file src/main.rs
+
+  # Get AST node at specific byte offset
+  llmgrep --db code.db ast --file src/main.rs --position 3000
+
+  # Limit output for large files
+  llmgrep --db code.db ast --file src/lib.rs --limit 100
+
+  # Pretty-print AST structure
+  llmgrep --db code.db ast --file src/main.rs --output pretty
+"#;
+
+const FIND_AST_EXAMPLES: &str = r#"
+EXAMPLES:
+  # Find all function definitions
+  llmgrep --db code.db find-ast --kind function_item
+
+  # Find all if expressions
+  llmgrep --db code.db find-ast --kind if_expression
+
+  # Find all loops as pretty JSON
+  llmgrep --db code.db find-ast --kind for_expression --output pretty
+
+  # Common node kinds:
+    function_item, struct_item, enum_item, impl_item
+    if_expression, while_expression, for_expression, match_expression
+    block, call_expression, let_declaration
+"#;
+
 fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
     // Canonicalize the path to resolve symlinks and .. components
     let canonical = path
@@ -352,6 +402,14 @@ fn main() {
 
 fn dispatch(cli: &Cli) -> Result<(), LlmError> {
     match &cli.command {
+        Command::Ast {
+            file,
+            position,
+            limit,
+        } => run_ast(cli, file, *position, *limit),
+
+        Command::FindAst { kind } => run_find_ast(cli, kind),
+
         Command::Search {
             query,
             mode,
@@ -895,6 +953,198 @@ fn run_search(
     Ok(())
 }
 
+fn run_ast(
+    cli: &Cli,
+    file: &PathBuf,
+    position: Option<usize>,
+    limit: usize,
+) -> Result<(), LlmError> {
+    use std::process::Command;
+
+    // Validate database path
+    let db_path = if let Some(db_path) = &cli.db {
+        validate_path(db_path, true)?
+    } else {
+        return Err(LlmError::DatabaseNotFound {
+            path: "none".to_string(),
+        });
+    };
+
+    // Validate file path
+    let validated_file = validate_path(file, false)?;
+
+    // Check if file exists (magellan will fail if it doesn't, but we give better error)
+    if !validated_file.exists() {
+        return Err(LlmError::PathValidationFailed {
+            path: file.display().to_string(),
+            reason: "File does not exist".to_string(),
+        });
+    }
+
+    // Build magellan ast command
+    let mut cmd = Command::new("magellan");
+    cmd.arg("ast")
+        .arg("--db")
+        .arg(&db_path)
+        .arg("--file")
+        .arg(&validated_file)
+        .arg("--output")
+        .arg("json");
+
+    // Add position flag if specified
+    if let Some(pos) = position {
+        cmd.arg("--position").arg(pos.to_string());
+    }
+
+    // Execute command
+    let output = cmd.output().map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
+        _ => LlmError::MagellanExecutionFailed {
+            algorithm: "ast".to_string(),
+            stderr: e.to_string(),
+        },
+    })?;
+
+    // Check for non-zero exit
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(LlmError::MagellanExecutionFailed {
+            algorithm: "ast".to_string(),
+            stderr: stderr.to_string(),
+        });
+    }
+
+    let json_str = String::from_utf8_lossy(&output.stdout);
+
+    // Parse JSON to check for truncation warning
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str) {
+        // Handle truncation warning (file mode only, not position mode)
+        if position.is_none() {
+            if let Some(data) = parsed.get("data") {
+                if let Some(count) = data.get("count").and_then(|c| c.as_u64()) {
+                    if count > limit as u64 {
+                        eprintln!(
+                            "Warning: AST output truncated to {} nodes (total: {})",
+                            limit, count
+                        );
+                        eprintln!(
+                            "         Use --limit {} to see all nodes.",
+                            count
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Render output based on format
+    let rendered = if matches!(cli.output, OutputFormat::Pretty) {
+        // Pretty-print the JSON
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str) {
+            serde_json::to_string_pretty(&parsed)
+        } else {
+            // If parsing fails, just return the raw string
+            Ok(json_str.to_string())
+        }
+    } else {
+        // Raw JSON
+        Ok(json_str.to_string())
+    }?;
+
+    println!("{}", rendered);
+
+    Ok(())
+}
+
+fn run_find_ast(
+    cli: &Cli,
+    kind: &str,
+) -> Result<(), LlmError> {
+    use std::process::Command;
+
+    // Validate database path
+    let db_path = if let Some(db_path) = &cli.db {
+        validate_path(db_path, true)?
+    } else {
+        return Err(LlmError::DatabaseNotFound {
+            path: "none".to_string(),
+        });
+    };
+
+    // Validate kind is not empty
+    if kind.trim().is_empty() {
+        return Err(LlmError::InvalidQuery {
+            query: "--kind cannot be empty".to_string(),
+        });
+    }
+
+    // Build magellan find-ast command
+    let mut cmd = Command::new("magellan");
+    cmd.arg("find-ast")
+        .arg("--db")
+        .arg(&db_path)
+        .arg("--kind")
+        .arg(kind)
+        .arg("--output")
+        .arg("json");
+
+    // Execute command
+    let output = cmd.output().map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
+        _ => LlmError::MagellanExecutionFailed {
+            algorithm: "find-ast".to_string(),
+            stderr: e.to_string(),
+        },
+    })?;
+
+    // Check for non-zero exit
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(LlmError::MagellanExecutionFailed {
+            algorithm: "find-ast".to_string(),
+            stderr: stderr.to_string(),
+        });
+    }
+
+    let json_str = String::from_utf8_lossy(&output.stdout);
+
+    // Check for empty nodes array (not an error, just no results)
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str) {
+        // Handle magellan wrapper: {"data": {"nodes": [...]}}
+        let nodes = if parsed["data"]["nodes"].is_array() {
+            parsed["data"]["nodes"].as_array()
+        } else {
+            parsed["nodes"].as_array()
+        };
+
+        if let Some(node_array) = nodes {
+            if node_array.is_empty() {
+                eprintln!("No AST nodes found with kind '{}'", kind);
+                eprintln!("Hint: Check available kinds with: magellan label --list");
+                return Ok(());
+            }
+        }
+    }
+
+    // Render output based on format
+    let rendered = if matches!(cli.output, OutputFormat::Pretty) {
+        // Pretty-print the JSON
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str) {
+            serde_json::to_string_pretty(&parsed)
+        } else {
+            // If parsing fails, just return the raw string
+            Ok(json_str.to_string())
+        }
+    } else {
+        // Raw JSON
+        Ok(json_str.to_string())
+    }?;
+
+    println!("{}", rendered);
+
+    Ok(())
+}
+
 /// Format SCC summary for human output
 fn format_scc_summary(count: usize, supernode_count: usize) -> String {
     if supernode_count == 1 {
@@ -1167,6 +1417,7 @@ mod cli_tests {
             Command::Search { query, .. } => {
                 assert_eq!(query, "test");
             }
+            _ => panic!("Expected Command::Search"),
         }
     }
 
@@ -1214,6 +1465,7 @@ mod cli_tests {
             Command::Search { limit, .. } => {
                 assert_eq!(limit, 500);
             }
+            _ => panic!("Expected Command::Search"),
         }
     }
 
@@ -1236,6 +1488,7 @@ mod cli_tests {
             Command::Search { regex, .. } => {
                 assert!(regex, "Regex flag should be set");
             }
+            _ => panic!("Expected Command::Search"),
         }
     }
 
@@ -1259,6 +1512,7 @@ mod cli_tests {
             Command::Search { fields, .. } => {
                 assert_eq!(fields.as_ref().unwrap(), "context,snippet,score");
             }
+            _ => panic!("Expected Command::Search"),
         }
     }
 
@@ -1282,6 +1536,7 @@ mod cli_tests {
             Command::Search { mode, .. } => {
                 assert!(matches!(mode, SearchMode::Symbols));
             }
+            _ => panic!("Expected Command::Search"),
         }
     }
 
@@ -1305,6 +1560,7 @@ mod cli_tests {
             Command::Search { mode, .. } => {
                 assert!(matches!(mode, SearchMode::References));
             }
+            _ => panic!("Expected Command::Search"),
         }
     }
 
@@ -1328,6 +1584,7 @@ mod cli_tests {
             Command::Search { mode, .. } => {
                 assert!(matches!(mode, SearchMode::Calls));
             }
+            _ => panic!("Expected Command::Search"),
         }
     }
 
@@ -1351,6 +1608,7 @@ mod cli_tests {
             Command::Search { mode, .. } => {
                 assert!(matches!(mode, SearchMode::Auto));
             }
+            _ => panic!("Expected Command::Search"),
         }
     }
 
@@ -1373,6 +1631,7 @@ mod cli_tests {
             Command::Search { query, .. } => {
                 assert_eq!(query, "");
             }
+            _ => panic!("Expected Command::Search"),
         }
     }
 
@@ -1579,5 +1838,209 @@ mod cli_tests {
         assert!(result.is_ok(), "Should allow temp db path");
         let canonical = result.unwrap();
         assert!(canonical.exists(), "Validated path should exist");
+    }
+
+    // AST command tests
+    #[test]
+    fn test_ast_command_basic() {
+        let temp_db = create_temp_db().expect("Failed to create temp db");
+        let temp_file = std::env::temp_dir().join("test_ast.rs");
+        std::fs::write(&temp_file, "fn main() {}").expect("Failed to create temp file");
+
+        let args = [
+            "llmgrep",
+            "--db",
+            temp_db.to_str().unwrap(),
+            "ast",
+            "--file",
+            temp_file.to_str().unwrap(),
+        ];
+        let result = Cli::try_parse_from(args);
+        assert!(result.is_ok(), "Should parse ast command");
+
+        let cli = result.unwrap();
+        match cli.command {
+            Command::Ast { file, position, limit } => {
+                assert_eq!(file, temp_file);
+                assert_eq!(position, None);
+                assert_eq!(limit, 10000); // default
+            }
+            _ => panic!("Expected Command::Ast"),
+        }
+
+        // Clean up
+        std::fs::remove_file(&temp_file).ok();
+    }
+
+    #[test]
+    fn test_ast_command_with_position() {
+        let temp_db = create_temp_db().expect("Failed to create temp db");
+        let temp_file = std::env::temp_dir().join("test_ast.rs");
+        std::fs::write(&temp_file, "fn main() {}").expect("Failed to create temp file");
+
+        let args = [
+            "llmgrep",
+            "--db",
+            temp_db.to_str().unwrap(),
+            "ast",
+            "--file",
+            temp_file.to_str().unwrap(),
+            "--position",
+            "100",
+        ];
+        let result = Cli::try_parse_from(args);
+        assert!(result.is_ok(), "Should parse ast command with position");
+
+        let cli = result.unwrap();
+        match cli.command {
+            Command::Ast { position, .. } => {
+                assert_eq!(position, Some(100));
+            }
+            _ => panic!("Expected Command::Ast"),
+        }
+
+        // Clean up
+        std::fs::remove_file(&temp_file).ok();
+    }
+
+    #[test]
+    fn test_ast_command_with_limit() {
+        let temp_db = create_temp_db().expect("Failed to create temp db");
+        let temp_file = std::env::temp_dir().join("test_ast.rs");
+        std::fs::write(&temp_file, "fn main() {}").expect("Failed to create temp file");
+
+        let args = [
+            "llmgrep",
+            "--db",
+            temp_db.to_str().unwrap(),
+            "ast",
+            "--file",
+            temp_file.to_str().unwrap(),
+            "--limit",
+            "500",
+        ];
+        let result = Cli::try_parse_from(args);
+        assert!(result.is_ok(), "Should parse ast command with limit");
+
+        let cli = result.unwrap();
+        match cli.command {
+            Command::Ast { limit, .. } => {
+                assert_eq!(limit, 500);
+            }
+            _ => panic!("Expected Command::Ast"),
+        }
+
+        // Clean up
+        std::fs::remove_file(&temp_file).ok();
+    }
+
+    #[test]
+    fn test_ast_limit_validation_min() {
+        let temp_db = create_temp_db().expect("Failed to create temp db");
+        let temp_file = std::env::temp_dir().join("test_ast.rs");
+        std::fs::write(&temp_file, "fn main() {}").expect("Failed to create temp file");
+
+        let args = [
+            "llmgrep",
+            "--db",
+            temp_db.to_str().unwrap(),
+            "ast",
+            "--file",
+            temp_file.to_str().unwrap(),
+            "--limit",
+            "0",
+        ];
+        let result = Cli::try_parse_from(args);
+        assert!(
+            result.is_err(),
+            "Should reject limit=0 (range is 1..=100000)"
+        );
+
+        // Clean up
+        std::fs::remove_file(&temp_file).ok();
+    }
+
+    #[test]
+    fn test_ast_limit_validation_max() {
+        let temp_db = create_temp_db().expect("Failed to create temp db");
+        let temp_file = std::env::temp_dir().join("test_ast.rs");
+        std::fs::write(&temp_file, "fn main() {}").expect("Failed to create temp file");
+
+        let args = [
+            "llmgrep",
+            "--db",
+            temp_db.to_str().unwrap(),
+            "ast",
+            "--file",
+            temp_file.to_str().unwrap(),
+            "--limit",
+            "100001",
+        ];
+        let result = Cli::try_parse_from(args);
+        assert!(
+            result.is_err(),
+            "Should reject limit=100001 (range is 1..=100000)"
+        );
+
+        // Clean up
+        std::fs::remove_file(&temp_file).ok();
+    }
+
+    // Find-ast command tests
+    #[test]
+    fn test_find_ast_command_basic() {
+        let temp_db = create_temp_db().expect("Failed to create temp db");
+
+        let args = [
+            "llmgrep",
+            "--db",
+            temp_db.to_str().unwrap(),
+            "find-ast",
+            "--kind",
+            "function_item",
+        ];
+        let result = Cli::try_parse_from(args);
+        assert!(result.is_ok(), "Should parse find-ast command");
+
+        let cli = result.unwrap();
+        match cli.command {
+            Command::FindAst { kind } => {
+                assert_eq!(kind, "function_item");
+            }
+            _ => panic!("Expected Command::FindAst"),
+        }
+    }
+
+    #[test]
+    fn test_find_ast_command_with_various_kinds() {
+        let temp_db = create_temp_db().expect("Failed to create temp db");
+
+        let test_kinds = [
+            "if_expression",
+            "while_expression",
+            "for_expression",
+            "struct_item",
+        ];
+
+        for kind in test_kinds {
+            let args = [
+                "llmgrep",
+                "--db",
+                temp_db.to_str().unwrap(),
+                "find-ast",
+                "--kind",
+                kind,
+            ];
+            let result = Cli::try_parse_from(args);
+            assert!(result.is_ok(), "Should parse find-ast with kind {}", kind);
+
+            let cli = result.unwrap();
+            match cli.command {
+                Command::FindAst { kind: k } => {
+                    assert_eq!(k, kind);
+                }
+                _ => panic!("Expected Command::FindAst"),
+            }
+        }
     }
 }
