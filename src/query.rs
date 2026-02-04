@@ -2971,7 +2971,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
             assert_eq!(
@@ -3008,7 +3008,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 0, "Should find 0 results");
         }
@@ -3041,7 +3041,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 2, "Should find 2 results");
 
@@ -3078,7 +3078,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
             assert_eq!(response.results[0].name, "helper", "Should match helper");
@@ -3112,7 +3112,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 Function result");
             assert_eq!(response.results[0].name, "test_func", "Should be test_func");
@@ -3150,7 +3150,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(
                 response.results.len(),
@@ -3187,7 +3187,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(
                 response.results.len(),
@@ -3225,7 +3225,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 0, "Should find 0 results");
         }
@@ -3258,7 +3258,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
             assert_eq!(
@@ -3296,7 +3296,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 2, "Should find 2 results");
 
@@ -3351,7 +3351,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(partial, "Should be partial since candidates < total count");
             assert_eq!(response.results.len(), 1, "Should return at most 1 result");
         }
@@ -3384,7 +3384,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.total_count, 2, "Total count should be 2");
         }
@@ -3417,7 +3417,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 2, "Should find 2 results");
 
@@ -3469,7 +3469,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
             assert!(
@@ -3511,7 +3511,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
             assert_eq!(
@@ -4878,7 +4878,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             // Should find med_complexity (15) and high_complexity (25), but not low_complexity (5)
             assert_eq!(
@@ -4935,7 +4935,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             // Should find only low_complexity (5), not med (15) or high (25)
             assert_eq!(
@@ -4979,7 +4979,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             // Should find only med_complexity (15), not low (5) or high (25)
             assert_eq!(
@@ -5023,7 +5023,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             // Should find only low_complexity (fan_in=10)
             assert_eq!(
@@ -5072,7 +5072,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             // Should find only high_complexity (fan_out=15)
             assert_eq!(
@@ -5116,7 +5116,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
@@ -5166,7 +5166,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
@@ -5216,7 +5216,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
@@ -5266,7 +5266,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1);
 
@@ -5381,7 +5381,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).unwrap();
             assert_eq!(response.results.len(), 3, "Should find all 3 symbols");
 
             // Symbols without metrics should have None for metrics fields
@@ -5444,7 +5444,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response_filter, _) = search_symbols(options_filter).unwrap();
+            let (response_filter, _, _) = search_symbols(options_filter).unwrap();
             assert_eq!(
                 response_filter.results.len(),
                 1,
@@ -5487,7 +5487,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).unwrap();
             assert!(!partial, "Should not be partial");
             assert_eq!(
                 response.results.len(),
@@ -5527,7 +5527,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).unwrap();
             // All test symbols are in /test/file.rs
             assert!(
                 !response.results.is_empty(),
@@ -5568,7 +5568,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).unwrap();
             assert_eq!(
                 response.results.len(),
                 1,
@@ -5613,7 +5613,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).unwrap();
             // All test symbols have symbol_id
             for result in &response.results {
                 assert!(
@@ -5724,7 +5724,7 @@ mod tests {
             };
 
             // Capture stderr to check for warning
-            let (response, _partial) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).unwrap();
             // Should find both symbols
             assert_eq!(
                 response.results.len(),
@@ -5829,7 +5829,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).unwrap();
             assert_eq!(
                 response.results.len(),
                 1,

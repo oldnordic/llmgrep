@@ -640,7 +640,7 @@ fn run_search(
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
             };
-            let (mut response, partial) = search_symbols(options)?;
+            let (mut response, partial, paths_bounded) = search_symbols(options)?;
 
             // Compute SCC count from results when condense was active
             let scc_count: usize = response
@@ -655,6 +655,20 @@ fn run_search(
                 response.notice = Some(
                     "No SCCs found - codebase is acyclic (no cycles detected)".to_string(),
                 );
+            }
+
+            // Warn if path enumeration hit bounds
+            if paths_bounded {
+                eprintln!("Warning: Path enumeration hit bounds (max-depth=100, max-paths=1000)");
+                eprintln!("         Results may be incomplete. Use magellan paths directly with adjusted bounds for full enumeration.");
+            }
+
+            // Note: Empty paths case
+            if paths_from.is_some() && response.total_count == 0 {
+                eprintln!("Note: No execution paths found from '{}'", paths_from.as_ref().unwrap());
+                if paths_to.is_some() {
+                    eprintln!("      to '{}'. Symbols may be unreachable.", paths_to.as_ref().unwrap());
+                }
             }
 
             output_symbols(cli, response, partial, scc_count)?;
@@ -736,7 +750,7 @@ fn run_search(
                 AutoLimitMode::Global => split_auto_limit(limit),
             };
 
-            let (symbols, symbols_partial) = search_symbols(SearchOptions {
+            let (symbols, symbols_partial, _) = search_symbols(SearchOptions {
                 db_path,
                 query,
                 path_filter: validated_path.as_ref(),
