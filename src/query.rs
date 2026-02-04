@@ -816,6 +816,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             fan_out,
             cyclomatic_complexity,
             ast_context,
+            supernode_id: None,
         });
     }
 
