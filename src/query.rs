@@ -385,14 +385,18 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
     })?;
 
     // Apply algorithm filters (pre-computed or one-shot execution)
-    let symbol_set_filter = if options.algorithm.is_active() {
-        Some(apply_algorithm_filters(options.db_path, &options.algorithm)?)
+    let (algorithm_symbol_ids, supernode_map) = if options.algorithm.is_active() {
+        apply_algorithm_filters(options.db_path, &options.algorithm)?
     } else {
-        None
+        (Vec::new(), HashMap::new())
     };
 
-    // Flatten Option<Vec<String>> to Option<&Vec<String>>
-    let symbol_set_ref = symbol_set_filter.as_ref();
+    // Convert to Option<&Vec<String>> for existing code
+    let symbol_set_filter = if algorithm_symbol_ids.is_empty() {
+        None
+    } else {
+        Some(&algorithm_symbol_ids)
+    };
 
     let (sql, params, symbol_set_strategy) = build_search_query(
         options.query,
@@ -413,7 +417,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        symbol_set_ref,
+        symbol_set_filter,
     );
 
     // Check if ast_nodes table exists for AST filtering
@@ -443,7 +447,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             options.depth.max_depth,
             options.depth.inside,
             options.depth.contains,
-            symbol_set_ref,
+            symbol_set_filter,
         )
     } else {
         (sql, params, symbol_set_strategy)
@@ -451,7 +455,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
 
     // Note: temp_table_name will be used in Plan 11-04 for JOIN logic
     let temp_table_name = if symbol_set_strategy == SymbolSetStrategy::TempTable {
-        if let Some(ids) = symbol_set_ref {
+        if let Some(ids) = symbol_set_filter {
             Some(create_symbol_set_temp_table(&conn, ids)?)
         } else {
             None
@@ -796,7 +800,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             name,
             kind: symbol.kind,
             parent: None,
-            symbol_id,
+            symbol_id: symbol_id.clone(),
             score: if options.include_score {
                 Some(score)
             } else {
@@ -816,7 +820,8 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
             fan_out,
             cyclomatic_complexity,
             ast_context,
-            supernode_id: None,
+            supernode_id: symbol_id.as_ref()
+                .and_then(|id| supernode_map.get(id).cloned()),
         });
     }
 

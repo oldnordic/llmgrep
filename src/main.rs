@@ -614,6 +614,7 @@ fn run_search(
                     in_cycle: in_cycle.map(|s| s.as_str()),
                     slice_backward_from: slice_backward_from.map(|s| s.as_str()),
                     slice_forward_from: slice_forward_from.map(|s| s.as_str()),
+                    condense: false,
                 },
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),
