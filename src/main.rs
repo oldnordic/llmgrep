@@ -157,6 +157,9 @@ enum Command {
 
         #[arg(long, value_name = "SYMBOL")]
         slice_forward_from: Option<String>,
+
+        #[arg(long)]
+        condense: bool,
     },
 }
 
@@ -367,6 +370,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             in_cycle,
             slice_backward_from,
             slice_forward_from,
+            condense,
         } => run_search(
             cli,
             query,
@@ -405,6 +409,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             in_cycle.as_ref(),
             slice_backward_from.as_ref(),
             slice_forward_from.as_ref(),
+            *condense,
         ),
     }
 }
@@ -448,6 +453,7 @@ fn run_search(
     in_cycle: Option<&String>,
     slice_backward_from: Option<&String>,
     slice_forward_from: Option<&String>,
+    condense: bool,
 ) -> Result<(), LlmError> {
     // Validate SymbolId format (32 hex characters)
     if let Some(sid) = symbol_id {
@@ -517,7 +523,7 @@ fn run_search(
         );
     }
 
-    if query.trim().is_empty() && symbol_id.is_none() {
+    if query.trim().is_empty() && symbol_id.is_none() && !condense {
         return Err(LlmError::EmptyQuery);
     }
 
@@ -614,14 +620,30 @@ fn run_search(
                     in_cycle: in_cycle.map(|s| s.as_str()),
                     slice_backward_from: slice_backward_from.map(|s| s.as_str()),
                     slice_forward_from: slice_forward_from.map(|s| s.as_str()),
-                    condense: false,
+                    condense,
                 },
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
             };
-            let (response, partial) = search_symbols(options)?;
-            output_symbols(cli, response, partial)?;
+            let (mut response, partial) = search_symbols(options)?;
+
+            // Compute SCC count from results when condense was active
+            let scc_count: usize = response
+                .results
+                .iter()
+                .filter_map(|r| r.supernode_id.as_ref())
+                .collect::<std::collections::HashSet<_>>()
+                .len();
+
+            // Populate notice when condense finds no SCCs
+            if condense && scc_count == 0 {
+                response.notice = Some(
+                    "No SCCs found - codebase is acyclic (no cycles detected)".to_string(),
+                );
+            }
+
+            output_symbols(cli, response, partial, scc_count)?;
         }
         SearchMode::References => {
             let options = SearchOptions {
@@ -832,9 +854,25 @@ fn run_search(
     Ok(())
 }
 
-fn output_symbols(cli: &Cli, response: SearchResponse, partial: bool) -> Result<(), LlmError> {
+/// Format SCC summary for human output
+fn format_scc_summary(count: usize, supernode_count: usize) -> String {
+    if supernode_count == 1 {
+        format!("Found {} symbol in 1 SCC", count)
+    } else {
+        format!("Found {} symbols in {} SCCs", count, supernode_count)
+    }
+}
+
+fn output_symbols(cli: &Cli, response: SearchResponse, partial: bool, scc_count: usize) -> Result<(), LlmError> {
     match cli.output {
         OutputFormat::Human => {
+            if scc_count > 0 {
+                println!("{}", format_scc_summary(response.total_count as usize, scc_count));
+            } else if response.notice.is_some() {
+                // Empty SCCs case - print warning from notice field
+                eprintln!("Warning: {}", response.notice.as_ref().unwrap());
+                println!("No symbols found - codebase contains no strongly connected components");
+            }
             println!("{}", format_total_header(response.total_count));
             for item in response.results {
                 println!(

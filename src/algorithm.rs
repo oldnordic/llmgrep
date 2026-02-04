@@ -507,25 +507,36 @@ pub fn parse_condense_output(json: &str) -> Result<(Vec<String>, std::collection
 
     let parsed: Value = serde_json::from_str(json).map_err(LlmError::JsonError)?;
 
-    // Extract supernodes array
-    let supernodes = parsed["supernodes"]
-        .as_array()
-        .ok_or_else(|| LlmError::MagellanExecutionFailed {
-            algorithm: "condense".to_string(),
-            stderr: "Missing 'supernodes' array in condense output".to_string(),
-        })?;
+    // Handle magellan wrapper structure: {"data": {"supernodes": [...]}}
+    // Fall back to direct structure for backward compatibility
+    let supernodes = if parsed["data"]["supernodes"].is_array() {
+        parsed["data"]["supernodes"].as_array()
+    } else {
+        parsed["supernodes"].as_array()
+    }
+    .ok_or_else(|| LlmError::MagellanExecutionFailed {
+        algorithm: "condense".to_string(),
+        stderr: "Missing 'supernodes' array in condense output".to_string(),
+    })?;
 
     let mut all_symbol_ids = Vec::new();
     let mut supernode_map = HashMap::new();
 
     // Extract members from each supernode
     for supernode in supernodes {
-        let supernode_id = supernode["id"]
-            .as_str()
-            .ok_or_else(|| LlmError::MagellanExecutionFailed {
+        // Handle both numeric and string IDs (magellan uses numeric)
+        let supernode_id = if let Some(id_str) = supernode["id"].as_str() {
+            id_str.to_string()
+        } else if let Some(id_num) = supernode["id"].as_u64() {
+            format!("supernode_{}", id_num)
+        } else if let Some(id_i64) = supernode["id"].as_i64() {
+            format!("supernode_{}", id_i64)
+        } else {
+            return Err(LlmError::MagellanExecutionFailed {
                 algorithm: "condense".to_string(),
                 stderr: "Supernode missing 'id' field".to_string(),
-            })?;
+            });
+        };
 
         let members = supernode["members"]
             .as_array()

@@ -955,6 +955,7 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool), 
                 .map(|path| path.to_string_lossy().to_string()),
             kind_filter: options.kind_filter.map(|value| value.to_string()),
             total_count,
+            notice: None,
         },
         partial,
     ))

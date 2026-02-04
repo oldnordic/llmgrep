@@ -159,6 +159,8 @@ pub struct SearchResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind_filter: Option<String>,
     pub total_count: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
 }
 
 #[derive(Serialize)]
