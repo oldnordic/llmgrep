@@ -823,31 +823,40 @@ pub fn apply_algorithm_filters(
     // Path enumeration
     if let Some(start_symbol) = options.paths_from {
         let start_id = resolve_fqn_to_symbol_id(db_path, start_symbol)?;
+        let db_path_str = db_path.to_string_lossy().to_string();
 
         // Build args: magellan paths --db <DB> --start <ID> [--end <ID>] --max-depth 100 --max-paths 1000 --output json
         let mut args = vec![
-            "paths", "--db", &db_path.to_string_lossy(),
-            "--start", &start_id,
-            "--max-depth", "100",
-            "--max-paths", "1000",
-            "--output", "json",
+            "paths".to_string(),
+            "--db".to_string(),
+            db_path_str.clone(),
+            "--start".to_string(),
+            start_id.clone(),
+            "--max-depth".to_string(),
+            "100".to_string(),
+            "--max-paths".to_string(),
+            "1000".to_string(),
+            "--output".to_string(),
+            "json".to_string(),
         ];
 
         if let Some(end_symbol) = options.paths_to {
             let end_id = resolve_fqn_to_symbol_id(db_path, end_symbol)?;
-            args.push("--end");
-            args.push(&end_id);
+            args.push("--end".to_string());
+            args.push(end_id);
         }
 
+        let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+
         let output = Command::new("magellan")
-            .args(&args)
+            .args(&args_refs)
             .output()
             .map_err(|e| match e.kind() {
                 std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
                 _ => LlmError::MagellanExecutionFailed {
                     algorithm: "paths".to_string(),
                     stderr: format!("{}\n\nTry running: magellan paths --db {} --start {} for more details",
-                        e, db_path.to_string_lossy(), start_id),
+                        e, db_path_str, start_id),
                 },
             })?;
 
@@ -856,7 +865,7 @@ pub fn apply_algorithm_filters(
             return Err(LlmError::MagellanExecutionFailed {
                 algorithm: "paths".to_string(),
                 stderr: format!("{}\n\nTry running: magellan paths --db {} --start {} for more details",
-                    stderr, db_path.to_string_lossy(), start_id),
+                    stderr, db_path_str, start_id),
             });
         }
 

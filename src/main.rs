@@ -160,6 +160,12 @@ enum Command {
 
         #[arg(long)]
         condense: bool,
+
+        #[arg(long, value_name = "SYMBOL")]
+        paths_from: Option<String>,
+
+        #[arg(long, value_name = "SYMBOL")]
+        paths_to: Option<String>,
     },
 }
 
@@ -371,6 +377,8 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             slice_backward_from,
             slice_forward_from,
             condense,
+            paths_from,
+            paths_to,
         } => run_search(
             cli,
             query,
@@ -410,6 +418,8 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             slice_backward_from.as_ref(),
             slice_forward_from.as_ref(),
             *condense,
+            paths_from.as_ref(),
+            paths_to.as_ref(),
         ),
     }
 }
@@ -454,6 +464,8 @@ fn run_search(
     slice_backward_from: Option<&String>,
     slice_forward_from: Option<&String>,
     condense: bool,
+    paths_from: Option<&String>,
+    paths_to: Option<&String>,
 ) -> Result<(), LlmError> {
     // Validate SymbolId format (32 hex characters)
     if let Some(sid) = symbol_id {
@@ -621,6 +633,8 @@ fn run_search(
                     slice_backward_from: slice_backward_from.map(|s| s.as_str()),
                     slice_forward_from: slice_forward_from.map(|s| s.as_str()),
                     condense,
+                    paths_from: paths_from.as_ref().map(|s| s.as_str()),
+                    paths_to: paths_to.as_ref().map(|s| s.as_str()),
                 },
                 symbol_id: symbol_id.map(|s| s.as_str()),
                 fqn_pattern: fqn.map(|s| s.as_str()),
