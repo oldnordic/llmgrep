@@ -9,7 +9,6 @@ use llmgrep::query::{
 };
 use llmgrep::AlgorithmOptions;
 use rusqlite::{params, Connection};
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 fn setup_db_with_ast(path: &std::path::Path) -> Connection {
@@ -45,7 +44,7 @@ fn setup_db_with_ast(path: &std::path::Path) -> Connection {
     conn
 }
 
-fn insert_symbol(conn: &Connection, id: i64, name: &str, kind: &str, file_id: i64, byte_start: u64, byte_end: u64) {
+fn insert_symbol(conn: &Connection, id: i64, name: &str, kind: &str, _file_id: i64, byte_start: u64, byte_end: u64) {
     conn.execute(
         "INSERT INTO graph_entities (id, kind, name, data) VALUES (?1, 'Symbol', ?2, ?3)",
         params![

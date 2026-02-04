@@ -252,7 +252,6 @@ fn parse_magellan_version(output: &str) -> Result<(u32, u32, u32), LlmError> {
     let version_part = first_line
         .strip_prefix("magellan")
         .unwrap_or("")
-        .trim()
         .split_whitespace()
         .next()
         .unwrap_or("");
@@ -900,15 +899,15 @@ pub fn create_symbol_set_temp_table(
         &format!("CREATE TEMP TABLE {} (symbol_id TEXT PRIMARY KEY)", table_name),
         [],
     )
-    .map_err(|e| LlmError::SqliteError(e))?;
+    .map_err(LlmError::SqliteError)?;
 
     // Insert all symbol_ids
     let mut stmt = conn
         .prepare(&format!("INSERT INTO {} (symbol_id) VALUES (?)", table_name))
-        .map_err(|e| LlmError::SqliteError(e))?;
+        .map_err(LlmError::SqliteError)?;
 
     for symbol_id in symbol_ids {
-        stmt.execute([symbol_id]).map_err(|e| LlmError::SqliteError(e))?;
+        stmt.execute([symbol_id]).map_err(LlmError::SqliteError)?;
     }
 
     Ok(table_name)

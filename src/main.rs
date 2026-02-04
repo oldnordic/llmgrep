@@ -735,10 +735,12 @@ fn run_search(
             }
 
             // Note: Empty paths case
-            if paths_from.is_some() && response.total_count == 0 {
-                eprintln!("Note: No execution paths found from '{}'", paths_from.as_ref().unwrap());
-                if paths_to.is_some() {
-                    eprintln!("      to '{}'. Symbols may be unreachable.", paths_to.as_ref().unwrap());
+            if response.total_count == 0 {
+                if let Some(from) = &paths_from {
+                    eprintln!("Note: No execution paths found from '{from}'");
+                    if let Some(to) = &paths_to {
+                        eprintln!("      to '{to}'. Symbols may be unreachable.");
+                    }
                 }
             }
 
@@ -955,7 +957,7 @@ fn run_search(
 
 fn run_ast(
     cli: &Cli,
-    file: &PathBuf,
+    file: &Path,
     position: Option<usize>,
     limit: usize,
 ) -> Result<(), LlmError> {

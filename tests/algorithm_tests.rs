@@ -9,7 +9,7 @@
 
 use llmgrep::algorithm::{
     parse_symbol_set_file, resolve_fqn_to_symbol_id, run_magellan_algorithm,
-    symbol_set_filter_strategy, AlgorithmOptions, SymbolSet, SymbolSetStrategy,
+    symbol_set_filter_strategy, AlgorithmOptions, SymbolSetStrategy,
 };
 use llmgrep::error::LlmError;
 use std::fs::File;

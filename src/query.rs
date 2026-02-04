@@ -691,14 +691,12 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool, b
                         Ok(Some(pref_ctx)) => Some(pref_ctx),
                         Ok(None) => {
                             // No preferred kind found, fall back to enriching the existing context
-                            if has_depth_filter {
-                                if let Ok(depth) = crate::ast::calculate_decision_depth(&conn, ctx.ast_id) {
-                                    ctx.depth = depth;
-                                }
+                            if let Ok(depth) = if has_depth_filter {
+                                crate::ast::calculate_decision_depth(&conn, ctx.ast_id)
                             } else {
-                                if let Ok(depth) = crate::ast::calculate_ast_depth(&conn, ctx.ast_id) {
-                                    ctx.depth = depth;
-                                }
+                                crate::ast::calculate_ast_depth(&conn, ctx.ast_id)
+                            } {
+                                ctx.depth = depth;
                             }
                             if let Ok(kind) = crate::ast::get_parent_kind(&conn, ctx.parent_id) {
                                 ctx.parent_kind = kind;
@@ -713,14 +711,12 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool, b
                         },
                         Err(e) => {
                             eprintln!("Warning: Failed to get preferred AST context: {}", e);
-                            if has_depth_filter {
-                                if let Ok(depth) = crate::ast::calculate_decision_depth(&conn, ctx.ast_id) {
-                                    ctx.depth = depth;
-                                }
+                            if let Ok(depth) = if has_depth_filter {
+                                crate::ast::calculate_decision_depth(&conn, ctx.ast_id)
                             } else {
-                                if let Ok(depth) = crate::ast::calculate_ast_depth(&conn, ctx.ast_id) {
-                                    ctx.depth = depth;
-                                }
+                                crate::ast::calculate_ast_depth(&conn, ctx.ast_id)
+                            } {
+                                ctx.depth = depth;
                             }
                             if let Ok(kind) = crate::ast::get_parent_kind(&conn, ctx.parent_id) {
                                 ctx.parent_kind = kind;
@@ -829,32 +825,29 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool, b
     // This is done post-query due to SQLite recursive CTE limitations
     if has_depth_filter {
         // Filter results by decision depth
-        results = results
-            .into_iter()
-            .filter(|result| {
-                // Only filter if we have AST context with ast_id
-                if let Some(ref ast_ctx) = result.ast_context {
-                    match crate::ast::calculate_decision_depth(&conn, ast_ctx.ast_id) {
-                        Ok(Some(depth)) => {
-                            // Check min/max bounds
-                            let min_ok = options
-                                .depth
-                                .min_depth
-                                .map_or(true, |m| (depth as usize) >= m);
-                            let max_ok = options
-                                .depth
-                                .max_depth
-                                .map_or(true, |m| (depth as usize) <= m);
-                            min_ok && max_ok
-                        }
-                        Ok(None) => true, // No depth data, keep the result
-                        Err(_) => true, // Error calculating depth, keep the result
+        results.retain(|result| {
+            // Only filter if we have AST context with ast_id
+            if let Some(ref ast_ctx) = result.ast_context {
+                match crate::ast::calculate_decision_depth(&conn, ast_ctx.ast_id) {
+                    Ok(Some(depth)) => {
+                        // Check min/max bounds
+                        let min_ok = options
+                            .depth
+                            .min_depth
+                            .is_none_or(|m| (depth as usize) >= m);
+                        let max_ok = options
+                            .depth
+                            .max_depth
+                            .is_none_or(|m| (depth as usize) <= m);
+                        min_ok && max_ok
                     }
-                } else {
-                    true // No AST context, keep the result
+                    Ok(None) => true, // No depth data, keep the result
+                    Err(_) => true, // Error calculating depth, keep the result
                 }
-            })
-            .collect();
+            } else {
+                true // No AST context, keep the result
+            }
+        });
     }
 
     let mut partial = false;
@@ -1513,39 +1506,38 @@ fn build_search_query(
     // AST kind filter: Filter by AST node kind(s) using overlap matching
     // This uses an EXISTS subquery to handle cases where AST nodes overlap
     // with symbol spans but don't have exact byte matches
-    if !ast_kinds.is_empty() {
-        if has_ast_table {
-            if ast_kinds.len() == 1 {
-                // Single kind - use EXISTS with overlap check
-                where_clauses.push(format!(
-                    "EXISTS (
-                        SELECT 1 FROM ast_nodes
-                        WHERE kind = ?
-                        AND byte_start < json_extract(s.data, '$.byte_end')
-                        AND byte_end > json_extract(s.data, '$.byte_start')
-                    )"
-                ));
-                params.push(Box::new(ast_kinds[0].clone()));
-            } else {
-                // Multiple kinds - use EXISTS with IN and overlap check
-                let placeholders = vec!["?"; ast_kinds.len()].join(",");
-                where_clauses.push(format!(
-                    "EXISTS (
-                        SELECT 1 FROM ast_nodes
-                        WHERE kind IN ({})
-                        AND byte_start < json_extract(s.data, '$.byte_end')
-                        AND byte_end > json_extract(s.data, '$.byte_start')
-                    )",
-                    placeholders
-                ));
-                for kind in ast_kinds {
-                    params.push(Box::new(kind.clone()));
-                }
+    if !ast_kinds.is_empty() && has_ast_table {
+        if ast_kinds.len() == 1 {
+            // Single kind - use EXISTS with overlap check
+            where_clauses.push(
+                "EXISTS (
+                    SELECT 1 FROM ast_nodes
+                    WHERE kind = ?
+                    AND byte_start < json_extract(s.data, '$.byte_end')
+                    AND byte_end > json_extract(s.data, '$.byte_start')
+                )"
+                .to_string(),
+            );
+            params.push(Box::new(ast_kinds[0].clone()));
+        } else {
+            // Multiple kinds - use EXISTS with IN and overlap check
+            let placeholders = vec!["?"; ast_kinds.len()].join(",");
+            where_clauses.push(format!(
+                "EXISTS (
+                    SELECT 1 FROM ast_nodes
+                    WHERE kind IN ({})
+                    AND byte_start < json_extract(s.data, '$.byte_end')
+                    AND byte_end > json_extract(s.data, '$.byte_start')
+                )",
+                placeholders
+            ));
+            for kind in ast_kinds {
+                params.push(Box::new(kind.clone()));
             }
         }
-        // If ast_nodes table doesn't exist, we silently ignore the filter
-        // (graceful degradation)
     }
+    // If ast_nodes table doesn't exist, we silently ignore the filter
+    // (graceful degradation)
 
     // Add metrics filter WHERE clauses
     // For filters, we use IS NOT NULL to ensure symbols have metrics
@@ -1575,7 +1567,7 @@ fn build_search_query(
         if has_ast_table {
             // Use a correlated EXISTS subquery with recursive CTE to check all ancestors
             // This handles nested structures like: function -> block -> closure
-            where_clauses.push(format!(
+            where_clauses.push(
                 "EXISTS (
                     WITH RECURSIVE ancestors AS (
                         SELECT id, parent_id FROM ast_nodes WHERE id = an.id
@@ -1588,7 +1580,8 @@ fn build_search_query(
                     JOIN ancestors anc ON p.id = anc.parent_id
                     WHERE p.kind = ?
                 )"
-            ));
+                .to_string(),
+            );
             params.push(Box::new(inside_kind.to_string()));
         }
     }

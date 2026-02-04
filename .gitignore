@@ -4,3 +4,4 @@
 /.codemcp/
 /scripts/
 test_db/
+.cargo/
