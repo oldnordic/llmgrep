@@ -598,6 +598,8 @@ pub struct AlgorithmOptions<'a> {
     pub slice_backward_from: Option<&'a str>,
     /// One-shot: forward slice from target (shell-out to magellan slice)
     pub slice_forward_from: Option<&'a str>,
+    /// One-shot: condense SCC detection (shell-out to magellan condense)
+    pub condense: bool,
 }
 
 impl<'a> AlgorithmOptions<'a> {
@@ -609,6 +611,7 @@ impl<'a> AlgorithmOptions<'a> {
             || self.in_cycle.is_some()
             || self.slice_backward_from.is_some()
             || self.slice_forward_from.is_some()
+            || self.condense
     }
 
     /// Create empty AlgorithmOptions
