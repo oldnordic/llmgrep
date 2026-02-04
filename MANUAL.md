@@ -66,6 +66,9 @@ llmgrep search --db <FILE> --query <STRING> [OPTIONS]
 - `--in-cycle <SYMBOL>` — One-shot: find symbols in dependency cycles
 - `--slice-backward-from <SYMBOL>` — One-shot: backward slice (code affecting target)
 - `--slice-forward-from <SYMBOL>` — One-shot: forward slice (code affected by target)
+- `--condense` — One-shot: find symbols in strongly connected components (SCCs)
+- `--paths-from <SYMBOL>` — One-shot: find symbols on execution paths from start symbol
+- `--paths-to <SYMBOL>` — Optional end symbol for path filtering (use with --paths-from)
 
 **Sorting:**
 - `--sort-by <MODE>` — Sort mode (default: `relevance`)
