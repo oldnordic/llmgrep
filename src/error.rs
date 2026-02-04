@@ -81,7 +81,15 @@ pub enum LlmError {
     RegexError(#[from] regex::Error),
 
     /// Magellan CLI not found in PATH.
-    #[error("magellan CLI not found. Install magellan to use algorithm features.")]
+    #[error(
+        "LLM-E105: Magellan CLI not found in PATH.\n\n\
+         Magellan v2.1.0+ is required for algorithm features (--reachable-from, --dead-code-in, etc.).\n\n\
+         Installation methods:\n\
+         \x20  1. Cargo:     cargo install magellan\n\
+         \x20  2. Binary:    cargo binstall magellan\n\
+         \x20  3. Docs:      https://docs.rs/magellan\n\n\
+         After installation, run: magellan --version"
+    )]
     MagellanNotFound,
 
     /// Symbol name is ambiguous (multiple matches).
@@ -176,7 +184,7 @@ impl LlmError {
                 Some("Check that the path exists and is within the allowed directory structure")
             }
             LlmError::MagellanNotFound => {
-                Some("Install magellan: cargo install magellan-cli")
+                Some("Install magellan v2.1.0+: cargo install magellan")
             }
             LlmError::AmbiguousSymbolName { .. } => {
                 Some("Use --symbol-id with full 32-character SymbolId for unambiguous reference.")
