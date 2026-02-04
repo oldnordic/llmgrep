@@ -184,7 +184,7 @@ fn check_magellan_version() -> Result<(), LlmError> {
             loop {
                 if let Ok(status) = child.try_wait() {
                     match status {
-                        Some(status) => {
+                        Some(_status) => {
                             // Process has exited, get output
                             break child.wait_with_output();
                         }
