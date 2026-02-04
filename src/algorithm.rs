@@ -820,6 +820,56 @@ pub fn apply_algorithm_filters(
         return Ok((symbol_ids, supernode_map));
     }
 
+    // Path enumeration
+    if let Some(start_symbol) = options.paths_from {
+        let start_id = resolve_fqn_to_symbol_id(db_path, start_symbol)?;
+
+        // Build args: magellan paths --db <DB> --start <ID> [--end <ID>] --max-depth 100 --max-paths 1000 --output json
+        let mut args = vec![
+            "paths", "--db", &db_path.to_string_lossy(),
+            "--start", &start_id,
+            "--max-depth", "100",
+            "--max-paths", "1000",
+            "--output", "json",
+        ];
+
+        if let Some(end_symbol) = options.paths_to {
+            let end_id = resolve_fqn_to_symbol_id(db_path, end_symbol)?;
+            args.push("--end");
+            args.push(&end_id);
+        }
+
+        let output = Command::new("magellan")
+            .args(&args)
+            .output()
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
+                _ => LlmError::MagellanExecutionFailed {
+                    algorithm: "paths".to_string(),
+                    stderr: format!("{}\n\nTry running: magellan paths --db {} --start {} for more details",
+                        e, db_path.to_string_lossy(), start_id),
+                },
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(LlmError::MagellanExecutionFailed {
+                algorithm: "paths".to_string(),
+                stderr: format!("{}\n\nTry running: magellan paths --db {} --start {} for more details",
+                    stderr, db_path.to_string_lossy(), start_id),
+            });
+        }
+
+        let json = String::from_utf8_lossy(&output.stdout);
+        let (symbol_ids, bounded_hit) = parse_paths_output(&json)?;
+
+        // bounded_hit is returned but not used here - will be handled in main.rs for warning
+        let _ = bounded_hit; // Suppress unused warning for now (used in 14-03)
+
+        // No decoration map needed for paths (unlike condense)
+        return Ok((symbol_ids, HashMap::new()));
+    }
+
     // No active filters
     Ok((Vec::new(), HashMap::new()))
 }
