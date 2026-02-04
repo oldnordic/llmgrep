@@ -274,6 +274,19 @@ V2.0 AST FEATURES:
 
   Use --ast-kind multiple times or comma-separate for combined filters.
   See MANUAL.md for complete node kind reference per language.
+
+V2.1 PATHS FEATURES:
+  # Find all symbols on execution paths from main
+  llmgrep --db code.db search --paths-from main --query ".*"
+
+  # Find symbols on paths between two functions
+  llmgrep --db code.db search --paths-from parse --paths-to execute --output json
+
+  # Combine path filtering with query
+  llmgrep --db code.db search --paths-from main --query "error" --output json
+
+  # Path filtering with other filters
+  llmgrep --db code.db search --paths-from main --kind Function --output json
 "#;
 
 fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
