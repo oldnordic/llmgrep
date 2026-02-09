@@ -14,6 +14,10 @@ default = ["unix"]
 unix = []
 windows = []
 
+# Native-V2 backend support (disabled by default)
+# Forward feature flag to magellan and sqlitegraph for conditional compilation
+native-v2 = ["magellan/native-v2", "sqlitegraph/native-v2"]
+
 [dependencies]
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
