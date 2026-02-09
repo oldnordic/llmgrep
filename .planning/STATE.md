@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** Fast, reliable search of Magellan code databases (SQLite or native-v2) with CLI behavior consistent with Splice and Magellan. Dual backend support enables O(1) KV lookups with native-v2 while maintaining SQLite compatibility. Optimized for LLM consumption with intelligent relevance scoring, AST-based structural queries, and graph algorithm integration.
-**Current focus:** Phase 19 - NativeV2Backend Implementation
+**Current focus:** Phase 20 - CLI Integration
 
 ## Current Position
 
-Phase: 19 of 21 (NativeV2Backend Implementation) — COMPLETE
-Current Plan: 19-06 (Phase 19 verification)
-Status: Phase 19 complete, all 6 plans finished
-Last activity: 2026-02-10 — 182 tests pass, zero regressions confirmed
+Phase: 20 of 21 (CLI Integration) — IN PROGRESS
+Current Plan: 20-01 (Wire Backend enum into CLI)
+Status: Plan 20-01 complete, backend detection integrated
+Last activity: 2026-02-10 — CLI uses Backend::detect_and_open() for all commands
 
-Progress: [██████░░░░░] 35% (15/27 plans complete in v3.0)
+Progress: [██████░░░░░] 38% (16/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [██████░░░░░] 35% (15/27 plans complete in v3.0)
 | Phase 19-native-v2-backend-implementation P01 | 5min | 1 tasks | 1 files |
 | Phase 19 P05 | 15min | 1 tasks | 2 files |
 | Phase 19 P06 | 3min | 1 tasks | 0 files |
+| Phase 20-cli-integration P01 | 4min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -108,10 +109,9 @@ Resume file: None
 
 ## Next Steps
 
-1. Phase 20: CLI Integration
-   - Wire backend abstraction into CLI commands (search, ast, find-ast)
-   - Add --backend flag for manual backend selection
-   - Test with both SQLite and native-v2 databases
+1. Phase 20 (remaining plans): Complete CLI integration
+   - [Plan 20-01: COMPLETE] Wire Backend enum into CLI
+   - Remaining plans in Phase 20 (if any)
 2. Phase 21: Native-v2 storage implementation
    - Migrate from SQLite to pure KV storage
    - Benchmark KV prefix scan performance
@@ -194,3 +194,24 @@ Resume file: None
 - Cargo.toml — native-v2 feature flag + updated dependencies
 
 **Commits:** 12 atomic commits across 3 waves
+
+---
+
+## Phase 20 Summary
+
+**Completed:** 2026-02-10
+**Plans:** 1/1 complete (20-01)
+**Status:** COMPLETE
+
+**Artifacts Created:**
+- .planning/phases/020-cli-integration/20-01-SUMMARY.md — CLI integration summary
+
+**Commits:** 1 atomic commit (2888dcd)
+
+**Verification:**
+- [x] CLI compiles with Backend enum integration
+- [x] All 151 tests passing (zero regressions)
+- [x] Backend::detect_and_open() called in run_search(), run_ast(), run_find_ast()
+- [x] Backend trait methods delegated to from main.rs
+- [x] No --backend flag (automatic detection per Phase 17 decision)
+- [x] Error handling for NativeV2BackendNotSupported includes remediation
