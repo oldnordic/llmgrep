@@ -342,51 +342,19 @@ pub fn search_chunks_by_span(
     }
 }
 
-pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool, bool), LlmError> {
-    let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-    {
-        Ok(conn) => conn,
-        Err(rusqlite::Error::SqliteFailure(err, msg)) => match err.code {
-            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
-                return Err(LlmError::DatabaseCorrupted {
-                    reason: msg
-                        .unwrap_or_else(|| "Database file is invalid or corrupted".to_string()),
-                });
-            }
-            ErrorCode::CannotOpen => {
-                return Err(LlmError::DatabaseNotFound {
-                    path: options.db_path.display().to_string(),
-                });
-            }
-            _ => return Err(LlmError::from(rusqlite::Error::SqliteFailure(err, msg))),
-        },
-        Err(e) => return Err(LlmError::from(e)),
-    };
-
-    // Force database validation by checking if schema exists
-    // This catches "not a database" errors that occur lazily
-    conn.query_row(
-        "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1",
-        [],
-        |_| Ok(()),
-    )
-    .map_err(|e| match e {
-        rusqlite::Error::SqliteFailure(err, ref msg) => match err.code {
-            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => LlmError::DatabaseCorrupted {
-                reason: msg
-                    .as_ref()
-                    .map(|s| s.as_str())
-                    .unwrap_or("Database file is invalid or corrupted")
-                    .to_string(),
-            },
-            _ => LlmError::from(e),
-        },
-        other => LlmError::from(other),
-    })?;
-
+/// Internal implementation of search_symbols that takes an explicit Connection.
+///
+/// This function contains the core SQL query logic for searching symbols.
+/// It is separated from search_symbols() to enable trait method implementation
+/// while maintaining backward-compatible wrapper.
+pub(crate) fn search_symbols_impl(
+    conn: &Connection,
+    db_path: &Path,
+    options: &SearchOptions,
+) -> Result<(SearchResponse, bool, bool), LlmError> {
     // Apply algorithm filters (pre-computed or one-shot execution)
     let (algorithm_symbol_ids, supernode_map, paths_bounded) = if options.algorithm.is_active() {
-        apply_algorithm_filters(options.db_path, &options.algorithm)?
+        apply_algorithm_filters(db_path, &options.algorithm)?
     } else {
         (Vec::new(), HashMap::new(), false)
     };
@@ -955,9 +923,12 @@ pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool, b
     ))
 }
 
-pub fn search_references(
-    options: SearchOptions,
-) -> Result<(ReferenceSearchResponse, bool), LlmError> {
+/// Public wrapper for search_symbols that handles connection opening and validation.
+///
+/// This function opens the database connection, validates it, and delegates to
+/// search_symbols_impl() for the actual query logic. This maintains backward
+/// compatibility while enabling trait method implementation.
+pub fn search_symbols(options: SearchOptions) -> Result<(SearchResponse, bool, bool), LlmError> {
     let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
     {
         Ok(conn) => conn,
@@ -999,6 +970,19 @@ pub fn search_references(
         other => LlmError::from(other),
     })?;
 
+    // Call the implementation
+    search_symbols_impl(&conn, options.db_path, &options)
+}
+
+/// Internal implementation of search_references that takes an explicit Connection.
+///
+/// This function contains the core SQL query logic for searching references.
+/// It is separated from the public `search_references()` to enable reuse
+/// within the SqliteBackend trait implementation.
+pub(crate) fn search_references_impl(
+    conn: &Connection,
+    options: &SearchOptions,
+) -> Result<(ReferenceSearchResponse, bool), LlmError> {
     let (sql, params) = build_reference_query(
         options.query,
         options.path_filter,
@@ -1065,7 +1049,7 @@ pub fn search_references(
             if options.snippet.include {
                 // Try chunks table first for faster, pre-validated content
                 match search_chunks_by_span(
-                    &conn,
+                    conn,
                     &reference.file,
                     reference.byte_start,
                     reference.byte_end,
@@ -1189,6 +1173,59 @@ pub fn search_references(
         },
         partial,
     ))
+}
+
+/// Public wrapper for search_references that handles connection opening and validation.
+///
+/// This function opens the database connection, validates it, and delegates to
+/// search_references_impl() for the actual query logic. This maintains backward
+/// compatibility while enabling trait method implementation.
+pub fn search_references(
+    options: SearchOptions,
+) -> Result<(ReferenceSearchResponse, bool), LlmError> {
+    let conn = match Connection::open_with_flags(options.db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+    {
+        Ok(conn) => conn,
+        Err(rusqlite::Error::SqliteFailure(err, msg)) => match err.code {
+            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => {
+                return Err(LlmError::DatabaseCorrupted {
+                    reason: msg
+                        .unwrap_or_else(|| "Database file is invalid or corrupted".to_string()),
+                });
+            }
+            ErrorCode::CannotOpen => {
+                return Err(LlmError::DatabaseNotFound {
+                    path: options.db_path.display().to_string(),
+                });
+            }
+            _ => return Err(LlmError::from(rusqlite::Error::SqliteFailure(err, msg))),
+        },
+        Err(e) => return Err(LlmError::from(e)),
+    };
+
+    // Force database validation by checking if schema exists
+    // This catches "not a database" errors that occur lazily
+    conn.query_row(
+        "SELECT name FROM sqlite_master WHERE type='table' LIMIT 1",
+        [],
+        |_| Ok(()),
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::SqliteFailure(err, ref msg) => match err.code {
+            ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase => LlmError::DatabaseCorrupted {
+                reason: msg
+                    .as_ref()
+                    .map(|s| s.as_str())
+                    .unwrap_or("Database file is invalid or corrupted")
+                    .to_string(),
+            },
+            _ => LlmError::from(e),
+        },
+        other => LlmError::from(other),
+    })?;
+
+    // Call the implementation
+    search_references_impl(&conn, &options)
 }
 
 pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool), LlmError> {
