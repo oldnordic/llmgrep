@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 19 of 21 (NativeV2Backend Implementation) — IN PROGRESS
-Current Plan: 19-02 (find_ast implementation using CodeGraph API)
-Status: Plan 19-02 complete, find_ast() delegates to CodeGraph::get_ast_nodes_by_kind()
-Last activity: 2026-02-09 — find_ast() implemented, builds successfully
+Current Plan: 19-01 (ast() implementation using CodeGraph API)
+Status: Plan 19-01 complete, ast() delegates to CodeGraph::get_ast_nodes_by_file()
+Last activity: 2026-02-09 — ast() and find_ast() implemented, builds successfully
 
 Progress: [██████░░░░░] 30% (11/27 plans complete in v3.0)
 
@@ -47,7 +47,7 @@ Progress: [██████░░░░░] 30% (11/27 plans complete in v3.0)
 
 *Updated after phase completion*
 | Phase 18-sqlite-backend-refactor P06 | 3min | 1 tasks | 0 files |
-| Phase 19-native-v2-backend-implementation P02 | 3min | 1 tasks | 1 files |
+| Phase 19-native-v2-backend-implementation P01 | 5min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -67,16 +67,17 @@ Recent decisions affecting current work:
 - **Phase 18**: search_references_impl takes explicit Connection parameter to enable trait method implementation
 - **Phase 18**: search_calls_impl takes explicit Connection parameter to enable trait method implementation
 - **Phase 18**: All BackendTrait methods implemented on SqliteBackend (delegation pattern + magellan shell-out for AST)
+- **Phase 19**: NativeV2Backend::ast() delegates to CodeGraph::get_ast_nodes_by_file() (direct API, no shell-out)
 - **Phase 19**: NativeV2Backend::find_ast() delegates to CodeGraph::get_ast_nodes_by_kind() (direct API, no shell-out)
 
 ### Pending Todos
 
-- Phase 19: Complete remaining NativeV2Backend methods (search_symbols, search_references, search_calls, ast)
+- Phase 19: Complete remaining NativeV2Backend methods (search_symbols, search_references, search_calls)
 
 ## Session Continuity
 
-Last session: 2026-02-09 — Phase 19 plan 19-02 execution
-Stopped at: Completed 19-02 (NativeV2Backend::find_ast using CodeGraph API)
+Last session: 2026-02-09 — Phase 19 plan 19-01 execution
+Stopped at: Completed 19-01 (NativeV2Backend::ast using CodeGraph API)
 Resume file: None
 
 ### Blockers/Concerns
@@ -134,14 +135,18 @@ Resume file: None
 **Status:** IN PROGRESS
 
 **Artifacts Created:**
-- src/backend/native_v2.rs — NativeV2Backend::find_ast() implementation
-- .planning/phases/019-native-v2-backend-implementation/19-02-SUMMARY.md — find_ast summary
+- src/backend/native_v2.rs — NativeV2Backend::ast() and find_ast() implementations
+- .planning/phases/019-native-v2-backend-implementation/19-01-SUMMARY.md — ast() summary
 
 **Commits:** 1 atomic commit (678f88b)
 
 **Verification:**
+- [x] ast() method delegates to CodeGraph::get_ast_nodes_by_file()
+- [x] Position filtering implemented (byte_start <= pos < byte_end)
+- [x] Limit parameter support via .take()
 - [x] find_ast() method delegates to CodeGraph::get_ast_nodes_by_kind()
 - [x] Code compiles with native-v2 feature enabled
+- [x] All 324 tests pass
 - [x] Error handling converts anyhow::Error to LlmError::SearchFailed
 
 ---
