@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 19 of 21 (NativeV2Backend Implementation) — IN PROGRESS
-Current Plan: 19-01 (ast() implementation using CodeGraph API)
-Status: Plan 19-01 complete, ast() delegates to CodeGraph::get_ast_nodes_by_file()
-Last activity: 2026-02-09 — ast() and find_ast() implemented, builds successfully
+Current Plan: 19-03 (search methods implementation)
+Status: Plan 19-03 complete, all 5 BackendTrait methods implemented
+Last activity: 2026-02-09 — search_symbols, search_references, search_calls implemented via SQL
 
-Progress: [██████░░░░░] 30% (11/27 plans complete in v3.0)
+Progress: [██████░░░░░] 30% (12/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -69,15 +69,17 @@ Recent decisions affecting current work:
 - **Phase 18**: All BackendTrait methods implemented on SqliteBackend (delegation pattern + magellan shell-out for AST)
 - **Phase 19**: NativeV2Backend::ast() delegates to CodeGraph::get_ast_nodes_by_file() (direct API, no shell-out)
 - **Phase 19**: NativeV2Backend::find_ast() delegates to CodeGraph::get_ast_nodes_by_kind() (direct API, no shell-out)
+- **Phase 19**: NativeV2Backend search methods use SQL queries via rusqlite (Magellan 2.1.0 native-v2 still uses SQLite storage)
+- **Phase 19**: NativeV2Backend stores db_path for direct SQL access (connect() helper method)
 
 ### Pending Todos
 
-- Phase 19: Complete remaining NativeV2Backend methods (search_symbols, search_references, search_calls)
+- Phase 19: Complete remaining plans (19-04, 19-05) for testing and verification
 
 ## Session Continuity
 
-Last session: 2026-02-09 — Phase 19 plan 19-01 execution
-Stopped at: Completed 19-01 (NativeV2Backend::ast using CodeGraph API)
+Last session: 2026-02-09 — Phase 19 plan 19-03 execution
+Stopped at: Completed 19-03 (NativeV2Backend search methods)
 Resume file: None
 
 ### Blockers/Concerns
@@ -131,22 +133,27 @@ Resume file: None
 ## Phase 19 Summary
 
 **Completed:** 2026-02-09 (in progress)
-**Plans:** 1/5 complete (19-01, 19-02 through 19-05 planned)
+**Plans:** 3/5 complete (19-01, 19-02, 19-03; 19-04 through 19-05 planned)
 **Status:** IN PROGRESS
 
 **Artifacts Created:**
-- src/backend/native_v2.rs — NativeV2Backend::ast() and find_ast() implementations
+- src/backend/native_v2.rs — Complete NativeV2Backend with all 5 BackendTrait methods
 - .planning/phases/019-native-v2-backend-implementation/19-01-SUMMARY.md — ast() summary
+- .planning/phases/019-native-v2-backend-implementation/19-02-SUMMARY.md — find_ast() summary
+- .planning/phases/019-native-v2-backend-implementation/19-03-SUMMARY.md — search methods summary
 
-**Commits:** 1 atomic commit (678f88b)
+**Commits:** 3 atomic commits (678f88b, 6e16650)
 
 **Verification:**
 - [x] ast() method delegates to CodeGraph::get_ast_nodes_by_file()
 - [x] Position filtering implemented (byte_start <= pos < byte_end)
 - [x] Limit parameter support via .take()
 - [x] find_ast() method delegates to CodeGraph::get_ast_nodes_by_kind()
+- [x] search_symbols() implemented via SQL queries
+- [x] search_references() implemented via SQL queries
+- [x] search_calls() implemented via SQL queries
 - [x] Code compiles with native-v2 feature enabled
-- [x] All 324 tests pass
+- [x] All 151 tests pass
 - [x] Error handling converts anyhow::Error to LlmError::SearchFailed
 
 ---

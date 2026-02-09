@@ -86,12 +86,14 @@ impl super::BackendTrait for SqliteBackend {
 
         let mut cmd = Command::new("magellan");
         cmd.args(["ast", "--db", db_path, "--file", file_path]);
+        cmd.args(["--output", "json"]);  // Explicitly request JSON output
 
         if let Some(pos) = position {
             cmd.args(["--position", &pos.to_string()]);
         }
 
-        cmd.args(["--limit", &limit.to_string()]);
+        // Note: magellan ast command doesn't support --limit flag
+        // We'll apply limit on the JSON result instead
 
         let output = cmd.output()
             .map_err(|e| LlmError::SearchFailed {
@@ -105,8 +107,18 @@ impl super::BackendTrait for SqliteBackend {
             });
         }
 
-        serde_json::from_slice(&output.stdout)
-            .map_err(|e| LlmError::JsonError(e))
+        // Parse JSON and apply limit if needed
+        let mut value: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .map_err(|e| LlmError::JsonError(e))?;
+
+        // Apply limit to array results
+        if let Some(arr) = value.as_array_mut() {
+            if arr.len() > limit {
+                arr.truncate(limit);
+            }
+        }
+
+        Ok(value)
     }
 
     fn find_ast(&self, kind: &str) -> Result<serde_json::Value, LlmError> {
@@ -116,7 +128,7 @@ impl super::BackendTrait for SqliteBackend {
             })?;
 
         let output = Command::new("magellan")
-            .args(["find-ast", "--db", db_path, "--kind", kind])
+            .args(["find-ast", "--db", db_path, "--kind", kind, "--output", "json"])
             .output()
             .map_err(|e| LlmError::SearchFailed {
                 reason: format!("Failed to execute magellan find-ast command: {}", e),
