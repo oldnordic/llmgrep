@@ -1,8 +1,10 @@
 pub mod algorithm;
 pub mod ast;
+pub mod backend;
 pub mod error;
 pub mod output;
 pub mod output_common;
+pub mod platform;
 pub mod query;
 pub mod safe_extraction;
 
