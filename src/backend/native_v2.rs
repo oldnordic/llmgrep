@@ -17,6 +17,7 @@ use std::path::Path;
 ///
 /// Wraps a CodeGraph and implements the Backend trait.
 /// This backend is only available when the native-v2 feature is enabled.
+#[derive(Debug)]
 pub struct NativeV2Backend {
     #[allow(dead_code)]
     pub(crate) graph: CodeGraph,

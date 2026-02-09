@@ -15,6 +15,7 @@ use std::path::Path;
 ///
 /// Wraps a rusqlite Connection and implements the Backend trait.
 /// The actual SQL queries will be moved from query.rs in Phase 18.
+#[derive(Debug)]
 pub struct SqliteBackend {
     pub(crate) conn: Connection,
 }

@@ -79,6 +79,7 @@ pub trait BackendTrait: Send {
 ///
 /// Wraps either SqliteBackend or NativeV2Backend and delegates Backend trait methods
 /// to the appropriate implementation based on database format detection.
+#[derive(Debug)]
 pub enum Backend {
     /// SQLite storage backend (traditional, always available)
     Sqlite(SqliteBackend),
