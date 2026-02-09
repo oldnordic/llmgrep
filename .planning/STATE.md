@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 18 of 21 (SqliteBackend Refactor) — IN PROGRESS
-Current Plan: 18-03 (search_references_impl creation)
-Status: Plan 18-03 complete, 3/5 plans done in Phase 18
-Last activity: 2026-02-09 — search_references_impl() created with Connection parameter
+Current Plan: 18-04 (search_calls_impl creation)
+Status: Plan 18-04 complete, 4/5 plans done in Phase 18
+Last activity: 2026-02-09 — search_calls_impl() created with Connection parameter
 
-Progress: [██████░░░░░] 26% (8/27 plans complete in v3.0)
+Progress: [██████░░░░░] 28% (9/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -62,17 +62,19 @@ Recent decisions affecting current work:
 - **Phase 18**: SqliteBackend stores db_path for magellan shell-out in ast/find_ast
 - **Phase 18**: Helper function migration skipped (referenced functions don't exist in current codebase)
 - **Phase 18**: search_symbols_impl takes explicit Connection parameter to enable trait method implementation
+- **Phase 18**: search_references_impl takes explicit Connection parameter to enable trait method implementation
+- **Phase 18**: search_calls_impl takes explicit Connection parameter to enable trait method implementation
 
 ### Pending Todos
 
-- Complete remaining Phase 18 plans (18-02 through 18-05)
+- Complete remaining Phase 18 plans (18-05)
 - Move SQL query logic from query.rs to SqliteBackend trait implementation
 - Implement ast/find_ast commands with magellan shell-out
 
 ## Session Continuity
 
-Last session: 2026-02-09 — Phase 18 plan 18-02 execution
-Stopped at: Completed 18-02 (search_symbols_impl creation)
+Last session: 2026-02-09 — Phase 18 plan 18-04 execution
+Stopped at: Completed 18-04 (search_calls_impl creation)
 Resume file: None
 
 ### Blockers/Concerns
@@ -92,7 +94,7 @@ Resume file: None
 
 ## Next Steps
 
-1. Continue Phase 18: Execute remaining plans (18-02 through 18-05)
+1. Continue Phase 18: Execute remaining plans (18-05)
    - Move SQL query logic from query.rs to SqliteBackend
    - Implement ast/find_ast commands with magellan shell-out
    - Verify output parity with pre-refactor implementation
@@ -100,13 +102,14 @@ Resume file: None
 ## Phase 18 Summary
 
 **Started:** 2026-02-09
-**Plans:** 3/5 complete (18-01, 18-02, 18-03)
+**Plans:** 4/5 complete (18-01, 18-02, 18-03, 18-04)
 **Artifacts Created:**
 - src/backend/sqlite.rs — SqliteBackend with db_path field and getter
 - src/query.rs — search_symbols_impl() with Connection parameter
 - src/query.rs — search_references_impl() with Connection parameter
+- src/query.rs — search_calls_impl() with Connection parameter
 
-**Commits:** 2 atomic commits (18-03 completed during 18-02)
+**Commits:** 4 atomic commits
 
 ---
 
