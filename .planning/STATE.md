@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 17 of 21 (Backend Infrastructure)
-Plan: 4 of 5 in current phase
+Plan: 5 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-09 — Plan 17-02 complete (Backend enum and runtime dispatch)
+Last activity: 2026-02-09 — Plan 17-05 complete (Backend API re-exports and integration tests)
 
-Progress: [███░░░░░░░░] 12% (4/27 plans complete in v3.0)
+Progress: [████░░░░░░░] 15% (5/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -41,11 +41,12 @@ Progress: [███░░░░░░░░] 12% (4/27 plans complete in v3.0)
 | 17-02 (v3.0) | 1 | 5m | ~5 min |
 | 17-03 (v3.0) | 1 | 2m | ~2 min |
 | 17-04 (v3.0) | 1 | 3m | ~3 min |
+| 17-05 (v3.0) | 1 | 7m | ~7 min |
 | 17-21 (v3.0) | 1 | TBD | - |
 
 **Recent Trend:**
-- Last 5 plans: ~5 min each
-- Trend: Stable (latest: 5min)
+- Last 5 plans: ~4 min each
+- Trend: Stable (latest: 7min)
 
 *Updated after each plan completion*
 
@@ -56,14 +57,21 @@ Progress: [███░░░░░░░░] 12% (4/27 plans complete in v3.0)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- **Phase 17**: Dual backend support via Backend trait abstraction
-- **Phase 17**: Runtime backend detection (no --backend flag needed)
+- **Phase 17**: Dual backend support via BackendTrait abstraction (renamed from Backend to avoid collision)
+- **Phase 17**: Runtime backend detection via Backend::detect_and_open() (no --backend flag needed)
 - **Phase 17**: Feature-gated native-v2 (disabled by default)
+- **Phase 17**: BackendTrait has no Send/Sync bounds (rusqlite::Connection not Sync, CodeGraph not Send)
 - **Phase 17**: Zero breaking changes to SQLite backend
 
 ### Pending Todos
 
 None yet.
+
+## Session Continuity
+
+Last session: 2026-02-09 19:41 UTC (plan 17-05 execution)
+Stopped at: Completed 17-05 Backend API re-exports and integration tests
+Resume file: None
 
 ### Blockers/Concerns
 
@@ -72,10 +80,19 @@ None yet.
 - **Phase 21**: KV prefix scan performance (benchmark on realistic datasets)
 
 **From 17-02 Execution:**
-- **Native-v2 backend**: magellan::CodeGraph uses Rc internally which is not Send + Sync. This blocks native-v2 compilation until magellan is updated to use Arc, or Backend trait bounds are relaxed. SQLite backend (primary) works correctly.
+- **Native-v2 backend**: magellan::CodeGraph uses Rc internally which is not Send + Sync. This was resolved in 17-05 by removing Send/Sync bounds from BackendTrait.
+
+**From 17-05 Execution:**
+- **BackendTrait has no Send/Sync bounds** - Required because rusqlite::Connection is not Sync and magellan::CodeGraph is not Send
+- **Backend enum has Debug derive** - Required for test assertions
+- **Custom Debug for NativeV2Backend** - CodeGraph doesn't implement Debug
+
+### Pending Todos
+
+None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-09 19:37 UTC (plan 17-02 execution)
-Stopped at: Completed 17-02 Backend enum and runtime dispatch
+Last session: 2026-02-09 19:41 UTC (plan 17-05 execution)
+Stopped at: Completed 17-05 Backend API re-exports and integration tests
 Resume file: None
