@@ -75,20 +75,44 @@ impl super::BackendTrait for NativeV2Backend {
 
     fn ast(
         &self,
-        _file: &Path,
-        _position: Option<usize>,
-        _limit: usize,
+        file: &Path,
+        position: Option<usize>,
+        limit: usize,
     ) -> Result<serde_json::Value, LlmError> {
-        // TODO: Implement in Phase 19 using CodeGraph API
-        Err(LlmError::SearchFailed {
-            reason: "NativeV2Backend::ast not yet implemented".to_string(),
-        })
+        // Convert Path to str for CodeGraph API
+        let file_path = file.to_str()
+            .ok_or_else(|| LlmError::SearchFailed {
+                reason: format!("File path {:?} is not valid UTF-8", file),
+            })?;
+
+        // Delegate to CodeGraph API for AST nodes
+        let nodes = self.graph.get_ast_nodes_by_file(file_path)
+            .map_err(|e| LlmError::SearchFailed {
+                reason: format!("Failed to get AST nodes for {}: {}", file_path, e),
+            })?;
+
+        // Apply position filter if specified
+        let filtered: Vec<_> = if let Some(pos) = position {
+            nodes.into_iter()
+                .filter(|n| n.node.byte_start <= pos && pos < n.node.byte_end)
+                .take(limit)
+                .collect()
+        } else {
+            nodes.into_iter().take(limit).collect()
+        };
+
+        // Return as JSON
+        serde_json::to_value(filtered).map_err(LlmError::JsonError)
     }
 
-    fn find_ast(&self, _kind: &str) -> Result<serde_json::Value, LlmError> {
-        // TODO: Implement in Phase 19 using CodeGraph API
-        Err(LlmError::SearchFailed {
-            reason: "NativeV2Backend::find_ast not yet implemented".to_string(),
-        })
+    fn find_ast(&self, kind: &str) -> Result<serde_json::Value, LlmError> {
+        // Delegate to CodeGraph::get_ast_nodes_by_kind()
+        let nodes = self.graph.get_ast_nodes_by_kind(kind)
+            .map_err(|e| LlmError::SearchFailed {
+                reason: format!("Failed to get AST nodes by kind: {}", e),
+            })?;
+
+        // Return JSON-serializable results
+        serde_json::to_value(nodes).map_err(LlmError::JsonError)
     }
 }
