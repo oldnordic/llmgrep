@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** Fast, reliable search of Magellan code databases (SQLite or native-v2) with CLI behavior consistent with Splice and Magellan. Dual backend support enables O(1) KV lookups with native-v2 while maintaining SQLite compatibility. Optimized for LLM consumption with intelligent relevance scoring, AST-based structural queries, and graph algorithm integration.
-**Current focus:** Phase 17 - Backend Infrastructure
+**Current focus:** Phase 18 - SqliteBackend Refactor
 
 ## Current Position
 
-Phase: 17 of 21 (Backend Infrastructure)
-Plan: 5 of 5 in current phase
-Status: In progress
-Last activity: 2026-02-09 — Plan 17-05 complete (Backend API re-exports and integration tests)
+Phase: 18 of 21 (SqliteBackend Refactor) — IN PROGRESS
+Current Plan: 18-01 (db_path field addition)
+Status: Plan 18-01 complete, 1/5 plans done in Phase 18
+Last activity: 2026-02-09 — SqliteBackend db_path field added
 
-Progress: [████░░░░░░░] 15% (5/27 plans complete in v3.0)
+Progress: [█████░░░░░░] 20% (6/27 plans complete in v3.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 47 (v1.0-v2.1)
+- Total plans completed: 52 (v1.0-v3.0)
 - Average duration: ~14 min
 - Total execution time: ~11 hours (across all milestones)
 
@@ -37,18 +37,15 @@ Progress: [████░░░░░░░] 15% (5/27 plans complete in v3.0)
 | 14 (v2.1) | 4 | 14m | ~4 min |
 | 15 (v2.1) | 2 | ~10m | ~5 min |
 | 16 (v2.1) | 2 | ~10m | ~5 min |
-| 17-01 (v3.0) | 1 | 2m | ~2 min |
-| 17-02 (v3.0) | 1 | 5m | ~5 min |
-| 17-03 (v3.0) | 1 | 2m | ~2 min |
-| 17-04 (v3.0) | 1 | 3m | ~3 min |
-| 17-05 (v3.0) | 1 | 7m | ~7 min |
-| 17-21 (v3.0) | 1 | TBD | - |
+| 17 (v3.0) | 5 | ~24m | ~5 min |
+| 18 (v3.0) | 1 | ~2m | ~2 min |
 
 **Recent Trend:**
-- Last 5 plans: ~4 min each
-- Trend: Stable (latest: 7min)
+- Phase 17 (5 plans): ~5 min each
+- Phase 18 (1 plan): ~2 min each
+- Trend: Stable
 
-*Updated after each plan completion*
+*Updated after phase completion*
 
 ## Accumulated Context
 
@@ -57,25 +54,30 @@ Progress: [████░░░░░░░] 15% (5/27 plans complete in v3.0)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- **Phase 17**: Dual backend support via BackendTrait abstraction (renamed from Backend to avoid collision)
+- **Phase 17**: Dual backend support via BackendTrait abstraction
 - **Phase 17**: Runtime backend detection via Backend::detect_and_open() (no --backend flag needed)
 - **Phase 17**: Feature-gated native-v2 (disabled by default)
 - **Phase 17**: BackendTrait has no Send/Sync bounds (rusqlite::Connection not Sync, CodeGraph not Send)
 - **Phase 17**: Zero breaking changes to SQLite backend
+- **Phase 18**: SqliteBackend stores db_path for magellan shell-out in ast/find_ast
+- **Phase 18**: Helper function migration skipped (referenced functions don't exist in current codebase)
 
 ### Pending Todos
 
-None yet.
+- Complete remaining Phase 18 plans (18-02 through 18-05)
+- Move SQL query logic from query.rs to SqliteBackend trait implementation
+- Implement ast/find_ast commands with magellan shell-out
 
 ## Session Continuity
 
-Last session: 2026-02-09 19:41 UTC (plan 17-05 execution)
-Stopped at: Completed 17-05 Backend API re-exports and integration tests
+Last session: 2026-02-09 — Phase 18 plan 18-01 execution
+Stopped at: Completed 18-01 (db_path field addition)
 Resume file: None
 
 ### Blockers/Concerns
 
 **From Research:**
+- **Phase 18**: SqliteBackend refactor must preserve exact SQL query logic to maintain output parity
 - **Phase 19**: CodeGraph API exact method signatures (consult Magellan docs during implementation)
 - **Phase 21**: KV prefix scan performance (benchmark on realistic datasets)
 
@@ -87,12 +89,37 @@ Resume file: None
 - **Backend enum has Debug derive** - Required for test assertions
 - **Custom Debug for NativeV2Backend** - CodeGraph doesn't implement Debug
 
-### Pending Todos
+## Next Steps
 
-None yet.
+1. Continue Phase 18: Execute remaining plans (18-02 through 18-05)
+   - Move SQL query logic from query.rs to SqliteBackend
+   - Implement ast/find_ast commands with magellan shell-out
+   - Verify output parity with pre-refactor implementation
 
-## Session Continuity
+## Phase 18 Summary
 
-Last session: 2026-02-09 19:41 UTC (plan 17-05 execution)
-Stopped at: Completed 17-05 Backend API re-exports and integration tests
-Resume file: None
+**Started:** 2026-02-09
+**Plans:** 1/5 complete (18-01)
+**Artifacts Created:**
+- src/backend/sqlite.rs — SqliteBackend with db_path field and getter
+
+**Commits:** 1 atomic commit
+
+---
+
+## Phase 17 Summary
+
+**Completed:** 2026-02-09
+**Plans:** 5/5 complete (17-01 through 17-05)
+**Verification:** 10/10 must-haves verified
+**Tests:** 342 tests passing (zero regressions)
+
+**Artifacts Created:**
+- src/backend/mod.rs — BackendTrait + Backend enum + detect_and_open()
+- src/backend/sqlite.rs — SqliteBackend struct with stub implementations
+- src/backend/native_v2.rs — NativeV2Backend struct cfg-gated
+- src/error.rs — NativeV2BackendNotSupported + BackendDetectionFailed
+- tests/backend_detection_test.rs — Integration tests for backend detection
+- Cargo.toml — native-v2 feature flag + updated dependencies
+
+**Commits:** 12 atomic commits across 3 waves
