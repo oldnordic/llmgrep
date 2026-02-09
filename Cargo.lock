@@ -670,7 +670,7 @@ checksum = "df1d3c3b53da64cf5760482273a98e575c651a67eec7f77df96b5b642de8f039"
 
 [[package]]
 name = "llmgrep"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -704,9 +704,7 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "magellan"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b74b831d6f9440a96a2d3152dfa56f46a164aa64b9587d8ed1d7823292ad828"
+version = "2.2.0"
 dependencies = [
  "ahash",
  "anyhow",
@@ -729,6 +727,7 @@ dependencies = [
  "sha2",
  "signal-hook",
  "sqlitegraph",
+ "tempfile",
  "thiserror",
  "tree-sitter",
  "tree-sitter-c",
@@ -1220,9 +1219,9 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "sqlitegraph"
-version = "1.4.2"
+version = "1.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b795b5895d8b7fa3fd65fbe8b5aedf568b61b4ab444c4a4e4a169efb45a20063"
+checksum = "320270c9facd018863ddaccc948c980ce10101872c0b63b1af0b85faf97b64d9"
 dependencies = [
  "ahash",
  "arc-swap",
