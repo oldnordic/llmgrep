@@ -33,7 +33,7 @@ impl NativeV2Backend {
     }
 }
 
-impl super::Backend for NativeV2Backend {
+impl super::BackendTrait for NativeV2Backend {
     fn search_symbols(
         &self,
         _options: SearchOptions,

@@ -30,7 +30,7 @@ impl SqliteBackend {
     }
 }
 
-impl super::Backend for SqliteBackend {
+impl super::BackendTrait for SqliteBackend {
     fn search_symbols(
         &self,
         _options: SearchOptions,

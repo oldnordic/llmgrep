@@ -29,7 +29,10 @@ use native_v2::NativeV2Backend;
 /// - Call search (outgoing edges)
 /// - AST tree queries
 /// - AST node search by kind
-pub trait Backend: Send + Sync {
+///
+/// Note: This trait does not require Sync because rusqlite::Connection is not Sync.
+/// Each backend instance should be used from a single thread or externally synchronized.
+pub trait BackendTrait: Send {
     /// Search for symbols matching the given options.
     ///
     /// Returns a tuple of (response, partial_results_flag, paths_bounded_flag).
