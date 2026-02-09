@@ -229,3 +229,101 @@ fn test_backend_find_ast_various_kinds() {
         let _ = result;
     }
 }
+
+// ============================================================================
+// Native-V2 backend specific tests
+// ============================================================================
+
+/// Test that native-v2 backend is correctly detected and opened
+#[cfg(feature = "native-v2")]
+#[test]
+fn test_native_v2_backend_detection() {
+    use magellan::CodeGraph;
+
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create a native-v2 database
+    let _graph = CodeGraph::open(&db_path)
+        .expect("Failed to create native-v2 database");
+
+    // Open via Backend abstraction
+    let backend = Backend::detect_and_open(&db_path)
+        .expect("Backend should open native-v2 database");
+
+    // Verify it detected as native-v2
+    match backend {
+        #[cfg(feature = "native-v2")]
+        Backend::NativeV2(_) => {
+            // Correct - native-v2 backend detected
+        }
+        Backend::Sqlite(_) => {
+            panic!("Should detect native-v2 database as native-v2, not SQLite");
+        }
+    }
+}
+
+/// Test that native-v2 backend ast() method handles non-existent files gracefully
+#[cfg(feature = "native-v2")]
+#[test]
+fn test_native_v2_ast_empty_result_for_missing_file() {
+    use magellan::CodeGraph;
+
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create a native-v2 database
+    let _graph = CodeGraph::open(&db_path)
+        .expect("Failed to create native-v2 database");
+
+    let backend = Backend::detect_and_open(&db_path)
+        .expect("Backend should open database");
+
+    // Query for non-existent file
+    let result = backend.ast(
+        Path::new("src/nonexistent.rs"),
+        None,
+        10,
+    );
+
+    // Should return empty array, not error
+    let json = result.expect("native-v2 backend should handle missing file gracefully");
+
+    match json {
+        serde_json::Value::Array(arr) => {
+            assert!(arr.is_empty(), "Non-existent file should return empty array");
+        }
+        serde_json::Value::Null => {
+            // Null is also acceptable
+        }
+        _ => {
+            panic!("Expected array or null for empty results, got {:?}", json);
+        }
+    }
+}
+
+/// Test that native-v2 backend find_ast() handles unknown kinds gracefully
+#[cfg(feature = "native-v2")]
+#[test]
+fn test_native_v2_find_ast_empty_result_for_unknown_kind() {
+    use magellan::CodeGraph;
+
+    let temp_dir = TempDir::new().expect("tempdir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create a native-v2 database
+    let _graph = CodeGraph::open(&db_path)
+        .expect("Failed to create native-v2 database");
+
+    let backend = Backend::detect_and_open(&db_path)
+        .expect("Backend should open database");
+
+    // Query for unknown kind
+    let result = backend.find_ast("unknown_kind_xyz")
+        .expect("find_ast should not error for unknown kind");
+
+    // Should return empty array
+    let arr = result.as_array()
+        .expect("Result should be array");
+    assert_eq!(arr.len(), 0, "Unknown kind should return empty array");
+}
