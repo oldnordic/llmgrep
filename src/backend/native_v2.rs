@@ -7,19 +7,27 @@
 
 use crate::error::LlmError;
 use crate::output::{
-    CallSearchResponse, ReferenceSearchResponse, SearchResponse,
+    CallSearchResponse, CallMatch, ReferenceSearchResponse, ReferenceMatch,
+    SearchResponse, SymbolMatch, Span,
 };
 use crate::query::SearchOptions;
 use magellan::CodeGraph;
-use std::path::Path;
+use rusqlite::Connection;
+use std::path::{Path, PathBuf};
+use sqlitegraph::SnapshotId;
 
 /// Native-V2 backend implementation.
 ///
 /// Wraps a CodeGraph and implements the Backend trait.
 /// This backend is only available when the native-v2 feature is enabled.
+///
+/// Note: Native-v2 databases in Magellan 2.1.0 still use SQLite as the storage
+/// layer (via sqlitegraph), so we can use SQL queries for symbol search.
 pub struct NativeV2Backend {
     #[allow(dead_code)]
     pub(crate) graph: CodeGraph,
+    /// Database path for direct SQL queries
+    db_path: PathBuf,
 }
 
 impl std::fmt::Debug for NativeV2Backend {
@@ -38,39 +46,323 @@ impl NativeV2Backend {
         let graph = CodeGraph::open(db_path).map_err(|e| LlmError::DatabaseCorrupted {
             reason: format!("Failed to open Native-V2 database: {}", e),
         })?;
-        Ok(Self { graph })
+        Ok(Self {
+            graph,
+            db_path: db_path.to_path_buf(),
+        })
+    }
+
+    /// Get a database connection for SQL queries.
+    fn connect(&self) -> Result<Connection, LlmError> {
+        Connection::open(&self.db_path).map_err(LlmError::from)
     }
 }
 
 impl super::BackendTrait for NativeV2Backend {
     fn search_symbols(
         &self,
-        _options: SearchOptions,
+        options: SearchOptions,
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
-        // TODO: Implement in Phase 19 using CodeGraph API
-        Err(LlmError::SearchFailed {
-            reason: "NativeV2Backend::search_symbols not yet implemented".to_string(),
-        })
+        // For native-v2, use SQL queries via the connection
+        // The native-v2 feature in Magellan still uses SQLite as the storage layer
+        let conn = self.connect()?;
+
+        // Build a simple search query for symbols
+        let mut query = String::from(
+            "SELECT
+                s.symbol_id,
+                s.name,
+                s.kind,
+                s.fqn,
+                s.canonical_fqn,
+                s.display_fqn,
+                s.file_path,
+                s.byte_start,
+                s.byte_end,
+                s.start_line,
+                s.start_col,
+                s.end_line,
+                s.end_col,
+                s.language,
+                s.parent_name
+            FROM symbol_nodes s
+            WHERE s.name LIKE ? ESCAPE '\\'"
+        );
+
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(format!("%{}%", options.query.replace("%", "\\%").replace("_", "\\_")))];
+
+        // Add path filter if specified
+        if let Some(path) = options.path_filter {
+            query.push_str(" AND s.file_path LIKE ? ESCAPE '\\'");
+            params.push(Box::new(format!("{}%", path.to_string_lossy())));
+        }
+
+        // Add kind filter if specified
+        if let Some(kind) = options.kind_filter {
+            query.push_str(" AND s.kind = ?");
+            params.push(Box::new(kind.to_string()));
+        }
+
+        // Add limit
+        query.push_str(" LIMIT ?");
+        params.push(Box::new(options.limit as i64));
+
+        let mut stmt = conn.prepare(&query)?;
+
+        let mut results = Vec::new();
+        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+        let mut rows = stmt.query(param_refs.as_slice())?;
+
+        while let Some(row) = rows.next()? {
+            let file_path: String = row.get(6)?;
+            let byte_start: u64 = row.get(7)?;
+            let byte_end: u64 = row.get(8)?;
+            let start_line: u64 = row.get(9)?;
+            let start_col: u64 = row.get(10)?;
+            let end_line: u64 = row.get(11)?;
+            let end_col: u64 = row.get(12)?;
+
+            let span = Span {
+                span_id: format!("{}:{}:{}", file_path, byte_start, byte_end),
+                file_path,
+                byte_start,
+                byte_end,
+                start_line,
+                start_col,
+                end_line,
+                end_col,
+                context: None,
+            };
+
+            results.push(SymbolMatch {
+                match_id: format!("sym-{}", results.len()),
+                span,
+                name: row.get(1)?,
+                kind: row.get(2)?,
+                parent: row.get(14)?,
+                symbol_id: row.get(0)?,
+                score: None,
+                fqn: row.get(3)?,
+                canonical_fqn: row.get(4)?,
+                display_fqn: row.get(5)?,
+                content_hash: None,
+                symbol_kind_from_chunk: None,
+                snippet: None,
+                snippet_truncated: None,
+                language: row.get(13)?,
+                kind_normalized: None,
+                complexity_score: None,
+                fan_in: None,
+                fan_out: None,
+                cyclomatic_complexity: None,
+                ast_context: None,
+                supernode_id: None,
+            });
+        }
+
+        let total_count = results.len() as u64;
+        let response = SearchResponse {
+            results,
+            query: options.query.to_string(),
+            path_filter: options.path_filter.map(|p| p.to_string_lossy().to_string()),
+            kind_filter: options.kind_filter.map(|s| s.to_string()),
+            total_count,
+            notice: None,
+        };
+
+        // (response, partial, paths_bounded)
+        // partial: true if results were truncated
+        // paths_bounded: true if path filter was applied and limited results
+        let partial = total_count >= options.limit as u64;
+        let paths_bounded = options.path_filter.is_some();
+
+        Ok((response, partial, paths_bounded))
     }
 
     fn search_references(
         &self,
-        _options: SearchOptions,
+        options: SearchOptions,
     ) -> Result<(ReferenceSearchResponse, bool), LlmError> {
-        // TODO: Implement in Phase 19
-        Err(LlmError::SearchFailed {
-            reason: "NativeV2Backend::search_references not yet implemented".to_string(),
-        })
+        let conn = self.connect()?;
+
+        // Build a search query for references
+        let mut query = String::from(
+            "SELECT DISTINCT
+                r.file_path,
+                r.referenced_symbol,
+                r.byte_start,
+                r.byte_end,
+                r.start_line,
+                r.start_col,
+                r.end_line,
+                r.end_col,
+                s.symbol_id
+            FROM reference_nodes r
+            LEFT JOIN symbol_nodes s ON r.referenced_symbol = s.name
+            WHERE r.referenced_symbol LIKE ? ESCAPE '\\'"
+        );
+
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(format!("%{}%", options.query.replace("%", "\\%").replace("_", "\\_")))];
+
+        // Add path filter if specified
+        if let Some(path) = options.path_filter {
+            query.push_str(" AND r.file_path LIKE ? ESCAPE '\\'");
+            params.push(Box::new(format!("{}%", path.to_string_lossy())));
+        }
+
+        // Add limit
+        query.push_str(" LIMIT ?");
+        params.push(Box::new(options.limit as i64));
+
+        let mut stmt = conn.prepare(&query)?;
+
+        let mut results = Vec::new();
+        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+        let mut rows = stmt.query(param_refs.as_slice())?;
+
+        while let Some(row) = rows.next()? {
+            let file_path: String = row.get(0)?;
+            let byte_start: u64 = row.get(2)?;
+            let byte_end: u64 = row.get(3)?;
+            let start_line: u64 = row.get(4)?;
+            let start_col: u64 = row.get(5)?;
+            let end_line: u64 = row.get(6)?;
+            let end_col: u64 = row.get(7)?;
+
+            let span = Span {
+                span_id: format!("{}:{}:{}", file_path, byte_start, byte_end),
+                file_path,
+                byte_start,
+                byte_end,
+                start_line,
+                start_col,
+                end_line,
+                end_col,
+                context: None,
+            };
+
+            results.push(ReferenceMatch {
+                match_id: format!("ref-{}", results.len()),
+                span,
+                referenced_symbol: row.get(1)?,
+                reference_kind: None,
+                target_symbol_id: row.get(8)?,
+                score: None,
+                content_hash: None,
+                symbol_kind_from_chunk: None,
+                snippet: None,
+                snippet_truncated: None,
+            });
+        }
+
+        let total_count = results.len() as u64;
+        let response = ReferenceSearchResponse {
+            results,
+            query: options.query.to_string(),
+            path_filter: options.path_filter.map(|p| p.to_string_lossy().to_string()),
+            total_count,
+        };
+
+        let partial = total_count >= options.limit as u64;
+        Ok((response, partial))
     }
 
     fn search_calls(
         &self,
-        _options: SearchOptions,
+        options: SearchOptions,
     ) -> Result<(CallSearchResponse, bool), LlmError> {
-        // TODO: Implement in Phase 19
-        Err(LlmError::SearchFailed {
-            reason: "NativeV2Backend::search_calls not yet implemented".to_string(),
-        })
+        let conn = self.connect()?;
+
+        // Build a search query for calls
+        // Search for calls where either caller or callee matches the query
+        let mut query = String::from(
+            "SELECT DISTINCT
+                c.file_path,
+                c.caller,
+                c.callee,
+                c.caller_symbol_id,
+                c.callee_symbol_id,
+                c.byte_start,
+                c.byte_end,
+                c.start_line,
+                c.start_col,
+                c.end_line,
+                c.end_col
+            FROM call_nodes c
+            WHERE (c.caller LIKE ? ESCAPE '\\' OR c.callee LIKE ? ESCAPE '\\')"
+        );
+
+        let query_pattern = format!("%{}%", options.query.replace("%", "\\%").replace("_", "\\_"));
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![
+            Box::new(query_pattern.clone()),
+            Box::new(query_pattern),
+        ];
+
+        // Add path filter if specified
+        if let Some(path) = options.path_filter {
+            query.push_str(" AND c.file_path LIKE ? ESCAPE '\\'");
+            params.push(Box::new(format!("{}%", path.to_string_lossy())));
+        }
+
+        // Add limit
+        query.push_str(" LIMIT ?");
+        params.push(Box::new(options.limit as i64));
+
+        let mut stmt = conn.prepare(&query)?;
+
+        let mut results = Vec::new();
+        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+        let mut rows = stmt.query(param_refs.as_slice())?;
+
+        while let Some(row) = rows.next()? {
+            let file_path: String = row.get(0)?;
+            let byte_start: u64 = row.get(5)?;
+            let byte_end: u64 = row.get(6)?;
+            let start_line: u64 = row.get(7)?;
+            let start_col: u64 = row.get(8)?;
+            let end_line: u64 = row.get(9)?;
+            let end_col: u64 = row.get(10)?;
+
+            let span = Span {
+                span_id: format!("{}:{}:{}", file_path, byte_start, byte_end),
+                file_path,
+                byte_start,
+                byte_end,
+                start_line,
+                start_col,
+                end_line,
+                end_col,
+                context: None,
+            };
+
+            results.push(CallMatch {
+                match_id: format!("call-{}", results.len()),
+                span,
+                caller: row.get(1)?,
+                callee: row.get(2)?,
+                caller_symbol_id: row.get(3)?,
+                callee_symbol_id: row.get(4)?,
+                score: None,
+                content_hash: None,
+                symbol_kind_from_chunk: None,
+                snippet: None,
+                snippet_truncated: None,
+            });
+        }
+
+        let total_count = results.len() as u64;
+        let response = CallSearchResponse {
+            results,
+            query: options.query.to_string(),
+            path_filter: options.path_filter.map(|p| p.to_string_lossy().to_string()),
+            total_count,
+        };
+
+        let partial = total_count >= options.limit as u64;
+        Ok((response, partial))
     }
 
     fn ast(
