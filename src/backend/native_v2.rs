@@ -17,10 +17,16 @@ use std::path::Path;
 ///
 /// Wraps a CodeGraph and implements the Backend trait.
 /// This backend is only available when the native-v2 feature is enabled.
-#[derive(Debug)]
 pub struct NativeV2Backend {
     #[allow(dead_code)]
     pub(crate) graph: CodeGraph,
+}
+
+impl std::fmt::Debug for NativeV2Backend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NativeV2Backend")
+            .finish_non_exhaustive()
+    }
 }
 
 impl NativeV2Backend {
@@ -29,7 +35,9 @@ impl NativeV2Backend {
     /// # Arguments
     /// * `db_path` - Path to the Native-V2 database file
     pub fn open(db_path: &Path) -> Result<Self, LlmError> {
-        let graph = CodeGraph::open(db_path)?;
+        let graph = CodeGraph::open(db_path).map_err(|e| LlmError::DatabaseCorrupted {
+            reason: format!("Failed to open Native-V2 database: {}", e),
+        })?;
         Ok(Self { graph })
     }
 }

@@ -30,9 +30,12 @@ use native_v2::NativeV2Backend;
 /// - AST tree queries
 /// - AST node search by kind
 ///
-/// Note: This trait does not require Sync because rusqlite::Connection is not Sync.
+/// Note: This trait does not require Send or Sync because:
+/// - rusqlite::Connection is not Sync
+/// - magellan::CodeGraph (native-v2) is not Send
+///
 /// Each backend instance should be used from a single thread or externally synchronized.
-pub trait BackendTrait: Send {
+pub trait BackendTrait {
     /// Search for symbols matching the given options.
     ///
     /// Returns a tuple of (response, partial_results_flag, paths_bounded_flag).
