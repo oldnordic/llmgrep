@@ -24,6 +24,9 @@ pub use ast::{
     get_supported_languages,
 };
 
+// Re-export backend types for external use
+pub use backend::Backend;
+
 use clap::ValueEnum;
 
 /// Sorting mode for search results
