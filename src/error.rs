@@ -103,6 +103,21 @@ pub enum LlmError {
     /// Magellan algorithm execution failed.
     #[error("Magellan {algorithm} execution failed: {stderr}")]
     MagellanExecutionFailed { algorithm: String, stderr: String },
+
+    /// Native-V2 backend detected but llmgrep was built without native-v2 support.
+    #[error(
+        "LLM-E109: Native-V2 backend detected but llmgrep was built without native-v2 support.\n\n\
+         Database: {path}\n\n\
+         To enable Native-V2 support, rebuild llmgrep with:\n\
+         \x20  cargo install llmgrep --features native-v2\n\
+         \x20  or: cargo build --release --features native-v2\n\n\
+         For more information, see: https://docs.rs/llmgrep/latest/llmgrep/"
+    )]
+    NativeV2BackendNotSupported { path: String },
+
+    /// Backend detection failed for the database.
+    #[error("LLM-E110: Backend detection failed for database: {path}\nReason: {reason}")]
+    BackendDetectionFailed { path: String, reason: String },
 }
 
 impl LlmError {
@@ -127,6 +142,8 @@ impl LlmError {
             LlmError::AmbiguousSymbolName { .. } => "LLM-E106",
             LlmError::MagellanVersionMismatch { .. } => "LLM-E107",
             LlmError::MagellanExecutionFailed { .. } => "LLM-E108",
+            LlmError::NativeV2BackendNotSupported { .. } => "LLM-E109",
+            LlmError::BackendDetectionFailed { .. } => "LLM-E110",
         }
     }
 
@@ -142,6 +159,8 @@ impl LlmError {
             LlmError::AmbiguousSymbolName { .. } => "error",
             LlmError::MagellanVersionMismatch { .. } => "error",
             LlmError::MagellanExecutionFailed { .. } => "error",
+            LlmError::NativeV2BackendNotSupported { .. } => "error",
+            LlmError::BackendDetectionFailed { .. } => "error",
             _ => "error",
         }
     }
@@ -194,6 +213,12 @@ impl LlmError {
             }
             LlmError::MagellanExecutionFailed { .. } => {
                 Some("Check magellan --version and database compatibility.")
+            }
+            LlmError::NativeV2BackendNotSupported { .. } => {
+                Some("Rebuild llmgrep with: cargo install llmgrep --features native-v2")
+            }
+            LlmError::BackendDetectionFailed { .. } => {
+                Some("Check that the database file exists and is a valid Magellan database.")
             }
         }
     }
