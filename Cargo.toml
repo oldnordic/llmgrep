@@ -1,12 +1,18 @@
 [package]
 name = "llmgrep"
-version = "2.1.0"
+version = "2.1.1"
 edition = "2021"
 description = "Smart grep over Magellan code maps with schema-aligned JSON output"
 license = "GPL-3.0-only"
 repository = "https://github.com/oldnordic/llmgrep"
 documentation = "https://docs.rs/llmgrep"
 readme = "README.md"
+
+[features]
+# Platform feature model - explicit opt-in required
+default = ["unix"]
+unix = []
+windows = []
 
 [dependencies]
 anyhow = "1.0"
@@ -21,4 +27,5 @@ sha2 = "0.10"
 sqlitegraph = "1.3.0"
 tempfile = "3.10"
 thiserror = "1.0"
-magellan = "2.1.0"
+# Use local path for development - will be "2.1.1" on crates.io
+magellan = { version = "2.2", path = "../magellan" }
