@@ -7,9 +7,10 @@ use llmgrep::output::{
     ErrorResponse, OutputFormat, ReferenceSearchResponse, SearchResponse,
 };
 use llmgrep::output_common::{format_partial_footer, format_total_header, render_json_response};
+use llmgrep::backend::Backend;
 use llmgrep::query::{
-    search_calls, search_references, search_symbols, AstOptions, ContextOptions, DepthOptions,
-    FqnOptions, MetricsOptions, SearchOptions, SnippetOptions,
+    AstOptions, ContextOptions, DepthOptions, FqnOptions, MetricsOptions, SearchOptions,
+    SnippetOptions,
 };
 use llmgrep::ast::{expand_shorthand_with_language, expand_shorthands};
 use llmgrep::SortMode;
@@ -393,6 +394,9 @@ fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
 }
 
 fn main() {
+    // Check platform and warn about limitations
+    llmgrep::platform::check_platform_support();
+
     let cli = Cli::parse();
     if let Err(err) = dispatch(&cli) {
         emit_error(&cli, &err);
@@ -621,6 +625,9 @@ fn run_search(
 
     let db_path = validated_db.as_ref().expect("validated db path missing");
 
+    // Detect and open backend automatically (SQLite or Native-V2)
+    let backend = Backend::detect_and_open(&db_path)?;
+
     // Validate path filter if provided
     let validated_path = if let Some(p) = path {
         Some(validate_path(p, false)?)
@@ -711,7 +718,7 @@ fn run_search(
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
             };
-            let (mut response, partial, paths_bounded) = search_symbols(options)?;
+            let (mut response, partial, paths_bounded) = backend.search_symbols(options)?;
 
             // Compute SCC count from results when condense was active
             let scc_count: usize = response
@@ -776,7 +783,7 @@ fn run_search(
                 fqn_pattern: None,
                 exact_fqn: None,
             };
-            let (response, partial) = search_references(options)?;
+            let (response, partial) = backend.search_references(options)?;
             output_references(cli, response, partial)?;
         }
         SearchMode::Calls => {
@@ -809,7 +816,7 @@ fn run_search(
                 fqn_pattern: None,
                 exact_fqn: None,
             };
-            let (response, partial) = search_calls(options)?;
+            let (response, partial) = backend.search_calls(options)?;
             output_calls(cli, response, partial)?;
         }
         SearchMode::Auto => {
@@ -823,7 +830,7 @@ fn run_search(
                 AutoLimitMode::Global => split_auto_limit(limit),
             };
 
-            let (symbols, symbols_partial, _) = search_symbols(SearchOptions {
+            let (symbols, symbols_partial, _) = backend.search_symbols(SearchOptions {
                 db_path,
                 query,
                 path_filter: validated_path.as_ref(),
@@ -868,7 +875,7 @@ fn run_search(
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
             })?;
-            let (references, refs_partial) = search_references(SearchOptions {
+            let (references, refs_partial) = backend.search_references(SearchOptions {
                 db_path,
                 query,
                 path_filter: validated_path.as_ref(),
@@ -897,7 +904,7 @@ fn run_search(
                 fqn_pattern: None,
                 exact_fqn: None,
             })?;
-            let (calls, calls_partial) = search_calls(SearchOptions {
+            let (calls, calls_partial) = backend.search_calls(SearchOptions {
                 db_path,
                 query,
                 path_filter: validated_path.as_ref(),
@@ -961,8 +968,6 @@ fn run_ast(
     position: Option<usize>,
     limit: usize,
 ) -> Result<(), LlmError> {
-    use std::process::Command;
-
     // Validate database path
     let db_path = if let Some(db_path) = &cli.db {
         validate_path(db_path, true)?
@@ -975,7 +980,7 @@ fn run_ast(
     // Validate file path
     let validated_file = validate_path(file, false)?;
 
-    // Check if file exists (magellan will fail if it doesn't, but we give better error)
+    // Check if file exists
     if !validated_file.exists() {
         return Err(LlmError::PathValidationFailed {
             path: file.display().to_string(),
@@ -983,57 +988,25 @@ fn run_ast(
         });
     }
 
-    // Build magellan ast command
-    let mut cmd = Command::new("magellan");
-    cmd.arg("ast")
-        .arg("--db")
-        .arg(&db_path)
-        .arg("--file")
-        .arg(&validated_file)
-        .arg("--output")
-        .arg("json");
+    // Detect and open backend automatically (SQLite or Native-V2)
+    let backend = Backend::detect_and_open(&db_path)?;
 
-    // Add position flag if specified
-    if let Some(pos) = position {
-        cmd.arg("--position").arg(pos.to_string());
-    }
+    // Query AST via backend
+    let json_value = backend.ast(&validated_file, position, limit)?;
 
-    // Execute command
-    let output = cmd.output().map_err(|e| match e.kind() {
-        std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
-        _ => LlmError::MagellanExecutionFailed {
-            algorithm: "ast".to_string(),
-            stderr: e.to_string(),
-        },
-    })?;
-
-    // Check for non-zero exit
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(LlmError::MagellanExecutionFailed {
-            algorithm: "ast".to_string(),
-            stderr: stderr.to_string(),
-        });
-    }
-
-    let json_str = String::from_utf8_lossy(&output.stdout);
-
-    // Parse JSON to check for truncation warning
-    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str) {
-        // Handle truncation warning (file mode only, not position mode)
-        if position.is_none() {
-            if let Some(data) = parsed.get("data") {
-                if let Some(count) = data.get("count").and_then(|c| c.as_u64()) {
-                    if count > limit as u64 {
-                        eprintln!(
-                            "Warning: AST output truncated to {} nodes (total: {})",
-                            limit, count
-                        );
-                        eprintln!(
-                            "         Use --limit {} to see all nodes.",
-                            count
-                        );
-                    }
+    // Check for truncation warning (file mode only, not position mode)
+    if position.is_none() {
+        if let Some(data) = json_value.get("data") {
+            if let Some(count) = data.get("count").and_then(|c| c.as_u64()) {
+                if count > limit as u64 {
+                    eprintln!(
+                        "Warning: AST output truncated to {} nodes (total: {})",
+                        limit, count
+                    );
+                    eprintln!(
+                        "         Use --limit {} to see all nodes.",
+                        count
+                    );
                 }
             }
         }
@@ -1041,17 +1014,10 @@ fn run_ast(
 
     // Render output based on format
     let rendered = if matches!(cli.output, OutputFormat::Pretty) {
-        // Pretty-print the JSON
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str) {
-            serde_json::to_string_pretty(&parsed)
-        } else {
-            // If parsing fails, just return the raw string
-            Ok(json_str.to_string())
-        }
+        serde_json::to_string_pretty(&json_value)?
     } else {
-        // Raw JSON
-        Ok(json_str.to_string())
-    }?;
+        serde_json::to_string(&json_value)?
+    };
 
     println!("{}", rendered);
 
@@ -1062,8 +1028,6 @@ fn run_find_ast(
     cli: &Cli,
     kind: &str,
 ) -> Result<(), LlmError> {
-    use std::process::Command;
-
     // Validate database path
     let db_path = if let Some(db_path) = &cli.db {
         validate_path(db_path, true)?
@@ -1080,67 +1044,33 @@ fn run_find_ast(
         });
     }
 
-    // Build magellan find-ast command
-    let mut cmd = Command::new("magellan");
-    cmd.arg("find-ast")
-        .arg("--db")
-        .arg(&db_path)
-        .arg("--kind")
-        .arg(kind)
-        .arg("--output")
-        .arg("json");
+    // Detect and open backend automatically (SQLite or Native-V2)
+    let backend = Backend::detect_and_open(&db_path)?;
 
-    // Execute command
-    let output = cmd.output().map_err(|e| match e.kind() {
-        std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
-        _ => LlmError::MagellanExecutionFailed {
-            algorithm: "find-ast".to_string(),
-            stderr: e.to_string(),
-        },
-    })?;
-
-    // Check for non-zero exit
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(LlmError::MagellanExecutionFailed {
-            algorithm: "find-ast".to_string(),
-            stderr: stderr.to_string(),
-        });
-    }
-
-    let json_str = String::from_utf8_lossy(&output.stdout);
+    // Query AST nodes by kind via backend
+    let json_value = backend.find_ast(kind)?;
 
     // Check for empty nodes array (not an error, just no results)
-    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str) {
-        // Handle magellan wrapper: {"data": {"nodes": [...]}}
-        let nodes = if parsed["data"]["nodes"].is_array() {
-            parsed["data"]["nodes"].as_array()
-        } else {
-            parsed["nodes"].as_array()
-        };
+    let nodes = if json_value["data"]["nodes"].is_array() {
+        json_value["data"]["nodes"].as_array()
+    } else {
+        json_value["nodes"].as_array()
+    };
 
-        if let Some(node_array) = nodes {
-            if node_array.is_empty() {
-                eprintln!("No AST nodes found with kind '{}'", kind);
-                eprintln!("Hint: Check available kinds with: magellan label --list");
-                return Ok(());
-            }
+    if let Some(node_array) = nodes {
+        if node_array.is_empty() {
+            eprintln!("No AST nodes found with kind '{}'", kind);
+            eprintln!("Hint: Check available kinds with: magellan label --list");
+            return Ok(());
         }
     }
 
     // Render output based on format
     let rendered = if matches!(cli.output, OutputFormat::Pretty) {
-        // Pretty-print the JSON
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str) {
-            serde_json::to_string_pretty(&parsed)
-        } else {
-            // If parsing fails, just return the raw string
-            Ok(json_str.to_string())
-        }
+        serde_json::to_string_pretty(&json_value)?
     } else {
-        // Raw JSON
-        Ok(json_str.to_string())
-    }?;
+        serde_json::to_string(&json_value)?
+    };
 
     println!("{}", rendered);
 
