@@ -9,15 +9,17 @@ use crate::output::{
 };
 use crate::query::SearchOptions;
 use rusqlite::Connection;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// SQLite backend implementation.
 ///
 /// Wraps a rusqlite Connection and implements the Backend trait.
+/// Stores db_path for magellan shell-out in ast/find_ast commands.
 /// The actual SQL queries will be moved from query.rs in Phase 18.
 #[derive(Debug)]
 pub struct SqliteBackend {
     pub(crate) conn: Connection,
+    db_path: PathBuf,
 }
 
 impl SqliteBackend {
@@ -27,7 +29,15 @@ impl SqliteBackend {
     /// * `db_path` - Path to the SQLite database file
     pub fn open(db_path: &Path) -> Result<Self, LlmError> {
         let conn = Connection::open(db_path)?;
-        Ok(Self { conn })
+        Ok(Self {
+            conn,
+            db_path: db_path.to_path_buf(),
+        })
+    }
+
+    /// Get the database path for magellan shell-out commands.
+    pub(crate) fn db_path(&self) -> &Path {
+        &self.db_path
     }
 }
 
