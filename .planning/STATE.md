@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 23 of 23 (Feature Parity Native-V2)
-Current Plan: 23-03 (Metrics Filtering for Native-V2)
-Status: 2 of 6 plans in Phase 23 complete
-Last activity: 2026-02-10 — Snippet Extraction for Native-V2 (16 min)
+Current Plan: 23-04 (Metrics Extraction for Native-V2)
+Status: 3 of 6 plans in Phase 23 complete
+Last activity: 2026-02-10 — Metrics Extraction for Native-V2 (3 min)
 
-Progress: [██████████░] 71% (33/37 plans complete in v3.0)
+Progress: [██████████░] 73% (34/37 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -59,6 +59,8 @@ Progress: [██████████░] 71% (33/37 plans complete in v3.0)
 | Phase 22-bugfix-production-ready P01 | 7min | 3 tasks | 5 files |
 | Phase 22-bugfix-production-ready P02 | 5min | 1 tasks | 1 files |
 | Phase 22-bugfix-production-ready P03 | 15min | 4 tasks | 12 files |
+| Phase 23-feature-parity-native-v2 P03 | 16min | 1 tasks | 1 files |
+| Phase 23-feature-parity-native-v2 P04 | 3min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -114,15 +116,18 @@ Recent decisions affecting current work:
 - [Phase 23]: Relevance scoring for Native-V2 backend with regex pattern support
 - [Phase 23]: Conditional score calculation only when include_score option is true
 - [Phase 23]: Max score aggregation for calls (caller_score.max(callee_score))
+- [Phase 23]: Metrics extraction from KV store using pattern `sm:symbol:{entity_id}`
+- [Phase 23]: Graceful degradation for metrics when not available (native-v2 databases may not have metrics)
+- [Phase 23]: Filter out symbols without metrics when metrics filter is active
 
 ### Pending Todos
 
-- Phase 23: Remaining plans (23-04, 23-05, 23-06)
+- Phase 23: Remaining plans (23-05, 23-06)
 
 ## Session Continuity
 
-Last session: 2026-02-10 — Phase 23 plan 23-03 (COMPLETE)
-Stopped at: Completed Phase 23-03: Relevance Scoring for Native-V2
+Last session: 2026-02-10 — Phase 23 plan 23-04 (COMPLETE)
+Stopped at: Completed Phase 23-04: Metrics Extraction for Native-V2
 Resume file: None
 
 ### Blockers/Concerns
@@ -355,22 +360,32 @@ Resume file: None
 ## Phase 23 Summary
 
 **Started:** 2026-02-10
-**Plans:** 1 of 6 complete (23-03)
+**Plans:** 2 of 6 complete (23-03, 23-04)
 **Status:** IN PROGRESS
 
 **Artifacts Created:**
 - .planning/phases/23-feature-parity-native-v2/23-03-SUMMARY.md — Relevance scoring summary
+- .planning/phases/23-feature-parity-native-v2/23-04-SUMMARY.md — Metrics extraction summary
 
 **Commits:**
 - 4786210 (23-03: Relevance scoring for Native-V2 backend)
+- 3f0a3ff (23-04: Metrics extraction for Native-V2 backend)
 
 **Verification:**
-- [x] score_match() function ported from src/query.rs verbatim
-- [x] use regex::Regex import added
-- [x] search_symbols() calculates score when include_score is true
-- [x] search_references() calculates score for referenced symbols
-- [x] search_calls() calculates score (max of caller/callee)
-- [x] Regex pattern compilation when use_regex is true
+- [x] Relevance scoring (23-03):
+  - [x] score_match() function ported from src/query.rs verbatim
+  - [x] use regex::Regex import added
+  - [x] search_symbols() calculates score when include_score is true
+  - [x] search_references() calculates score for referenced symbols
+  - [x] search_calls() calculates score (max of caller/callee)
+  - [x] Regex pattern compilation when use_regex is true
+- [x] Metrics extraction (23-04):
+  - [x] SymbolMetrics import added from magellan::graph::metrics::schema
+  - [x] get_metrics() helper implemented for KV store lookup
+  - [x] search_symbols() extracts metrics using entity_id
+  - [x] Metrics filters applied (min_fan_in, min_fan_out, min_complexity)
+  - [x] symbol_node_to_match() updated to accept metrics parameters
+  - [x] Graceful degradation when metrics not available
 - [x] All 151 library tests passing (zero regressions)
 - [x] Build successful with native-v2 feature
 
