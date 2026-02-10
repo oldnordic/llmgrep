@@ -233,7 +233,7 @@ fn test_no_debug_strings_in_code() {
         let content = fs::read_to_string(native_v2_path).unwrap();
 
         // Check that no DEBUG: eprintln statements exist
-        assert!(!content.contains(r#"eprintln!("DEBUG:"#),
+        assert!(!content.contains("eprintln!(\"DEBUG:"),
                 "native_v2.rs should not contain eprintln DEBUG statements");
 
         // Check that no bare DEBUG comments exist (from removed code)
