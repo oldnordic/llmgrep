@@ -1315,6 +1315,33 @@ fn emit_error(cli: &Cli, err: &LlmError) {
     }
 }
 
+/// Check if backend is native-v2, return error if SQLite
+///
+/// This helper function is used by commands that require native-v2 storage.
+/// When native-v2 feature is disabled, SQLite backend is the only variant,
+/// so this function always returns RequiresNativeV2Backend error.
+fn require_native_v2(backend: &Backend, command: &str, db_path: &Path) -> Result<(), LlmError> {
+    #[cfg(feature = "native-v2")]
+    {
+        match backend {
+            Backend::NativeV2(_) => Ok(()),
+            Backend::Sqlite(_) => Err(LlmError::RequiresNativeV2Backend {
+                command: command.to_string(),
+                path: db_path.display().to_string(),
+            }),
+        }
+    }
+    #[cfg(not(feature = "native-v2"))]
+    {
+        // When native-v2 feature is disabled, all backends are SQLite
+        let _ = (backend, command);
+        Err(LlmError::RequiresNativeV2Backend {
+            command: command.to_string(),
+            path: db_path.display().to_string(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod cli_tests {
     use super::*;
