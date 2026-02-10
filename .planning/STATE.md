@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** Fast, reliable search of Magellan code databases (SQLite or native-v2) with CLI behavior consistent with Splice and Magellan. Dual backend support enables O(1) KV lookups with native-v2 while maintaining SQLite compatibility. Optimized for LLM consumption with intelligent relevance scoring, AST-based structural queries, and graph algorithm integration.
-**Current focus:** Phase 21 - Native-V2 Exclusive Features
+**Current focus:** Phase 22 - Production Readiness Bugfix
 
 ## Current Position
 
-Phase: 21 of 21 (Native-V2 Exclusive Features) — IN PROGRESS
-Current Plan: 21-06 (KV store migration benchmarks)
-Status: Phase 21 plan 5 of 6 complete
-Last activity: 2026-02-10 — Added comprehensive test suite for native-v2 exclusive features (5 min)
+Phase: 22 of 22 (Production Readiness Bugfix) — IN PROGRESS
+Current Plan: 22-02 (Remove Debug Output from complete() Method)
+Status: Phase 22 plan 2 of 4 complete
+Last activity: 2026-02-10 — Removed debug output from complete() method (5 min)
 
-Progress: [████████░░░] 60% (29/27 plans complete in v3.0)
+Progress: [████████░░░] 63% (30/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -297,4 +297,28 @@ Resume file: None
 - [x] Comprehensive test suite with 30 integration tests for native-v2 exclusive features
 - [x] Tests verify complete/lookup/label command error handling on SQLite backend
 - [x] Performance metrics structure validation and JSON serialization tests
+
+---
+
+## Phase 22 Summary
+
+**Started:** 2026-02-10
+**Plans:** 2/4 complete (22-01, 22-02)
+**Status:** IN PROGRESS
+
+**Artifacts Created:**
+- .planning/phases/22-bugfix-production-ready/22-01-SUMMARY.md — Language inference summary
+- .planning/phases/22-bugfix-production-ready/22-02-SUMMARY.md — Debug output removal summary
+
+**Commits:** 1 atomic commit (4596572)
+
+**Verification:**
+- [x] Language inference added for Python, JavaScript, TypeScript, C/C++, Java, Rust
+- [x] has_known_extension() helper function added
+- [x] symbol_node_to_match() uses infer_language()
+- [x] search_symbols() uses infer_language()
+- [x] Debug output removed from complete() method (36 lines)
+- [x] No eprintln! statements remain in native_v2.rs
+- [x] No DEBUG references remain in native_v2.rs
+- [x] File reduced from 679 to 643 lines
 
