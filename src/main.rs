@@ -16,6 +16,8 @@ use llmgrep::query::{
 use llmgrep::ast::{expand_shorthand_with_language, expand_shorthands};
 use llmgrep::SortMode;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 // Custom value parser for ranged usize - needed because clap doesn't provide RangedUsizeValueParser
 fn ranged_usize(min: i64, max: i64) -> impl TypedValueParser<Value = usize> {
@@ -211,6 +213,27 @@ enum Command {
         #[arg(long)]
         fqn: String,
     },
+
+    #[command(after_help = WATCH_EXAMPLES)]
+    Watch {
+        #[arg(long)]
+        query: String,
+
+        #[arg(long, value_enum, default_value = "symbols")]
+        mode: SearchMode,
+
+        #[arg(long)]
+        path: Option<PathBuf>,
+
+        #[arg(long)]
+        kind: Option<String>,
+
+        #[arg(long, default_value_t = 50, value_parser = ranged_usize(1, 1000))]
+        limit: usize,
+
+        #[arg(long)]
+        regex: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -394,6 +417,21 @@ EXAMPLES:
 
   # Get all symbol metadata in one query
   llmgrep --db code.db lookup --fqn "parse" --output pretty
+"#;
+
+const WATCH_EXAMPLES: &str = r#"
+EXAMPLES:
+  # Watch for symbols matching "Widget"
+  llmgrep --db code.db watch --query "Widget"
+
+  # Watch with path filter
+  llmgrep --db code.db watch --query "parse" --path src/
+
+  # Watch for references
+  llmgrep --db code.db watch --query "Token" --mode references
+
+  # Watch with regex pattern
+  llmgrep --db code.db watch --query "^test_" --regex
 "#;
 
 fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
@@ -598,6 +636,23 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             paths_from.as_ref(),
             paths_to.as_ref(),
         ),
+
+        #[cfg(feature = "unstable-watch")]
+        Command::Watch {
+            query,
+            mode,
+            path,
+            kind,
+            limit,
+            regex,
+        } => run_watch(cli, query, *mode, path, kind, *limit, *regex),
+
+        #[cfg(not(feature = "unstable-watch"))]
+        Command::Watch { .. } => {
+            eprintln!("Error: watch command is incomplete and not yet available.");
+            eprintln!("This feature is under development and will be available in a future release.");
+            std::process::exit(1);
+        }
         }
     }
 }
@@ -1542,6 +1597,104 @@ fn run_lookup(
     Ok(())
 }
 
+/// Run watch command with signal handling.
+#[cfg(feature = "unstable-watch")]
+fn run_watch(
+    cli: &Cli,
+    query: &str,
+    mode: SearchMode,
+    path: &Option<PathBuf>,
+    kind: &Option<String>,
+    limit: usize,
+    regex: bool,
+) -> Result<(), LlmError> {
+    use llmgrep::query::{
+        AlgorithmOptions, AstOptions, ContextOptions, DepthOptions, FqnOptions,
+        MetricsOptions, SearchOptions, SnippetOptions,
+    };
+
+    // Validate database path
+    let db_path = if let Some(db_path) = &cli.db {
+        validate_path(db_path, true)?
+    } else {
+        return Err(LlmError::DatabaseNotFound {
+            path: "none".to_string(),
+        });
+    };
+
+    // Validate query is not empty
+    if query.trim().is_empty() {
+        return Err(LlmError::EmptyQuery);
+    }
+
+    // Validate path filter if provided
+    let validated_path = if let Some(p) = path {
+        Some(validate_path(p, false)?)
+    } else {
+        None
+    };
+
+    // Convert SearchMode enum to query::SearchMode
+    let search_mode = match mode {
+        SearchMode::Symbols => llmgrep::query::SearchMode::Symbols,
+        SearchMode::References => llmgrep::query::SearchMode::References,
+        SearchMode::Calls => llmgrep::query::SearchMode::Calls,
+        SearchMode::Labels => llmgrep::query::SearchMode::Labels,
+        SearchMode::Auto => llmgrep::query::SearchMode::Auto,
+    };
+
+    // Build SearchOptions from command args
+    let options = SearchOptions {
+        db_path: &db_path,
+        query,
+        path_filter: validated_path.as_ref(),
+        kind_filter: kind.as_deref(),
+        language_filter: None,
+        limit,
+        use_regex: regex,
+        candidates: 1000, // Default for watch
+        context: ContextOptions::default(),
+        snippet: SnippetOptions::default(),
+        fqn: FqnOptions::default(),
+        include_score: true,
+        sort_by: llmgrep::SortMode::Relevance,
+        metrics: MetricsOptions::default(),
+        ast: AstOptions {
+            ast_kinds: Vec::new(),
+            with_ast_context: false,
+            _phantom: std::marker::PhantomData,
+        },
+        depth: DepthOptions::default(),
+        algorithm: AlgorithmOptions::default(),
+        symbol_id: None,
+        fqn_pattern: None,
+        exact_fqn: None,
+    };
+
+    // Create shutdown flag for signal handling
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown_clone = shutdown.clone();
+
+    // Register signal handlers for SIGINT and SIGTERM
+    #[cfg(unix)]
+    {
+        use signal_hook::consts::signal;
+        use signal_hook::flag;
+
+        let sig_flag = flag::register(signal::SIGINT, shutdown_clone.clone())?;
+        let _ = flag::register(signal::SIGTERM, shutdown_clone)?;
+        std::mem::forget(sig_flag);
+    }
+
+    // Run the watch command
+    llmgrep::watch_cmd::run_watch(db_path, options, cli.output, shutdown)
+        .map_err(|e| LlmError::SearchFailed {
+            reason: e.to_string(),
+        })?;
+
+    Ok(())
+}
+
 /// Format SCC summary for human output
 fn format_scc_summary(count: usize, supernode_count: usize) -> String {
     if supernode_count == 1 {
@@ -1880,7 +2033,7 @@ mod cli_tests {
             temp_db.to_str().unwrap()
         );
         match cli.command {
-            Command::Search { query, .. } => {
+            Some(Command::Search { query, .. }) => {
                 assert_eq!(query, "test");
             }
             _ => panic!("Expected Command::Search"),
@@ -1928,7 +2081,7 @@ mod cli_tests {
         assert!(result.is_ok(), "Should accept valid limit");
         let cli = result.unwrap();
         match cli.command {
-            Command::Search { limit, .. } => {
+            Some(Command::Search { limit, .. }) => {
                 assert_eq!(limit, 500);
             }
             _ => panic!("Expected Command::Search"),
@@ -1951,7 +2104,7 @@ mod cli_tests {
         assert!(result.is_ok(), "Should parse regex flag");
         let cli = result.unwrap();
         match cli.command {
-            Command::Search { regex, .. } => {
+            Some(Command::Search { regex, .. }) => {
                 assert!(regex, "Regex flag should be set");
             }
             _ => panic!("Expected Command::Search"),
@@ -1975,7 +2128,7 @@ mod cli_tests {
         assert!(result.is_ok(), "Should parse fields");
         let cli = result.unwrap();
         match cli.command {
-            Command::Search { fields, .. } => {
+            Some(Command::Search { fields, .. }) => {
                 assert_eq!(fields.as_ref().unwrap(), "context,snippet,score");
             }
             _ => panic!("Expected Command::Search"),
@@ -1999,7 +2152,7 @@ mod cli_tests {
         assert!(result.is_ok(), "Should parse symbols mode");
         let cli = result.unwrap();
         match cli.command {
-            Command::Search { mode, .. } => {
+            Some(Command::Search { mode, .. }) => {
                 assert!(matches!(mode, SearchMode::Symbols));
             }
             _ => panic!("Expected Command::Search"),
@@ -2023,7 +2176,7 @@ mod cli_tests {
         assert!(result.is_ok(), "Should parse references mode");
         let cli = result.unwrap();
         match cli.command {
-            Command::Search { mode, .. } => {
+            Some(Command::Search { mode, .. }) => {
                 assert!(matches!(mode, SearchMode::References));
             }
             _ => panic!("Expected Command::Search"),
@@ -2047,7 +2200,7 @@ mod cli_tests {
         assert!(result.is_ok(), "Should parse calls mode");
         let cli = result.unwrap();
         match cli.command {
-            Command::Search { mode, .. } => {
+            Some(Command::Search { mode, .. }) => {
                 assert!(matches!(mode, SearchMode::Calls));
             }
             _ => panic!("Expected Command::Search"),
@@ -2071,7 +2224,7 @@ mod cli_tests {
         assert!(result.is_ok(), "Should parse auto mode");
         let cli = result.unwrap();
         match cli.command {
-            Command::Search { mode, .. } => {
+            Some(Command::Search { mode, .. }) => {
                 assert!(matches!(mode, SearchMode::Auto));
             }
             _ => panic!("Expected Command::Search"),
@@ -2094,7 +2247,7 @@ mod cli_tests {
         assert!(result.is_ok(), "Clap should accept empty query string");
         let cli = result.unwrap();
         match cli.command {
-            Command::Search { query, .. } => {
+            Some(Command::Search { query, .. }) => {
                 assert_eq!(query, "");
             }
             _ => panic!("Expected Command::Search"),
@@ -2326,7 +2479,7 @@ mod cli_tests {
 
         let cli = result.unwrap();
         match cli.command {
-            Command::Ast { file, position, limit } => {
+            Some(Command::Ast { file, position, limit }) => {
                 assert_eq!(file, temp_file);
                 assert_eq!(position, None);
                 assert_eq!(limit, 10000); // default
@@ -2359,7 +2512,7 @@ mod cli_tests {
 
         let cli = result.unwrap();
         match cli.command {
-            Command::Ast { position, .. } => {
+            Some(Command::Ast { position, .. }) => {
                 assert_eq!(position, Some(100));
             }
             _ => panic!("Expected Command::Ast"),
@@ -2390,7 +2543,7 @@ mod cli_tests {
 
         let cli = result.unwrap();
         match cli.command {
-            Command::Ast { limit, .. } => {
+            Some(Command::Ast { limit, .. }) => {
                 assert_eq!(limit, 500);
             }
             _ => panic!("Expected Command::Ast"),
@@ -2470,7 +2623,7 @@ mod cli_tests {
 
         let cli = result.unwrap();
         match cli.command {
-            Command::FindAst { kind } => {
+            Some(Command::FindAst { kind }) => {
                 assert_eq!(kind, "function_item");
             }
             _ => panic!("Expected Command::FindAst"),
@@ -2502,7 +2655,7 @@ mod cli_tests {
 
             let cli = result.unwrap();
             match cli.command {
-                Command::FindAst { kind: k } => {
+                Some(Command::FindAst { kind: k }) => {
                     assert_eq!(k, kind);
                 }
                 _ => panic!("Expected Command::FindAst"),

@@ -7,6 +7,10 @@ pub mod output_common;
 pub mod platform;
 pub mod query;
 pub mod safe_extraction;
+
+// Watch command is incomplete and not yet integrated into CLI
+// cfg-gated to prevent compilation errors
+#[cfg(feature = "unstable-watch")]
 pub mod watch_cmd;
 
 // Re-export safe extraction functions for testing and external use
