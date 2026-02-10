@@ -30,9 +30,9 @@ use sqlitegraph::backend::{PubSubEvent, SubscriptionFilter};
 /// # Returns
 /// * `Ok(())` on successful shutdown
 /// * `Err(LlmError)` on failure
-pub fn run_watch(
+pub fn run_watch<'a>(
     db_path: PathBuf,
-    options: SearchOptions,
+    options: SearchOptions<'a>,
     output_format: OutputFormat,
     shutdown: Arc<AtomicBool>,
 ) -> Result<()> {
@@ -67,10 +67,10 @@ pub fn run_watch(
 /// * `Ok(())` on successful shutdown
 /// * `Err(LlmError)` on failure
 #[cfg(feature = "native-v2")]
-fn run_watch_with_pubsub(
+fn run_watch_with_pubsub<'a>(
     backend: &crate::backend::native_v2::NativeV2Backend,
     db_path: PathBuf,
-    options: SearchOptions,
+    options: SearchOptions<'a>,
     output_format: OutputFormat,
     shutdown: Arc<AtomicBool>,
 ) -> Result<()> {
@@ -151,10 +151,10 @@ fn run_watch_with_pubsub(
 /// # Returns
 /// * `Ok(())` on successful shutdown
 /// * `Err(LlmError)` on failure
-fn run_watch_with_filesystem(
+fn run_watch_with_filesystem<'a>(
     backend: &crate::backend::sqlite::SqliteBackend,
     db_path: PathBuf,
-    options: SearchOptions,
+    options: SearchOptions<'a>,
     output_format: OutputFormat,
     shutdown: Arc<AtomicBool>,
 ) -> Result<()> {
