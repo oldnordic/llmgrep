@@ -781,7 +781,7 @@ fn run_search(
 
     // Detect and open backend automatically (SQLite or Native-V2)
     let detect_start = std::time::Instant::now();
-    let backend = Backend::detect_and_open(&db_path)?;
+    let backend = Backend::detect_and_open(db_path)?;
     let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
 
     // Validate path filter if provided
@@ -1544,7 +1544,7 @@ fn run_lookup(
         OutputFormat::Human => {
             println!("Symbol: {}", symbol.name);
             println!("Kind: {}", symbol.kind);
-            println!("FQN: {}", symbol.fqn.as_deref().unwrap_or(&"<none>".to_string()));
+            println!("FQN: {}", symbol.fqn.as_deref().unwrap_or("<none>"));
             if let Some(canonical_fqn) = &symbol.canonical_fqn {
                 println!("Canonical FQN: {}", canonical_fqn);
             }

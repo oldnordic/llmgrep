@@ -717,6 +717,14 @@ impl<'a> AlgorithmOptions<'a> {
     }
 }
 
+/// Result type for algorithm filtering operations.
+///
+/// Contains:
+/// - `Vec<String>` of SymbolIds for filtering
+/// - `HashMap<String, String>` mapping symbol_id -> supernode_id for decoration
+/// - `bool` indicating if path enumeration hit bounds
+pub type AlgorithmFilterResult = Result<(Vec<String>, HashMap<String, String>, bool), LlmError>;
+
 /// Apply algorithm filters and return SymbolSet for search filtering
 ///
 /// Handles:
@@ -729,7 +737,7 @@ impl<'a> AlgorithmOptions<'a> {
 pub fn apply_algorithm_filters(
     db_path: &Path,
     options: &AlgorithmOptions<'_>,
-) -> Result<(Vec<String>, HashMap<String, String>, bool), LlmError> {
+) -> AlgorithmFilterResult {
     // Priority 1: Pre-computed SymbolSet from file
     if let Some(file_path) = options.from_symbol_set {
         let symbol_set = parse_symbol_set_file(Path::new(file_path))?;

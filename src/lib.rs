@@ -16,27 +16,18 @@
 //! # Quick Start
 //!
 //! ```no_run
-//! use llmgrep::{Backend, SearchOptions};
+//! use llmgrep::Backend;
 //! use std::path::Path;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Open a Magellan database
 //! let db_path = Path::new(".codemcp/codegraph.db");
 //! let backend = Backend::detect_and_open(db_path)?;
-//!
-//! // Search for symbols
-//! let options = SearchOptions {
-//!     db_path,
-//!     query: "main",
-//!     limit: 10,
-//!     ..Default::default()
-//! };
-//!
-//! let (results, partial, _) = backend.search_symbols(options)?;
-//! println!("Found {} symbols", results.total_count);
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! See the [`query`](query) module for search functions and options.
 //!
 //! # Modules
 //!

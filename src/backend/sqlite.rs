@@ -104,7 +104,7 @@ impl super::BackendTrait for SqliteBackend {
 
         // Parse JSON and apply limit if needed
         let mut value: serde_json::Value = serde_json::from_slice(&output.stdout)
-            .map_err(|e| LlmError::JsonError(e))?;
+            .map_err(LlmError::JsonError)?;
 
         // Apply limit to array results
         if let Some(arr) = value.as_array_mut() {
@@ -137,7 +137,7 @@ impl super::BackendTrait for SqliteBackend {
         }
 
         serde_json::from_slice(&output.stdout)
-            .map_err(|e| LlmError::JsonError(e))
+            .map_err(LlmError::JsonError)
     }
 
     fn complete(&self, _prefix: &str, _limit: usize) -> Result<Vec<String>, LlmError> {

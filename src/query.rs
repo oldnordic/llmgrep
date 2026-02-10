@@ -11,26 +11,8 @@
 //!
 //! # Search Options
 //!
-//! All search operations use `SearchOptions` to configure the query:
-//!
-//! ```no_run
-//! use llmgrep::query::{SearchOptions, ContextOptions, SnippetOptions};
-//! use std::path::Path;
-//!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let options = SearchOptions {
-//!     db_path: Path::new("code.db"),
-//!     query: "main",
-//!     limit: 10,
-//!     use_regex: false,
-//!     context: ContextOptions { include: true, lines: 3, max_lines: 10 },
-//!     snippet: SnippetOptions { include: true, max_bytes: 500 },
-//!     // ... other options ...
-//!     ..Default::default()
-//! };
-//! # Ok(())
-//! # }
-//! ```
+//! All search operations use `SearchOptions` to configure the query.
+//! See the `SearchOptions` struct documentation for all available options.
 //!
 //! # Language Inference
 //!
@@ -696,7 +678,7 @@ pub(crate) fn search_symbols_impl(
                 // If ast_kinds filter is active and the current context doesn't match, use preferred lookup
                 if has_ast_kind_filter && !options.ast.ast_kinds.contains(&ctx.kind) {
                     match crate::ast::get_ast_context_for_symbol_with_preference(
-                        &conn,
+                        conn,
                         &file_path,
                         symbol.byte_start,
                         symbol.byte_end,
