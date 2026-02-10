@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 20 of 21 (CLI Integration) — IN PROGRESS
-Current Plan: 20-02 (Verify Native-V2 error handling)
-Status: Plan 20-02 complete, error handling verified
-Last activity: 2026-02-10 — LLM-E109 error verified with remediation hints
+Current Plan: 20-03 (Prepare error handling for native-v2-only commands)
+Status: Plan 20-03 complete, error infrastructure ready for Phase 21
+Last activity: 2026-02-10 — RequiresNativeV2Backend error (LLM-E111) added
 
-Progress: [██████░░░░░] 39% (17/27 plans complete in v3.0)
+Progress: [██████░░░░░] 41% (18/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -80,6 +80,8 @@ Recent decisions affecting current work:
 - **Phase 19**: SqliteBackend explicitly specifies --output json for magellan shell-out commands
 - [Phase 19]: Simplified parity tests to API behavior tests due to Magellan file storage disconnect
 - [Phase 19]: Fixed SqliteBackend ast to apply limit on JSON result since magellan doesn't support --limit
+- [Phase 20]: RequiresNativeV2Backend error (LLM-E111) for native-v2-only commands
+- [Phase 20]: require_native_v2() helper function for backend variant checking with cfg gates
 
 ### Pending Todos
 
@@ -88,8 +90,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-10 — Phase 20 plan 20-02 verification
-Stopped at: Completed Phase 20 plan 20-02 (native-v2 error handling verified)
+Last session: 2026-02-10 — Phase 20 plan 20-03
+Stopped at: Completed Phase 20 plan 20-03 (RequiresNativeV2Backend error infrastructure ready)
 Resume file: None
 
 ### Blockers/Concerns
@@ -200,14 +202,15 @@ Resume file: None
 ## Phase 20 Summary
 
 **Completed:** 2026-02-10 (IN PROGRESS)
-**Plans:** 2/6 complete (20-01, 20-02)
+**Plans:** 3/6 complete (20-01, 20-02, 20-03)
 **Status:** IN PROGRESS
 
 **Artifacts Created:**
 - .planning/phases/020-cli-integration/20-01-SUMMARY.md — CLI integration summary
 - .planning/phases/020-cli-integration/20-02-SUMMARY.md — Native-V2 error handling verification
+- .planning/phases/020-cli-integration/20-03-SUMMARY.md — RequiresNativeV2Backend error type
 
-**Commits:** 1 atomic commit (2888dcd)
+**Commits:** 3 atomic commits (2888dcd, 06b1976, ac61383)
 
 **Verification:**
 - [x] CLI compiles with Backend enum integration
@@ -218,3 +221,6 @@ Resume file: None
 - [x] Error handling for NativeV2BackendNotSupported includes remediation
 - [x] LLM-E109 error verified with cargo install/build commands
 - [x] Integration test test_native_v2_not_supported_error passes
+- [x] RequiresNativeV2Backend error type with LLM-E111 code
+- [x] require_native_v2() helper function for backend variant checking
+
