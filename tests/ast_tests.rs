@@ -103,7 +103,7 @@ fn test_check_ast_table_exists() {
     // Test with ast_nodes table
     let conn = setup_db_with_ast(&db_path);
     assert!(
-        check_ast_table_exists(&conn).unwrap(),
+        check_ast_table_exists(&conn).expect("failed to check AST table"),
         "Should return true when ast_nodes table exists"
     );
     drop(conn);
@@ -114,7 +114,7 @@ fn test_check_ast_table_exists() {
         .execute("DROP TABLE ast_nodes", [])
         .expect("drop ast_nodes");
     assert!(
-        !check_ast_table_exists(&conn2).unwrap(),
+        !check_ast_table_exists(&conn2).expect("failed to check AST table"),
         "Should return false when ast_nodes table doesn't exist"
     );
 }
@@ -133,7 +133,7 @@ fn test_ast_context_serialization() {
         decision_points: None,
     };
 
-    let json = serde_json::to_string(&ctx).unwrap();
+    let json = serde_json::to_string(&ctx).expect("failed to serialize context");
     assert!(json.contains(r#""ast_id":123"#));
     assert!(json.contains(r#""kind":"function_item""#));
     assert!(json.contains(r#""parent_id":122"#));
@@ -155,7 +155,7 @@ fn test_ast_context_without_parent() {
         decision_points: None,
     };
 
-    let json = serde_json::to_string(&ctx).unwrap();
+    let json = serde_json::to_string(&ctx).expect("failed to serialize context");
     assert!(json.contains(r#""parent_id":null"#));
 }
 
@@ -224,7 +224,7 @@ fn test_ast_kind_filter() {
     // All results should have function_item in their ast_context
     for result in &response.results {
         assert_eq!(
-            result.ast_context.as_ref().unwrap().kind,
+            result.ast_context.as_ref().expect("ast_context should be Some").kind,
             "function_item"
         );
     }
@@ -266,7 +266,7 @@ fn test_backward_compat_no_ast_table() {
 
     // Verify table doesn't exist
     assert!(
-        !check_ast_table_exists(&conn).unwrap(),
+        !check_ast_table_exists(&conn).expect("failed to check AST table"),
         "ast_nodes table should not exist"
     );
 
@@ -487,9 +487,9 @@ fn test_calculate_ast_depth() {
     .expect("insert nodes");
 
     // Test depth calculation
-    assert_eq!(calculate_ast_depth(&conn, 1).unwrap().unwrap(), 0, "Root should have depth 0");
-    assert_eq!(calculate_ast_depth(&conn, 2).unwrap().unwrap(), 1, "Child should have depth 1");
-    assert_eq!(calculate_ast_depth(&conn, 3).unwrap().unwrap(), 2, "Grandchild should have depth 2");
+    assert_eq!(calculate_ast_depth(&conn, 1).expect("failed to calculate AST depth").expect("AST depth should be Some"), 0, "Root should have depth 0");
+    assert_eq!(calculate_ast_depth(&conn, 2).expect("failed to calculate AST depth").expect("AST depth should be Some"), 1, "Child should have depth 1");
+    assert_eq!(calculate_ast_depth(&conn, 3).expect("failed to calculate AST depth").expect("AST depth should be Some"), 2, "Grandchild should have depth 2");
 }
 
 // Test: Get parent kind for AST nodes
@@ -513,17 +513,17 @@ fn test_get_parent_kind() {
 
     // Test parent kind lookup
     assert_eq!(
-        get_parent_kind(&conn, Some(1)).unwrap().unwrap(),
+        get_parent_kind(&conn, Some(1)).expect("failed to get parent kind").expect("parent kind should be Some"),
         "mod_item",
         "Parent kind should be mod_item"
     );
     assert_eq!(
-        get_parent_kind(&conn, None).unwrap(),
+        get_parent_kind(&conn, None).expect("failed to get parent kind for None"),
         None,
         "None parent_id should return None"
     );
     assert_eq!(
-        get_parent_kind(&conn, Some(999)).unwrap(),
+        get_parent_kind(&conn, Some(999)).expect("failed to get parent kind for nonexistent"),
         None,
         "Non-existent parent should return None"
     );
@@ -554,7 +554,7 @@ fn test_count_children_by_kind() {
     )
     .expect("insert nodes");
 
-    let counts = count_children_by_kind(&conn, 1).unwrap();
+    let counts = count_children_by_kind(&conn, 1).expect("failed to count children");
     assert_eq!(counts.get("let_declaration"), Some(&3), "Should have 3 let_declaration");
     assert_eq!(counts.get("if_expression"), Some(&1), "Should have 1 if_expression");
     assert_eq!(counts.get("call_expression"), Some(&2), "Should have 2 call_expression");
@@ -587,7 +587,7 @@ fn test_count_decision_points() {
     )
     .expect("insert nodes");
 
-    let decision_points = count_decision_points(&conn, 1).unwrap();
+    let decision_points = count_decision_points(&conn, 1).expect("failed to count decision points");
     assert_eq!(decision_points, 6, "Should count 6 decision points");
 }
 

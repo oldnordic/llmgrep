@@ -169,7 +169,7 @@ fn process_emoji(input: &str) -> String {
     let chunk =
         search_chunks_by_span(&conn, file_path, 0, 100).expect("chunk query should succeed");
     assert!(chunk.is_some(), "Chunk should exist");
-    let chunk = chunk.unwrap();
+    let chunk = chunk.expect("chunk should be Some");
 
     // Verify emoji content is intact
     assert!(
@@ -225,7 +225,7 @@ fn process_emoji(input: &str) -> String {
 
     let result = &response.0.results[0];
     assert!(result.snippet.is_some(), "Snippet should be extracted");
-    let snippet = result.snippet.as_ref().unwrap();
+    let snippet = result.snippet.as_ref().expect("snippet should be Some");
     // Snippet should contain emoji without panic
     assert!(
         snippet.contains("🚀") || snippet.contains("emoji"),
@@ -261,7 +261,7 @@ fn chinese_function() {
     let chunk =
         search_chunks_by_span(&conn, file_path, 0, 200).expect("chunk query should succeed");
     assert!(chunk.is_some(), "Chunk with CJK should exist");
-    let chunk = chunk.unwrap();
+    let chunk = chunk.expect("chunk should be Some");
 
     // Verify CJK characters are preserved
     assert!(
@@ -340,7 +340,7 @@ fn test_chunk_retrieval_with_hash() {
     );
 
     // Verify hash is valid hex
-    let hash = result.content_hash.as_ref().unwrap();
+    let hash = result.content_hash.as_ref().expect("content_hash should be Some");
     assert_eq!(hash.len(), 64, "SHA-256 hash should be 64 hex chars");
     assert!(
         hash.chars().all(|c| c.is_ascii_hexdigit()),
@@ -480,7 +480,7 @@ fn test_symbol_id_lookup() {
     assert_eq!(response.0.results.len(), 1, "Should find symbol by ID");
     assert_eq!(response.0.results[0].name, symbol_name);
     assert_eq!(
-        response.0.results[0].symbol_id.as_ref().unwrap(),
+        response.0.results[0].symbol_id.as_ref().expect("symbol_id should be Some"),
         known_symbol_id
     );
 }
@@ -544,7 +544,7 @@ fn test_language_filtering() {
         "Should only return Rust symbols"
     );
     assert_eq!(response.0.results[0].name, rust_fn);
-    assert_eq!(response.0.results[0].language.as_ref().unwrap(), "Rust");
+    assert_eq!(response.0.results[0].language.as_ref().expect("language should be Some"), "Rust");
 }
 
 /// Test 7: Multi-kind filtering (comma-separated)
@@ -797,7 +797,7 @@ fn test_fqn_pattern_filtering() {
         response.0.results[0]
             .canonical_fqn
             .as_ref()
-            .unwrap()
+            .expect("canonical_fqn should be Some")
             .contains("module_a"),
         "canonical_fqn should contain module_a"
     );
@@ -868,7 +868,7 @@ fn test_combined_metrics_and_language_filter() {
         "Should only return high-complexity Rust function"
     );
     assert_eq!(response.0.results[0].name, rust_complex);
-    assert_eq!(response.0.results[0].language.as_ref().unwrap(), "Rust");
+    assert_eq!(response.0.results[0].language.as_ref().expect("language should be Some"), "Rust");
 }
 
 /// Test 11: Metrics present in search results
@@ -925,20 +925,20 @@ fn test_metrics_present_in_search_results() {
         result.fan_in.is_some(),
         "fan_in should be present in search results"
     );
-    assert_eq!(result.fan_in.unwrap(), 10, "fan_in should match inserted value");
+    assert_eq!(result.fan_in.expect("fan_in should be Some"), 10, "fan_in should match inserted value");
 
     assert!(
         result.fan_out.is_some(),
         "fan_out should be present in search results"
     );
-    assert_eq!(result.fan_out.unwrap(), 5, "fan_out should match inserted value");
+    assert_eq!(result.fan_out.expect("fan_out should be Some"), 5, "fan_out should match inserted value");
 
     assert!(
         result.cyclomatic_complexity.is_some(),
         "cyclomatic_complexity should be present in search results"
     );
     assert_eq!(
-        result.cyclomatic_complexity.unwrap(),
+        result.cyclomatic_complexity.expect("cyclomatic_complexity should be Some"),
         3,
         "cyclomatic_complexity should match inserted value"
     );

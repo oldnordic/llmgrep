@@ -174,7 +174,7 @@ fn test_extract_symbol_content_safe_multi_byte_boundary() {
     // If we end at byte 7 (middle of "世"), should return None or truncated
     let result = extract_symbol_content_safe(content, 5, 7);
     // Implementation should handle this gracefully
-    assert!(result.is_none() || result.as_ref().unwrap().len() <= 2);
+    assert!(result.is_none() || result.as_ref().expect("result should be Some").len() <= 2);
 }
 
 /// Test 1d: Safe extraction - emoji handling
@@ -189,7 +189,7 @@ fn test_extract_symbol_content_safe_emoji() {
     assert_eq!(result, Some(content.to_string()));
 
     // Verify emoji is preserved
-    let result = result.unwrap();
+    let result = result.expect("result should be Ok");
     assert!(result.contains("🚀"));
     assert!(result.contains("🔥"));
     assert!(result.contains("⭐"));
@@ -406,7 +406,7 @@ fn test_api_language_filtering() {
 
     let response = search_symbols(options).expect("search should succeed");
     assert_eq!(response.0.results.len(), 1);
-    assert_eq!(response.0.results[0].language.as_ref().unwrap(), "Rust");
+    assert_eq!(response.0.results[0].language.as_ref().expect("language should be Some"), "Rust");
 }
 
 /// Test 6: Public API - position mode sorting
@@ -531,7 +531,7 @@ fn test_api_symbol_id_lookup() {
     assert_eq!(response.0.results.len(), 1);
     assert_eq!(response.0.results[0].name, symbol_name);
     assert_eq!(
-        response.0.results[0].symbol_id.as_ref().unwrap(),
+        response.0.results[0].symbol_id.as_ref().expect("symbol_id should be Some"),
         known_symbol_id
     );
 }

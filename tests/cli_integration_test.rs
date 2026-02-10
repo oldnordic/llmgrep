@@ -149,7 +149,7 @@ fn test_search_with_sqlite_backend() {
     let output = Command::new(&binary)
         .args([
             "--db",
-            db_path.to_str().unwrap(),
+            db_path.to_str().expect("failed to convert path to string"),
             "search",
             "--query",
             "main",
@@ -201,7 +201,7 @@ fn test_ast_with_sqlite_backend() {
     let output = Command::new(&binary)
         .args([
             "--db",
-            db_path.to_str().unwrap(),
+            db_path.to_str().expect("failed to convert path to string"),
             "ast",
             "--file",
             "src/main.rs",
@@ -256,7 +256,7 @@ fn test_find_ast_with_sqlite_backend() {
     let output = Command::new(&binary)
         .args([
             "--db",
-            db_path.to_str().unwrap(),
+            db_path.to_str().expect("failed to convert path to string"),
             "find-ast",
             "--kind",
             "function_item",
@@ -304,7 +304,7 @@ fn test_native_v2_backend_error() {
         eprintln!("SKIP: LLMGREP_TEST_NATIVE_V2_DB not set");
         return;
     }
-    let db_path = db_path.unwrap();
+    let db_path = db_path.expect("LLMGREP_TEST_NATIVE_V2_DB should be set after is_err check");
 
     let output = Command::new(&binary)
         .args(["--db", &db_path, "search", "--query", "test"])
@@ -348,7 +348,7 @@ fn test_backend_detection_via_cli() {
     let output = Command::new(&binary)
         .args([
             "--db",
-            db_path.to_str().unwrap(),
+            db_path.to_str().expect("failed to convert path to string"),
             "search",
             "--query",
             "test",
@@ -385,7 +385,7 @@ fn test_search_mode_symbols_via_cli() {
     let output = Command::new(&binary)
         .args([
             "--db",
-            db_path.to_str().unwrap(),
+            db_path.to_str().expect("failed to convert path to string"),
             "search",
             "--query",
             "main",
@@ -421,7 +421,7 @@ fn test_search_mode_references_via_cli() {
     let output = Command::new(&binary)
         .args([
             "--db",
-            db_path.to_str().unwrap(),
+            db_path.to_str().expect("failed to convert path to string"),
             "search",
             "--query",
             "main",
@@ -457,7 +457,7 @@ fn test_search_mode_calls_via_cli() {
     let output = Command::new(&binary)
         .args([
             "--db",
-            db_path.to_str().unwrap(),
+            db_path.to_str().expect("failed to convert path to string"),
             "search",
             "--query",
             "main",
@@ -493,7 +493,7 @@ fn test_json_output_format_via_cli() {
     let output = Command::new(&binary)
         .args([
             "--db",
-            db_path.to_str().unwrap(),
+            db_path.to_str().expect("failed to convert path to string"),
             "search",
             "--query",
             "main",

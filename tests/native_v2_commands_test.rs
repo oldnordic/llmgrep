@@ -17,12 +17,12 @@ use llmgrep::output::PerformanceMetrics;
 // Helper to create a test SQLite database (traditional format)
 #[cfg(test)]
 fn create_sqlite_test_db() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
     let db_path = dir.path().join("test.db");
 
     // Create a minimal SQLite database with Magellan schema
     // This simulates a traditional SQLite-format database
-    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let conn = rusqlite::Connection::open(&db_path).expect("failed to open test database");
 
     // Create minimal schema to simulate Magellan SQLite database
     conn.execute(
@@ -44,20 +44,20 @@ fn create_sqlite_test_db() -> tempfile::TempDir {
             parent_name TEXT
         )",
         [],
-    ).unwrap();
+    ).expect("test database operation failed");
 
     // Insert test data
     conn.execute(
         "INSERT INTO symbol_nodes (symbol_id, name, kind, fqn, file_path, byte_start, byte_end, start_line, start_col, end_line, end_col, language)
          VALUES (1, 'test_function', 'Function', 'test::module::test_function', 'src/test.rs', 0, 100, 1, 0, 5, 0, 'rust')",
         [],
-    ).unwrap();
+    ).expect("test database operation failed");
 
     conn.execute(
         "INSERT INTO symbol_nodes (symbol_id, name, kind, fqn, file_path, byte_start, byte_end, start_line, start_col, end_line, end_col, language)
          VALUES (2, 'another_function', 'Function', 'test::module::another_function', 'src/test.rs', 100, 200, 6, 0, 10, 0, 'rust')",
         [],
-    ).unwrap();
+    ).expect("test database operation failed");
 
     dir
 }
@@ -68,7 +68,7 @@ fn test_complete_command_sqlite_error() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
 
     let result = backend.complete("test", 10);
     assert!(matches!(result, Err(LlmError::RequiresNativeV2Backend { .. })));
@@ -87,7 +87,7 @@ fn test_lookup_command_sqlite_error() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let db_path_str = db_path.to_string_lossy().to_string();
 
     let result = backend.lookup("test::symbol", &db_path_str);
@@ -107,7 +107,7 @@ fn test_label_search_sqlite_error() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let db_path_str = db_path.to_string_lossy().to_string();
 
     let result = backend.search_by_label("test", 10, &db_path_str);
@@ -158,7 +158,7 @@ fn test_performance_metrics_json_serialization() {
         total_ms: 18,
     };
 
-    let json = serde_json::to_string(&metrics).unwrap();
+    let json = serde_json::to_string(&metrics).expect("test database operation failed");
     assert!(json.contains("5")); // backend_detection_ms
     assert!(json.contains("10")); // query_execution_ms
     assert!(json.contains("3")); // output_formatting_ms
@@ -171,7 +171,7 @@ fn test_backend_detection_sqlite_format() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
 
     match backend {
         llmgrep::backend::Backend::Sqlite(_) => {
@@ -200,7 +200,7 @@ fn test_requires_native_v2_backend_error_message() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let result = backend.complete("test", 10);
 
     if let Err(LlmError::RequiresNativeV2Backend { command, path }) = result {
@@ -239,7 +239,7 @@ fn test_symbol_not_found_error_structure() {
     // Verify remediation hint
     let remediation = error.remediation();
     assert!(remediation.is_some());
-    assert!(remediation.unwrap().contains("complete"));
+    assert!(remediation.expect("test database operation failed").contains("complete"));
 }
 
 // Test 11: Verify error code for complete command failure
@@ -248,7 +248,7 @@ fn test_complete_command_error_code() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let result = backend.complete("test", 10);
 
     if let Err(err) = result {
@@ -264,7 +264,7 @@ fn test_lookup_command_error_code() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let db_path_str = db_path.to_string_lossy().to_string();
 
     let result = backend.lookup("test::symbol", &db_path_str);
@@ -282,7 +282,7 @@ fn test_label_search_error_code() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let db_path_str = db_path.to_string_lossy().to_string();
 
     let result = backend.search_by_label("test", 10, &db_path_str);
@@ -300,7 +300,7 @@ fn test_complete_command_various_prefixes() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
 
     // All should fail on SQLite backend
     let prefixes = vec!["std", "test::module", "crate::backend", "llmgrep"];
@@ -317,7 +317,7 @@ fn test_lookup_command_various_fqns() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let db_path_str = db_path.to_string_lossy().to_string();
 
     let fqns = vec![
@@ -339,7 +339,7 @@ fn test_label_search_various_labels() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let db_path_str = db_path.to_string_lossy().to_string();
 
     let labels = vec!["test", "entry_point", "public_api", "test_functions"];
@@ -378,7 +378,7 @@ fn test_performance_metrics_in_json_response() {
         "data": response
     });
 
-    let json_str = serde_json::to_string(&json_response).unwrap();
+    let json_str = serde_json::to_string(&json_response).expect("test database operation failed");
     assert!(json_str.contains("\"backend_detection_ms\":5"));
     assert!(json_str.contains("\"query_execution_ms\":10"));
     assert!(json_str.contains("\"output_formatting_ms\":3"));
@@ -391,13 +391,13 @@ fn test_requires_native_v2_backend_remediation() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let result = backend.complete("test", 10);
 
     if let Err(err) = result {
         let remediation = err.remediation();
         assert!(remediation.is_some(), "Should have remediation hint");
-        let hint = remediation.unwrap();
+        let hint = remediation.expect("test database operation failed");
         assert!(hint.contains("magellan watch"), "Should suggest reindexing with magellan");
         assert!(hint.contains("native-v2"), "Should mention native-v2 storage");
     } else {
@@ -417,7 +417,7 @@ fn test_symbol_not_found_remediation() {
     let remediation = error.remediation();
     assert!(remediation.is_some());
 
-    let hint = remediation.unwrap();
+    let hint = remediation.expect("test database operation failed");
     assert!(hint.contains("complete"), "Should suggest using complete command");
     assert!(hint.contains("--partial"), "Should mention --partial flag");
 }
@@ -454,7 +454,7 @@ fn test_complete_command_limit_parameter() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
 
     // Test with various limit values
     for limit in [1, 10, 50, 100, 1000] {
@@ -469,7 +469,7 @@ fn test_lookup_command_preserves_fqn() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let db_path_str = db_path.to_string_lossy().to_string();
 
     let test_fqn = "test::module::function";
@@ -488,7 +488,7 @@ fn test_label_search_preserves_label() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let db_path_str = db_path.to_string_lossy().to_string();
 
     let test_label = "test_functions";
@@ -521,7 +521,7 @@ fn test_backend_standard_search_operations() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
 
     // Standard search may fail due to incomplete schema, but that's okay
     // The important thing is that it returns a different error than native-v2 requirements
@@ -581,7 +581,7 @@ fn test_multiple_backend_operations() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
 
     // All native-v2 operations should fail gracefully
     assert!(backend.complete("test", 10).is_err());
@@ -645,7 +645,7 @@ fn test_backend_error_consistency() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let db_path_str = db_path.to_string_lossy().to_string();
 
     // All native-v2 errors should have the same error code
@@ -678,7 +678,7 @@ fn test_search_operations_dont_require_native_v2() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
-    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).unwrap();
+    let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
 
     use llmgrep::query::SearchOptions;
 

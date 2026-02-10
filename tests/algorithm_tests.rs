@@ -23,7 +23,7 @@ use tempfile::TempDir;
 
 #[test]
 fn test_symbol_set_parsing_valid() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().expect("failed to create temp dir");
     let symbol_set_path = temp_dir.path().join("symbols.json");
 
     let valid_json = r#"{
@@ -34,10 +34,10 @@ fn test_symbol_set_parsing_valid() {
         ]
     }"#;
 
-    let mut file = File::create(&symbol_set_path).unwrap();
-    file.write_all(valid_json.as_bytes()).unwrap();
+    let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
+    file.write_all(valid_json.as_bytes()).expect("failed to write valid JSON");
 
-    let symbol_set = parse_symbol_set_file(&symbol_set_path).unwrap();
+    let symbol_set = parse_symbol_set_file(&symbol_set_path).expect("failed to parse symbol set");
     assert_eq!(symbol_set.symbol_ids.len(), 3);
     assert_eq!(
         symbol_set.symbol_ids[0],
@@ -47,15 +47,15 @@ fn test_symbol_set_parsing_valid() {
 
 #[test]
 fn test_symbol_set_parsing_invalid_length() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().expect("failed to create temp dir");
     let symbol_set_path = temp_dir.path().join("symbols.json");
 
     let invalid_json = r#"{
         "symbol_ids": ["abc123"]
     }"#;
 
-    let mut file = File::create(&symbol_set_path).unwrap();
-    file.write_all(invalid_json.as_bytes()).unwrap();
+    let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
+    file.write_all(invalid_json.as_bytes()).expect("failed to write valid JSON");
 
     let result = parse_symbol_set_file(&symbol_set_path);
     assert!(result.is_err());
@@ -69,15 +69,15 @@ fn test_symbol_set_parsing_invalid_length() {
 
 #[test]
 fn test_symbol_set_parsing_invalid_chars() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().expect("failed to create temp dir");
     let symbol_set_path = temp_dir.path().join("symbols.json");
 
     let invalid_json = r#"{
         "symbol_ids": ["abc123def456789012345678901234g!"]
     }"#;
 
-    let mut file = File::create(&symbol_set_path).unwrap();
-    file.write_all(invalid_json.as_bytes()).unwrap();
+    let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
+    file.write_all(invalid_json.as_bytes()).expect("failed to write valid JSON");
 
     let result = parse_symbol_set_file(&symbol_set_path);
     assert!(result.is_err());
@@ -91,15 +91,15 @@ fn test_symbol_set_parsing_invalid_chars() {
 
 #[test]
 fn test_symbol_set_parsing_empty_array() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().expect("failed to create temp dir");
     let symbol_set_path = temp_dir.path().join("symbols.json");
 
     let empty_json = r#"{"symbol_ids": []}"#;
 
-    let mut file = File::create(&symbol_set_path).unwrap();
-    file.write_all(empty_json.as_bytes()).unwrap();
+    let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
+    file.write_all(empty_json.as_bytes()).expect("failed to write empty JSON");
 
-    let symbol_set = parse_symbol_set_file(&symbol_set_path).unwrap();
+    let symbol_set = parse_symbol_set_file(&symbol_set_path).expect("failed to parse symbol set");
     assert!(symbol_set.symbol_ids.is_empty());
     assert!(symbol_set.is_empty());
     assert_eq!(symbol_set.len(), 0);
@@ -107,13 +107,13 @@ fn test_symbol_set_parsing_empty_array() {
 
 #[test]
 fn test_symbol_set_parsing_missing_field() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().expect("failed to create temp dir");
     let symbol_set_path = temp_dir.path().join("symbols.json");
 
     let invalid_json = r#"{"wrong_field": []}"#;
 
-    let mut file = File::create(&symbol_set_path).unwrap();
-    file.write_all(invalid_json.as_bytes()).unwrap();
+    let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
+    file.write_all(invalid_json.as_bytes()).expect("failed to write valid JSON");
 
     let result = parse_symbol_set_file(&symbol_set_path);
     assert!(result.is_err());
@@ -459,7 +459,7 @@ fn test_slice_forward_filter() {
 #[test]
 #[ignore]
 fn test_from_symbol_set_file() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().expect("failed to create temp dir");
     let symbol_set_path = temp_dir.path().join("symbols.json");
 
     let valid_json = r#"{
@@ -469,10 +469,10 @@ fn test_from_symbol_set_file() {
         ]
     }"#;
 
-    let mut file = File::create(&symbol_set_path).unwrap();
-    file.write_all(valid_json.as_bytes()).unwrap();
+    let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
+    file.write_all(valid_json.as_bytes()).expect("failed to write valid JSON");
 
-    let symbol_set = parse_symbol_set_file(&symbol_set_path).unwrap();
+    let symbol_set = parse_symbol_set_file(&symbol_set_path).expect("failed to parse symbol set");
     assert_eq!(symbol_set.symbol_ids.len(), 2);
     assert!(symbol_set.validate().is_ok());
 }

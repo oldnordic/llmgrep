@@ -158,7 +158,7 @@ fn test_get_supported_languages() {
 fn test_python_function_kinds() {
     let result = get_node_kinds_for_language("python", "functions");
     assert!(result.is_some());
-    let kinds = result.unwrap();
+    let kinds = result.expect("result should be Ok");
     assert!(kinds.contains(&"function_definition".to_string()));
     assert!(kinds.contains(&"lambda".to_string()));
     assert!(kinds.contains(&"async_function_definition".to_string()));
@@ -168,7 +168,7 @@ fn test_python_function_kinds() {
 fn test_python_loops_kinds() {
     let result = get_node_kinds_for_language("python", "loops");
     assert!(result.is_some());
-    let kinds = result.unwrap();
+    let kinds = result.expect("result should be Ok");
     assert!(kinds.contains(&"for_statement".to_string()));
     assert!(kinds.contains(&"while_statement".to_string()));
 }
@@ -177,7 +177,7 @@ fn test_python_loops_kinds() {
 fn test_python_conditionals_kinds() {
     let result = get_node_kinds_for_language("python", "conditionals");
     assert!(result.is_some());
-    let kinds = result.unwrap();
+    let kinds = result.expect("result should be Ok");
     assert!(kinds.contains(&"if_statement".to_string()));
     assert!(kinds.contains(&"match_statement".to_string()));
 }
@@ -186,7 +186,7 @@ fn test_python_conditionals_kinds() {
 fn test_python_declarations_kinds() {
     let result = get_node_kinds_for_language("python", "declarations");
     assert!(result.is_some());
-    let kinds = result.unwrap();
+    let kinds = result.expect("result should be Ok");
     assert!(kinds.contains(&"class_definition".to_string()));
     assert!(kinds.contains(&"type_alias_statement".to_string()));
 }
@@ -195,7 +195,7 @@ fn test_python_declarations_kinds() {
 fn test_javascript_function_kinds() {
     let result = get_node_kinds_for_language("javascript", "functions");
     assert!(result.is_some());
-    let kinds = result.unwrap();
+    let kinds = result.expect("result should be Ok");
     assert!(kinds.contains(&"function_declaration".to_string()));
     assert!(kinds.contains(&"arrow_function".to_string()));
 }
@@ -204,7 +204,7 @@ fn test_javascript_function_kinds() {
 fn test_javascript_loops_kinds() {
     let result = get_node_kinds_for_language("javascript", "loops");
     assert!(result.is_some());
-    let kinds = result.unwrap();
+    let kinds = result.expect("result should be Ok");
     assert!(kinds.contains(&"for_statement".to_string()));
     assert!(kinds.contains(&"while_statement".to_string()));
     assert!(kinds.contains(&"for_of_statement".to_string()));
@@ -214,7 +214,7 @@ fn test_javascript_loops_kinds() {
 fn test_typescript_function_kinds() {
     let result = get_node_kinds_for_language("typescript", "functions");
     assert!(result.is_some());
-    let kinds = result.unwrap();
+    let kinds = result.expect("result should be Ok");
     assert!(kinds.contains(&"function_declaration".to_string()));
     assert!(kinds.contains(&"arrow_function".to_string()));
 }
@@ -223,7 +223,7 @@ fn test_typescript_function_kinds() {
 fn test_typescript_declarations_kinds() {
     let result = get_node_kinds_for_language("typescript", "declarations");
     assert!(result.is_some());
-    let kinds = result.unwrap();
+    let kinds = result.expect("result should be Ok");
     assert!(kinds.contains(&"interface_declaration".to_string()));
     assert!(kinds.contains(&"enum_declaration".to_string()));
 }

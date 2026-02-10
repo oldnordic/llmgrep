@@ -19,9 +19,9 @@ use tempfile::TempDir;
 /// Helper to create a test SQLite database with basic schema
 #[cfg(test)]
 fn create_sqlite_test_db() -> (TempDir, PathBuf) {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
     let db_path = dir.path().join("test.db");
-    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let conn = rusqlite::Connection::open(&db_path).expect("failed to open test database");
 
     // Create minimal Magellan-compatible schema
     conn.execute_batch(
@@ -63,7 +63,7 @@ fn create_sqlite_test_db() -> (TempDir, PathBuf) {
     conn.execute(
         "INSERT INTO graph_entities (id, kind, name, data) VALUES (1, 'File', 'src/test.rs', ?1)",
         rusqlite::params_from_iter([&file_data]),
-    ).unwrap();
+    ).expect("failed to execute SQL");
 
     // Insert symbol entities
     let symbol1_data = serde_json::json!({
@@ -85,24 +85,24 @@ fn create_sqlite_test_db() -> (TempDir, PathBuf) {
     conn.execute(
         "INSERT INTO graph_entities (id, kind, name, data) VALUES (10, 'Symbol', 'test_function', ?1)",
         rusqlite::params_from_iter([&symbol1_data]),
-    ).unwrap();
+    ).expect("failed to execute SQL");
 
     // Insert edge linking symbol to file
     conn.execute(
         "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES')",
         [],
-    ).unwrap();
+    ).expect("failed to execute SQL");
 
     // Create test source file for context/snippet extraction
     let test_file_path = dir.path().join("src/test.rs");
-    std::fs::create_dir_all(test_file_path.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(test_file_path.parent().expect("test file should have parent")).expect("failed to create test directory");
     std::fs::write(&test_file_path, r#"
 // Line 1: Before context
 pub fn test_function() {
     println!("test");
 }
 // Line 7: After context
-"#).unwrap();
+"#).expect("failed to execute SQL");
 
     (dir, db_path)
 }
@@ -136,7 +136,7 @@ fn test_backend_detection_sqlite() {
 fn test_backend_detection_native_v2() {
     use magellan::CodeGraph;
 
-    let dir = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
     let db_path = dir.path().join("test.mag2");
 
     // Create a native-v2 database (empty, but valid format)
@@ -200,7 +200,7 @@ fn test_context_structure_parity() {
     // The search should succeed (not error)
     assert!(result.is_ok(), "search_symbols should succeed: {:?}", result.err());
 
-    let (response, _partial, _bounded) = result.unwrap();
+    let (response, _partial, _bounded) = result.expect("result should be Ok");
 
     // Response structure should be correct
     // We're mainly testing that the API accepts context options and returns a response
@@ -373,7 +373,7 @@ fn test_score_calculation_enabled() {
 
     assert!(result.is_ok(), "search_symbols with scoring should succeed");
 
-    let (response, _partial, _bounded) = result.unwrap();
+    let (response, _partial, _bounded) = result.expect("result should be Ok");
 
     // When scoring is enabled, results should be scored
     // We verify the API works - exact values depend on the backend implementation

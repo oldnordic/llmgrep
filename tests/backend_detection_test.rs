@@ -7,15 +7,15 @@ use tempfile::NamedTempFile;
 #[test]
 fn test_detect_sqlite_backend() {
     // Create a temporary file with SQLite header
-    let temp = NamedTempFile::new().unwrap();
+    let temp = NamedTempFile::new().expect("failed to create temp file");
     let path = temp.path();
 
     // Write SQLite header (first 16 bytes of a valid SQLite database)
     // SQLite magic: "SQLite format 3\0"
     use std::io::Write;
-    let mut file = std::fs::File::create(path).unwrap();
-    file.write_all(b"SQLite format 3\0").unwrap();
-    file.sync_all().unwrap();
+    let mut file = std::fs::File::create(path).expect("failed to create file");
+    file.write_all(b"SQLite format 3\0").expect("failed to write SQLite header");
+    file.sync_all().expect("failed to sync file");
 
     // Try to detect backend - should fail to open as valid SQLite DB
     // but backend format should be detected correctly
@@ -52,7 +52,7 @@ fn test_detect_nonexistent_file() {
 
 #[test]
 fn test_detect_empty_file() {
-    let temp = NamedTempFile::new().unwrap();
+    let temp = NamedTempFile::new().expect("failed to create temp file");
     let path = temp.path();
 
     let result = Backend::detect_and_open(path);
@@ -72,13 +72,13 @@ fn test_detect_native_v2_backend() {
     use std::io::Write;
 
     // Create a temporary file with Native-V2 header
-    let temp = NamedTempFile::new().unwrap();
+    let temp = NamedTempFile::new().expect("failed to create temp file");
     let path = temp.path();
 
     // Write Native-V2 magic bytes: "SQLTGF"
-    let mut file = std::fs::File::create(path).unwrap();
-    file.write_all(b"SQLTGF").unwrap();
-    file.sync_all().unwrap();
+    let mut file = std::fs::File::create(path).expect("failed to create file");
+    file.write_all(b"SQLTGF").expect("failed to write test data");
+    file.sync_all().expect("failed to sync file");
 
     let result = Backend::detect_and_open(path);
 
@@ -101,13 +101,13 @@ fn test_native_v2_not_supported_error() {
     use std::io::Write;
 
     // Create a temporary file with Native-V2 header
-    let temp = NamedTempFile::new().unwrap();
+    let temp = NamedTempFile::new().expect("failed to create temp file");
     let path = temp.path();
 
     // Write Native-V2 magic bytes: "SQLTGF"
-    let mut file = std::fs::File::create(path).unwrap();
-    file.write_all(b"SQLTGF").unwrap();
-    file.sync_all().unwrap();
+    let mut file = std::fs::File::create(path).expect("failed to create file");
+    file.write_all(b"SQLTGF").expect("failed to write test data");
+    file.sync_all().expect("failed to sync file");
 
     let result = Backend::detect_and_open(path);
 

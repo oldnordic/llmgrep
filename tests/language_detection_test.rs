@@ -230,7 +230,7 @@ fn test_no_debug_strings_in_code() {
 
     let native_v2_path = Path::new("src/backend/native_v2.rs");
     if native_v2_path.exists() {
-        let content = fs::read_to_string(native_v2_path).unwrap();
+        let content = fs::read_to_string(native_v2_path).expect("failed to read test file");
 
         // Check that no DEBUG: eprintln statements exist
         assert!(!content.contains("eprintln!(\"DEBUG:"),
