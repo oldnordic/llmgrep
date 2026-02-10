@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 21 of 21 (Native-V2 Exclusive Features) — IN PROGRESS
-Current Plan: 21-01 (Complete command with KV prefix scan)
-Status: Phase 21 plan 1 of 6 complete
-Last activity: 2026-02-10 — Implemented complete command with KV prefix scan (3 min)
+Current Plan: 21-02 (Lookup command with O(1) exact FQN lookup)
+Status: Phase 21 plan 2 of 6 complete
+Last activity: 2026-02-10 — Implemented lookup command with O(1) FQN lookup using magellan KV store (7 min)
 
-Progress: [███████░░░░] 48% (25/27 plans complete in v3.0)
+Progress: [███████░░░░] 52% (26/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [███████░░░░] 48% (25/27 plans complete in v3.0)
 | Phase 19 P06 | 3min | 1 tasks | 0 files |
 | Phase 20-cli-integration P01 | 4min | 1 tasks | 1 files |
 | Phase 21-native-v2-exclusive-features P01 | 3min | 1 tasks | 4 files |
+| Phase 21-native-v2-exclusive-features P02 | 7min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -86,16 +87,19 @@ Recent decisions affecting current work:
 - [Phase 21]: Complete command defined unconditionally (not cfg-gated) for consistent --help output
 - [Phase 21]: Backend check at runtime via require_native_v2() for graceful SQLite fallback
 - [Phase 21]: KV prefix scan using magellan::kv::keys::sym_fqn_key for consistent key format
+- [Phase 21]: SymbolNotFound error (LLM-E112) for exact FQN lookup failures with fqn, db, partial fields
+- [Phase 21]: Lookup command with O(1) exact FQN resolution using magellan::kv::lookup_symbol_by_fqn
+- [Phase 21]: Two-phase lookup pattern: KV store for O(1) ID resolution, SQL for full metadata
 
 ### Pending Todos
 
-- Phase 21: Native-v2 exclusive features (lookup, label-search, metrics)
+- Phase 21: Native-v2 exclusive features (label-search, performance metrics)
 - Phase 21: KV store migration benchmarks
 
 ## Session Continuity
 
-Last session: 2026-02-10 — Phase 21 plan 21-01
-Stopped at: Completed Phase 21 plan 21-01 (Complete command with KV prefix scan)
+Last session: 2026-02-10 — Phase 21 plan 21-02
+Stopped at: Completed Phase 21 plan 21-02 (Lookup command with O(1) exact FQN lookup)
 Resume file: None
 
 ### Blockers/Concerns
@@ -244,13 +248,14 @@ Resume file: None
 ## Phase 21 Summary
 
 **Started:** 2026-02-10
-**Plans:** 1/6 complete (21-01)
+**Plans:** 2/6 complete (21-01, 21-02)
 **Status:** IN PROGRESS
 
 **Artifacts Created:**
 - .planning/phases/021-native-v2-exclusive-features/21-01-SUMMARY.md — Complete command summary
+- .planning/phases/021-native-v2-exclusive-features/21-02-SUMMARY.md — Lookup command summary
 
-**Commits:** 1 atomic commit (56be1ea)
+**Commits:** 3 atomic commits (56be1ea, f94c08e, 42e5b8c)
 
 **Verification:**
 - [x] Complete command implemented with KV prefix scan
@@ -258,5 +263,9 @@ Resume file: None
 - [x] LLM-E111 error on SQLite backend (verified)
 - [x] Empty prefix validation (verified)
 - [x] Human and JSON output formats (implemented)
+- [x] Lookup command implemented with O(1) FQN lookup
+- [x] SymbolNotFound error (LLM-E112) added with helpful remediation
+- [x] magellan::kv::lookup_symbol_by_fqn for O(1) ID resolution
+- [x] SQL query for full symbol metadata after KV lookup
 - [x] All 151 tests passing (zero regressions)
 
