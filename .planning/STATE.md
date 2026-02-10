@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 21 of 21 (Native-V2 Exclusive Features) — IN PROGRESS
-Current Plan: 21-02 (Lookup command with O(1) exact FQN lookup)
-Status: Phase 21 plan 2 of 6 complete
-Last activity: 2026-02-10 — Implemented lookup command with O(1) FQN lookup using magellan KV store (7 min)
+Current Plan: 21-03 (Label search mode for purpose-based semantic queries)
+Status: Phase 21 plan 3 of 6 complete
+Last activity: 2026-02-10 — Implemented label search mode using magellan KV store (7 min)
 
-Progress: [███████░░░░] 52% (26/27 plans complete in v3.0)
+Progress: [███████░░░░] 54% (27/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [███████░░░░] 52% (26/27 plans complete in v3.0)
 | Phase 20-cli-integration P01 | 4min | 1 tasks | 1 files |
 | Phase 21-native-v2-exclusive-features P01 | 3min | 1 tasks | 4 files |
 | Phase 21-native-v2-exclusive-features P02 | 7min | 2 tasks | 5 files |
+| Phase 21-native-v2-exclusive-features P03 | 7min | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -90,16 +91,19 @@ Recent decisions affecting current work:
 - [Phase 21]: SymbolNotFound error (LLM-E112) for exact FQN lookup failures with fqn, db, partial fields
 - [Phase 21]: Lookup command with O(1) exact FQN resolution using magellan::kv::lookup_symbol_by_fqn
 - [Phase 21]: Two-phase lookup pattern: KV store for O(1) ID resolution, SQL for full metadata
+- [Phase 21]: Label search using magellan::kv::keys::label_key and decode_symbol_ids for SymbolId list retrieval
+- [Phase 21]: Default label "test" when --label flag not specified
+- [Phase 21]: Empty label results return empty SearchResponse (not error)
 
 ### Pending Todos
 
-- Phase 21: Native-v2 exclusive features (label-search, performance metrics)
+- Phase 21: Native-v2 exclusive features (performance metrics)
 - Phase 21: KV store migration benchmarks
 
 ## Session Continuity
 
-Last session: 2026-02-10 — Phase 21 plan 21-02
-Stopped at: Completed Phase 21 plan 21-02 (Lookup command with O(1) exact FQN lookup)
+Last session: 2026-02-10 — Phase 21 plan 21-03
+Stopped at: Completed Phase 21 plan 21-03 (Label search mode)
 Resume file: None
 
 ### Blockers/Concerns
@@ -248,14 +252,15 @@ Resume file: None
 ## Phase 21 Summary
 
 **Started:** 2026-02-10
-**Plans:** 2/6 complete (21-01, 21-02)
+**Plans:** 3/6 complete (21-01, 21-02, 21-03)
 **Status:** IN PROGRESS
 
 **Artifacts Created:**
 - .planning/phases/021-native-v2-exclusive-features/21-01-SUMMARY.md — Complete command summary
 - .planning/phases/021-native-v2-exclusive-features/21-02-SUMMARY.md — Lookup command summary
+- .planning/phases/021-native-v2-exclusive-features/21-03-SUMMARY.md — Label search mode summary
 
-**Commits:** 3 atomic commits (56be1ea, f94c08e, 42e5b8c)
+**Commits:** 4 atomic commits (56be1ea, f94c08e, 42e5b8c, 352fefc)
 
 **Verification:**
 - [x] Complete command implemented with KV prefix scan
@@ -267,5 +272,9 @@ Resume file: None
 - [x] SymbolNotFound error (LLM-E112) added with helpful remediation
 - [x] magellan::kv::lookup_symbol_by_fqn for O(1) ID resolution
 - [x] SQL query for full symbol metadata after KV lookup
+- [x] Label search mode with SearchMode::Labels variant
+- [x] --label flag with default "test" label
+- [x] NativeV2Backend::search_by_label using label_key KV lookup
+- [x] Empty label results handled gracefully
 - [x] All 151 tests passing (zero regressions)
 
