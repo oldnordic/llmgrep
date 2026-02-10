@@ -14,6 +14,7 @@ use crate::output::{
 use crate::query::SearchOptions;
 use magellan::graph::{query, SymbolNode};
 use magellan::CodeGraph;
+use regex::Regex;
 use std::cell::UnsafeCell;
 use std::path::{Path, PathBuf};
 use sqlitegraph::SnapshotId;
@@ -149,6 +150,69 @@ impl NativeV2Backend {
             || path.ends_with(".kts") || path.ends_with(".scala") || path.ends_with(".lua")
             || path.ends_with(".r") || path.ends_with(".m") || path.ends_with(".cs")
     }
+
+    /// Calculate relevance score for a search match
+    ///
+    /// This is a verbatim port of the score_match() function from src/query.rs
+    /// to ensure consistent scoring across SQLite and Native-V2 backends.
+    ///
+    /// # Arguments
+    /// * `query` - The search query string
+    /// * `name` - Symbol name
+    /// * `display_fqn` - Display fully qualified name
+    /// * `fqn` - Fully qualified name
+    /// * `regex` - Optional regex pattern for regex matching
+    ///
+    /// # Returns
+    /// A score from 0-100 indicating match relevance
+    fn score_match(
+        query: &str,
+        name: &str,
+        display_fqn: &str,
+        fqn: &str,
+        regex: Option<&Regex>,
+    ) -> u64 {
+        let mut score = 0;
+
+        if name == query {
+            score = score.max(100);
+        }
+        if display_fqn == query {
+            score = score.max(95);
+        }
+        if fqn == query {
+            score = score.max(90);
+        }
+
+        if name.starts_with(query) {
+            score = score.max(80);
+        }
+        if display_fqn.starts_with(query) {
+            score = score.max(70);
+        }
+        if name.contains(query) {
+            score = score.max(60);
+        }
+        if display_fqn.contains(query) {
+            score = score.max(50);
+        }
+        if fqn.contains(query) {
+            score = score.max(40);
+        }
+
+        if let Some(pattern) = regex {
+            if pattern.is_match(name) {
+                score = score.max(70);
+            } else if pattern.is_match(display_fqn) {
+                score = score.max(60);
+            } else if pattern.is_match(fqn) {
+                score = score.max(50);
+            }
+        }
+
+        score
+    }
+
 }
 
 impl super::BackendTrait for NativeV2Backend {
@@ -158,6 +222,15 @@ impl super::BackendTrait for NativeV2Backend {
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
         let mut results = Vec::new();
         let query_lower = options.query.to_lowercase();
+
+        // Compile regex pattern if using regex search
+        let regex_pattern = if options.use_regex {
+            Some(Regex::new(options.query).map_err(|e| LlmError::InvalidQuery {
+                query: format!("Invalid regex: {}", e),
+            })?)
+        } else {
+            None
+        };
 
         // SAFETY: We have exclusive access through &self
         let graph = unsafe { self.graph() };
@@ -213,6 +286,23 @@ impl super::BackendTrait for NativeV2Backend {
 
                 // Convert SymbolFact to SymbolMatch
                 let file_path_str = symbol.file_path.to_string_lossy().to_string();
+                let name = symbol.name.as_deref().unwrap_or("");
+                let display_fqn = symbol.display_fqn.as_deref().unwrap_or("");
+                let fqn = symbol.fqn.as_deref().unwrap_or("");
+
+                // Calculate score if requested
+                let score = if options.include_score {
+                    Some(Self::score_match(
+                        options.query,
+                        name,
+                        display_fqn,
+                        fqn,
+                        regex_pattern.as_ref(),
+                    ))
+                } else {
+                    None
+                };
+
                 let span = Span {
                     span_id: format!("{}:{}:{}", file_path_str, symbol.byte_start, symbol.byte_end),
                     file_path: file_path_str.clone(),
@@ -232,7 +322,7 @@ impl super::BackendTrait for NativeV2Backend {
                     kind: symbol.kind.normalized_key().to_string(),
                     parent: None,
                     symbol_id: None,
-                    score: None,
+                    score,
                     fqn: symbol.fqn.clone(),
                     canonical_fqn: symbol.canonical_fqn.clone(),
                     display_fqn: symbol.display_fqn.clone(),
