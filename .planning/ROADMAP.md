@@ -479,6 +479,67 @@ Plans:
 - [x] 21-05-PLAN.md — Write tests for native-v2 exclusive features (Wave 3)
 - [x] 21-06-PLAN.md — Verify graceful degradation on SQLite backend (Wave 4)
 
+#### Phase 22: Production Readiness Bugfix 🔧
+**Goal:** Fix critical bugs discovered after Phase 21 verification
+**Depends on**: Phase 21
+**Status:** Pending
+**Success Criteria** (what must be TRUE):
+  1. Language field accurately reflects source file language (not hardcoded "Rust")
+  2. No debug output pollutes stderr during normal operation
+  3. All search modes return accurate language field
+  4. Integration tests verify language detection for all supported file types
+  5. Integration tests verify no debug output in any command
+**Plans**: 4 plans
+
+Plans:
+- [ ] 22-01 — Add language inference to NativeV2Backend (infer from file extension)
+- [ ] 22-02 — Remove debug output from complete() method
+- [ ] 22-03 — Cross-backend verification tests for language detection
+- [ ] 22-04 — Final verification and release
+
+#### Phase 23: Native-V2 Feature Parity 🔄
+**Goal:** Achieve full feature parity between SQLite and Native-V2 backends
+**Depends on**: Phase 22
+**Status:** Pending
+**Success Criteria** (what must be TRUE):
+  1. `--with-context` flag works with Native-V2 backend
+  2. `--with-snippet` flag works with Native-V2 backend
+  3. Search results include relevance score with Native-V2 backend
+  4. Metrics fields (fan_in, fan_out, cyclomatic_complexity) populated from CodeGraph
+  5. `--min-fan-in`, `--min-fan-out`, `--min-complexity` flags work with Native-V2
+  6. Cross-backend tests verify identical output
+**Plans**: 6 plans
+
+Plans:
+- [ ] 23-01 — Context extraction from CodeGraph
+- [ ] 23-02 — Snippet extraction from CodeGraph
+- [ ] 23-03 — Score calculation for relevance sorting
+- [ ] 23-04 — Metrics extraction from CodeGraph
+- [ ] 23-05 — Cross-backend parity tests
+- [ ] 23-06 — Documentation and verification
+
+#### Phase 24: Code Quality Polish ✨
+**Goal:** Address code quality issues, remove warnings, improve test code
+**Depends on**: Phase 23
+**Status:** Pending
+**Success Criteria** (what must be TRUE):
+  1. `cargo build --release` produces zero warnings
+  2. `cargo clippy` produces zero warnings (or only explicitly allowed)
+  3. Test code uses `.expect("message")` instead of bare `.unwrap()`
+  4. All public APIs are documented
+  5. All unsafe blocks have safety documentation
+  6. CONCERNS.md updated with resolved issues removed
+**Plans**: 7 plans
+
+Plans:
+- [ ] 24-01 — Fix compiler warnings (unused variable, dead code)
+- [ ] 24-02 — Improve test code error messages
+- [ ] 24-03 — Add safety documentation for unsafe blocks
+- [ ] 24-04 — Improve public API documentation
+- [ ] 24-05 — Code consistency review
+- [ ] 24-06 — Update CONCERNS.md
+- [ ] 24-07 — Final verification
+
 ### 📋 v4.0 Future Enhancements (Planned)
 
 **Milestone Goal:** Advanced features requiring native-v2 watch/snapshot APIs
@@ -491,7 +552,7 @@ Deferred to future release. Requirements tracked but not scheduled.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 17 → 18 → 19 → 20 → 21
+Phases execute in numeric order: 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -518,6 +579,9 @@ Phases execute in numeric order: 17 → 18 → 19 → 20 → 21
 | 19. NativeV2Backend | v3.0 | 6/6 | Complete | 2026-02-09 |
 | 20. CLI Integration | v3.0 | 5/5 | Complete | 2026-02-10 |
 | 21. Native-V2 Features | v3.0 | 6/6 | Complete | 2026-02-10 |
+| 22. Production Bugfix | v3.0.1 | 0/4 | Pending | — |
+| 23. Feature Parity | v3.1 | 0/6 | Pending | — |
+| 24. Code Quality Polish | v3.1 | 0/7 | Pending | — |
 
 **Recent Trend:**
 - Phase 17 (5 plans): ~5 min each
