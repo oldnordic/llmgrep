@@ -40,11 +40,6 @@ impl SqliteBackend {
             db_path: db_path.to_path_buf(),
         })
     }
-
-    /// Get the database path for magellan shell-out commands.
-    pub(crate) fn db_path(&self) -> &Path {
-        &self.db_path
-    }
 }
 
 impl super::BackendTrait for SqliteBackend {

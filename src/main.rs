@@ -1633,8 +1633,8 @@ fn run_watch(
         });
     }
 
-    // Build SearchOptions from command args
-    let options = SearchOptions {
+    // Build SearchOptions from command args (for future watch implementation)
+    let _options = SearchOptions {
         db_path: &db_path,
         query,
         path_filter: validated_path.as_ref(),
@@ -1688,7 +1688,8 @@ fn run_watch(
 
         let sig_flag = flag::register(signal::SIGINT, shutdown_clone.clone())?;
         let _ = flag::register(signal::SIGTERM, shutdown_clone)?;
-        std::mem::forget(sig_flag);
+        // Keep sig_flag alive to prevent signal handler from being unregistered
+        let _ = sig_flag;
     }
 
     // Run the watch command
