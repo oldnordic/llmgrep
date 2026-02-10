@@ -1,220 +1,140 @@
 # Codebase Concerns
 
 **Analysis Date:** 2026-02-10
+**Verified Against:** v3.0.1 (native-v2 feature enabled)
 
-## Tech Debt
+## Confirmed Production Issues
 
-### Native-V2 Backend Debug Output
-- Issue: Production code contains debug `eprintln!` statements in the `complete()` method
-- Files: `src/backend/native_v2.rs` (lines 522-559)
-- Impact: Excessive stdout pollution in production use; indicates incomplete development work
-- Fix approach: Remove all `eprintln!("DEBUG: ...")` statements or conditionally compile behind a `debug` feature flag
+### 1. Hardcoded Language String - CONFIRMED BUG
+- **Severity:** High (Misleading data)
+- **Files:** `src/backend/native_v2.rs` (lines 121, 228)
+- **Issue:** Native-V2 backend hardcodes `language: Some("Rust".to_string())` in all search results
+- **Impact:** Non-Rust codebases show incorrect language. Python, JavaScript, TypeScript, Java, C, C++ files all report as "Rust"
+- **Verification:** Tested with `test.py` file - returned `"language": "Rust"`
+- **Fix approach:** Infer language from file extension using existing `infer_language()` function from `query.rs`
 
-### Shell-Out External Process Dependency
-- Issue: SQLite backend shells out to `magellan` CLI for AST queries (`ast`, `find-ast` commands)
-- Files: `src/backend/sqlite.rs` (lines 87-146)
-- Impact: Requires magellan binary in PATH; slower than native API; fragile to PATH changes
-- Fix approach: Consider using libmagellan API directly or accepting this as permanent hybrid approach
+### 2. Production Debug Output Pollution - CONFIRMED BUG
+- **Severity:** High (UX/Production readiness)
+- **Files:** `src/backend/native_v2.rs` (lines 522-559 in `complete()` method)
+- **Issue:** Production code contains 10+ `eprintln!("DEBUG: ...")` statements
+- **Impact:** Every `llmgrep complete` command prints 15+ lines of debug output to stderr
+- **Verification:** Running `llmgrep complete --prefix "hel" --limit 1` outputs:
+  ```
+  DEBUG: Found 5 total KV entries with 'sym:' prefix
+  DEBUG:   "sym:fqn:hello" -> Integer(4)
+  DEBUG: KV indexing 1 symbols for file /tmp/test_code/test.py
+  DEBUG: populate_symbol_index called with 1 symbols, file_id=1
+  [... 11 more DEBUG lines]
+  ```
+- **Fix approach:** Remove all debug statements or conditionally compile behind `#[cfg(debug_assertions)]`
 
-### Hardcoded Language String
-- Issue: Native-V2 backend hardcodes `language: Some("Rust".to_string())` in all search results
-- Files: `src/backend/native_v2.rs` (lines 121, 228)
-- Impact: Incorrect language reporting for non-Rust codebases; misleading results
-- Fix approach: Infer language from file extension using `infer_language()` function from query.rs
+### 3. Native-V2 Backend Missing Features - CONFIRMED
+- **Severity:** Medium (Feature parity gap)
+- **Files:** `src/backend/native_v2.rs`
+- **Issues:**
+  - `score` always returns `None` (line 113, 220)
+  - `context` always returns `None` (line 103, 210)
+  - `snippet` always returns `None` (line 119, 226)
+  - `fan_in`, `fan_out`, `cyclomatic_complexity` always return `None` (lines 124-126, 231-233)
+- **Impact:** `--with-context`, `--with-snippet`, `--min-complexity`, `--min-fan-in`, relevance sorting don't work with native-v2
+- **Verification:** These fields are hardcoded to `None` in `symbol_node_to_match()` and search methods
 
-### SQL Query Rebuild Pattern
-- Issue: `search_symbols_impl()` builds SQL query twice when AST filtering is active (lines 369-422)
-- Files: `src/query.rs`
-- Impact: Unnecessary computation; confusing control flow
-- Fix approach: Check for AST table existence before initial query build, not after
+## Technical Debt
 
-### Duplicate Search Options Construction
-- Issue: Three separate mode handlers (Symbols, References, Calls) construct identical SearchOptions with minor variations
-- Files: `src/main.rs` (lines 731-785, 851-879, 914-942)
-- Impact: Code duplication; high maintenance burden for adding new options
-- Fix approach: Extract common SearchOptions construction into helper function
+### UnsafeCell Usage Pattern
+- **Files:** `src/backend/native_v2.rs` (lines 33-73, 148, 264, 366, 481, 503)
+- **Issue:** Uses `UnsafeCell` for interior mutability because `CodeGraph` requires `&mut self` but `BackendTrait` takes `&self`
+- **Why fragile:** Manual verification required that no concurrent access occurs
+- **Current safety:** Relies on exclusive ownership claim in documentation
+- **Test coverage:** No tests for concurrent access scenarios
+- **Mitigation:** `Send` is implemented but `Sync` is NOT - prevents multi-threaded access
 
-## Known Bugs
+### String Cloning in Hot Paths
+- **Files:** `src/backend/native_v2.rs`
+- **Issue:** Excessive `.to_string()` calls in search loops
+- **Examples:**
+  - Line 201: `let file_path_str = symbol.file_path.to_string_lossy().to_string();`
+  - Line 316: `let file_path = reference.file_path.to_string_lossy().to_string();`
+  - Line 426: `let file_path = call.file_path.to_string_lossy().to_string();`
+- **Impact:** ~6 heap allocations per search result
+- **Improvement path:** Use `Cow<str>` or reuse string buffers
 
-### Empty Query with SymbolId bypasses validation
-- Issue: Empty query string allowed when `--symbol-id` is provided, but validation happens before symbol_id check
-- Files: `src/main.rs` (line 673)
-- Symptoms: `--query "" --symbol-id abc...` passes validation unexpectedly
-- Trigger: Empty query with valid symbol ID
-- Workaround: Provide non-empty query string
+### Test Code Using unwrap() Excessively
+- **Files:** `src/query.rs` (lines 2926-3638)
+- **Issue:** Test code uses `.unwrap()` instead of proper error assertions
+- **Count:** ~40+ occurrences of `.unwrap()` in test module
+- **Impact:** Tests panic with unclear messages instead of showing assertion failures
+- **Examples:**
+  ```rust
+  let db_file = tempfile::NamedTempFile::new().unwrap();
+  let conn = Connection::open(db_file.path()).unwrap();
+  let (response, partial, _) = search_symbols(options).unwrap();
+  ```
+- **Fix approach:** Use `.expect("descriptive message")` or proper result assertions
 
-### Auto Mode Missing Label Search
-- Issue: Auto mode combines symbols/references/calls but does not include label search
-- Files: `src/main.rs` (lines 976-1141)
-- Symptoms: Cannot use `--mode auto --label test` for combined label search
-- Workaround: Use `--mode labels` directly
+## Shell-Out External Process Dependency
 
-## Security Considerations
+### Magellan CLI Dependency
+- **Files:** `src/algorithm.rs`, `src/backend/sqlite.rs`
+- **Issue:** SQLite backend shells out to `magellan` CLI for graph algorithms and AST queries
+- **Impact:**
+  - Requires magellan binary in PATH
+  - Slower than native API (process spawn overhead)
+  - Fragile to PATH changes
+- **Commands used:** `magellan find`, `reachable`, `dead-code`, `cycles`, `condense`, `paths`
+- **Note:** This is accepted as permanent hybrid approach for SQLite backend
 
-### Regex ReDoS Mitigation Partial
-- Area: User-provided regex patterns
-- Risk: Complex regex patterns could cause catastrophic backtracking
-- Files: `src/query.rs` (line 20: MAX_REGEX_SIZE = 10KB)
-- Current mitigation: Size limit on regex pattern via `RegexBuilder::size_limit()`
-- Recommendations: Add complexity detection (nested quantifiers, excessive alternation)
+## Known Limitations (By Design)
 
-### Path Traversal Protection
-- Area: Database and file path inputs
-- Risk: Access to sensitive system directories
-- Files: `src/main.rs` (lines 396-447: `validate_path()`)
-- Current mitigation: Blocks `/etc`, `/root`, `/boot`, `/sys`, `/proc`, `/dev`, `/run`, `/var/run`, `/var/tmp`, `~/.ssh`, `~/.config`
-- Recommendations: Add whitelist-based approach for project directories
+### Native-V2 Requires Feature Flag
+- **Files:** `src/backend/native_v2.rs` (line 6: `#[cfg(feature = "native-v2")]`)
+- **Issue:** Binary built without `--features native-v2` cannot read Magellan 2.x databases
+- **Error:** `LLM-E109: Native-V2 backend detected but llmgrep was built without native-v2 support`
+- **Workaround:** Rebuild with `cargo install llmgrep --features native-v2`
+- **Note:** This is intentional - keeps default binary smaller
 
-### Shell Injection via Magellan Command
-- Area: Algorithm shell-out commands
-- Risk: Arguments passed to magellan subprocess not properly escaped
-- Files: `src/algorithm.rs` (lines 328-365)
-- Current mitigation: Uses `Command::args()` which handles basic escaping
-- Recommendations: Validate all algorithm parameters before shell execution
+### Linear Scanning in Native-V2 Search
+- **Files:** `src/backend/native_v2.rs` (lines 150-238)
+- **Issue:** `search_symbols()` iterates through all files and all symbols within files
+- **Cause:** No indexed symbol name lookup in CodeGraph API for substring matching
+- **Impact:** O(n) where n = total symbols in database
+- **Mitigation:** Path filtering reduces search space
+- **Note:** This is a current limitation of the CodeGraph API, not a bug
 
-## Performance Bottlenecks
+## Missing Error Context
 
-### Native-V2 Backend Linear File Scanning
-- Problem: `search_symbols()` iterates through all files and all symbols within files
-- Files: `src/backend/native_v2.rs` (lines 140-254)
-- Cause: No indexed symbol name lookup; must scan all symbol names for substring match
-- Improvement path: Use CodeGraph's KV store for symbol name indexing if available
+### Generic unwrap() in Main
+- **Files:** `src/main.rs`
+- **Issue:** Some `.expect()` calls have generic messages
+- **Example:** Line 686: `let db_path = validated_db.as_ref().expect("validated db path missing");`
+- **Impact:** Less helpful error messages
+- **Priority:** Low (errors are rare in this path)
 
-### SQLite Backend Shell-Out Overhead
-- Problem: Each AST query spawns separate magellan process
-- Files: `src/backend/sqlite.rs` (lines 87-146)
-- Cause: No native API access for AST operations on SQLite backend
-- Improvement path: Link against magellan library or create persistent daemon process
+## Code Quality Issues
 
-### String Cloning in Search Loops
-- Problem: Excessive `.to_string()` calls in hot loops
-- Files: `src/backend/native_v2.rs` (~17 clone operations per search result)
-- Cause: String ownership patterns requiring copies
-- Improvement path: Use `Cow<str>` or references where possible
+### Unused Variable Warning
+- **Files:** `src/backend/sqlite.rs` (line 159)
+- **Issue:** `let partial = fqn.rsplit("::").next().unwrap_or(fqn);` - variable defined but never used
+- **Compiler warning:** `warning: unused variable: partial`
+- **Fix:** Remove or prefix with underscore
 
-## Fragile Areas
-
-### Native-V2 Backend UnsafeCell Usage
-- Files: `src/backend/native_v2.rs` (lines 33-73, 148, 264, 366, 481, 503)
-- Why fragile: Requires manual verification that no concurrent access occurs
-- Safe modification: Never call backend methods from multiple threads simultaneously
-- Test coverage: No tests for concurrent access scenarios
-
-### Algorithm JSON Parsing Fragility
-- Files: `src/algorithm.rs` (lines 388-455: `extract_symbol_ids_from_magellan_json()`)
-- Why fragile: Hardcoded JSON path access; breaks on magellan output format changes
-- Safe modification: Add version check to magellan JSON format parsing
-- Test coverage: Unit tests exist but use mock JSON; may not catch real format changes
-
-### AST Node Kind String Matching
-- Files: `src/ast.rs` (language-specific shorthand expansions)
-- Why fragile: Depends on exact string matches from tree-sitter grammars
-- Safe modification: Add fuzzy matching for node kind variations
-- Test coverage: Tests use hardcoded node kinds; may miss grammar updates
-
-## Scaling Limits
-
-### SymbolSet Temp Table Threshold
-- Current capacity: 1000 symbols triggers temporary table creation
-- Files: `src/algorithm.rs` (line 885: `SYMBOL_SET_TEMP_TABLE_THRESHOLD`)
-- Limit: SQLite IN clause performance degrades beyond ~1000 items
-- Scaling path: Always use temp tables for symbol sets; remove threshold logic
-
-### Path Enumeration Bounds
-- Current capacity: max-depth=100, max-paths=1000 (hardcoded in algorithm.rs line 836-839)
-- Limit: Large codebases may exceed these bounds silently
-- Scaling path: Make bounds configurable via command-line flags
-
-### Candidates Limit
-- Current capacity: max 10,000 candidates via CLI arg validation
-- Files: `src/main.rs` (line 76: `ranged_usize(1, 10000)`)
-- Limit: Large codebases may need more candidates for comprehensive results
-- Scaling path: Remove upper bound or make it configurable
-
-## Dependencies at Risk
-
-### Magellan CLI Runtime Dependency
-- Risk: Shell-out pattern depends on external binary availability and version
-- Impact: All algorithm features break without magellan CLI
-- Files: `src/algorithm.rs`, `src/backend/sqlite.rs`
-- Migration plan: Add optional `libmagellan` feature for direct library linking
-
-### SQLiteGraph Version Compatibility
-- Risk: Native-V2 backend depends on specific sqlitegraph KV store API
-- Impact: Database format changes require coordinated updates
-- Files: `src/backend/native_v2.rs`
-- Migration plan: Version the database format and support migration paths
-
-## Missing Critical Features
-
-### Native-V2 Backend Metrics Filtering
-- Problem: `fan_in`, `fan_out`, `cyclomatic_complexity` always return `None`
-- Files: `src/backend/native_v2.rs` (lines 224-226, 331-333, 446-448)
-- Blocks: Metrics-based filtering (`--min-complexity`, `--min-fan-in`) doesn't work with native-v2
-- Priority: High for feature parity
-
-### Native-V2 Backend Context/Snippet Extraction
-- Problem: `context` and `snippet` fields always return `None`
-- Files: `src/backend/native_v2.rs` (lines 103, 116, 226, 336, 450)
-- Blocks: `--with-context` and `--with-snippet` don't work with native-v2
-- Priority: High for feature parity
-
-### Native-V2 Backend Score Calculation
-- Problem: `score` always returns `None`
-- Files: `src/backend/native_v2.rs` (line 113)
-- Blocks: Relevance sorting unavailable in native-v2 mode
-- Priority: Medium for user experience
-
-## Test Coverage Gaps
-
-### Untested Area: Unsafe Block Concurrency
-- What's not tested: Multiple threads calling `NativeV2Backend` methods simultaneously
-- Files: `src/backend/native_v2.rs`
-- Risk: Undefined behavior if backend is used from multiple threads
-- Priority: High (safety critical)
-
-### Untested Area: Path Traversal Edge Cases
-- What's not tested: Symlink-based path traversal attempts
-- Files: `src/main.rs` (validate_path function)
-- Risk: Potential bypass of directory access controls
-- Priority: Medium (security)
-
-### Untested Area: Magelland CLI Not Found Handling
-- What's not tested: System without magellan installed
-- Files: `src/algorithm.rs`
-- Risk: Poor error messages when magellan is missing
-- Priority: Low (error handling exists but not tested)
-
-### Untested Area: Large SymbolSet Performance
-- What's not tested: SymbolSets larger than 1000 items
-- Files: `src/algorithm.rs`, `src/query.rs`
-- Risk: Performance regression at scale
-- Priority: Medium (performance)
-
-### Untested Area: Non-Rust Languages in Native-V2
-- What's not tested: Searching Python, JavaScript, or other languages via native-v2
-- Files: `src/backend/native_v2.rs`
-- Risk: "Rust" hardcoded language field confuses users
-- Priority: Low (cosmetic but misleading)
-
-### Untested Area: Empty Database Handling
-- What's not tested: All commands against empty/just-initialized databases
-- Files: All backends
-- Risk: Panics or poor UX on first use
-- Priority: Low (edge case)
-
-### Untested Area: Database Corruption Recovery
-- What's not tested: Opening partially-written or corrupted database files
-- Files: `src/backend/native_v2.rs` (line 57)
-- Risk: Cryptic error messages
-- Priority: Low (rare event)
-
-### Untested Area: Unicode Edge Cases in Search
-- What's not tested: Search queries with combining characters, RTL scripts, emoji
-- Files: `src/query.rs`
-- Risk: Incorrect matching or display issues
-- Priority: Medium (internationalization)
+### Dead Code Warning
+- **Files:** `src/backend/sqlite.rs` (line 45)
+- **Issue:** `pub(crate) fn db_path(&self)` method defined but never called
+- **Compiler warning:** `warning: method 'db_path' is never used`
+- **Fix:** Remove or make public if needed externally
 
 ---
+
+## Summary by Priority
+
+| Priority | Issue | Files | Status |
+|----------|-------|-------|--------|
+| **HIGH** | Hardcoded "Rust" language | `native_v2.rs:121, 228` | Confirmed Bug |
+| **HIGH** | Debug output in production | `native_v2.rs:522-559` | Confirmed Bug |
+| **MEDIUM** | Missing native-v2 features (score, context, snippet, metrics) | `native_v2.rs` | Feature Gap |
+| **MEDIUM** | String cloning in hot paths | `native_v2.rs` | Performance |
+| **LOW** | Test code using unwrap() | `query.rs` tests | Code Quality |
+| **LOW** | Unused/dead code warnings | `sqlite.rs` | Code Quality |
 
 *Concerns audit: 2026-02-10*
