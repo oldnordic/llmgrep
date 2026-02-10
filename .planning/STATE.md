@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 20 of 21 (CLI Integration) — IN PROGRESS
-Current Plan: 20-01 (Wire Backend enum into CLI)
-Status: Plan 20-01 complete, backend detection integrated
-Last activity: 2026-02-10 — CLI uses Backend::detect_and_open() for all commands
+Current Plan: 20-02 (Verify Native-V2 error handling)
+Status: Plan 20-02 complete, error handling verified
+Last activity: 2026-02-10 — LLM-E109 error verified with remediation hints
 
-Progress: [██████░░░░░] 38% (16/27 plans complete in v3.0)
+Progress: [██████░░░░░] 39% (17/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -88,8 +88,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-10 — Phase 19 plan 19-06 verification
-Stopped at: Completed Phase 19 (all 6 plans, NativeV2Backend complete)
+Last session: 2026-02-10 — Phase 20 plan 20-02 verification
+Stopped at: Completed Phase 20 plan 20-02 (native-v2 error handling verified)
 Resume file: None
 
 ### Blockers/Concerns
@@ -199,19 +199,22 @@ Resume file: None
 
 ## Phase 20 Summary
 
-**Completed:** 2026-02-10
-**Plans:** 1/1 complete (20-01)
-**Status:** COMPLETE
+**Completed:** 2026-02-10 (IN PROGRESS)
+**Plans:** 2/6 complete (20-01, 20-02)
+**Status:** IN PROGRESS
 
 **Artifacts Created:**
 - .planning/phases/020-cli-integration/20-01-SUMMARY.md — CLI integration summary
+- .planning/phases/020-cli-integration/20-02-SUMMARY.md — Native-V2 error handling verification
 
 **Commits:** 1 atomic commit (2888dcd)
 
 **Verification:**
 - [x] CLI compiles with Backend enum integration
-- [x] All 151 tests passing (zero regressions)
+- [x] All 182 tests passing (zero regressions)
 - [x] Backend::detect_and_open() called in run_search(), run_ast(), run_find_ast()
 - [x] Backend trait methods delegated to from main.rs
 - [x] No --backend flag (automatic detection per Phase 17 decision)
 - [x] Error handling for NativeV2BackendNotSupported includes remediation
+- [x] LLM-E109 error verified with cargo install/build commands
+- [x] Integration test test_native_v2_not_supported_error passes
