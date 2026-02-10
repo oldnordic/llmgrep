@@ -1,3 +1,53 @@
+//! llmgrep - Semantic code search powered by Magellan.
+//!
+//! This library provides semantic code search capabilities using Magellan's
+//! code graph database. It supports symbol search, reference search, call search,
+//! AST-based filtering, and algorithm-based analysis.
+//!
+//! # Features
+//!
+//! - **Symbol Search**: Find symbols by name with fuzzy matching
+//! - **Reference Search**: Find incoming references to symbols
+//! - **Call Search**: Find outgoing function calls from symbols
+//! - **AST Filtering**: Filter by AST node kind (functions, loops, etc.)
+//! - **Metrics Filtering**: Filter by complexity, fan-in, fan-out
+//! - **Algorithm Integration**: Run Magellan algorithms (reachable, dead-code, cycles)
+//!
+//! # Quick Start
+//!
+//! ```no_run
+//! use llmgrep::{Backend, SearchOptions};
+//! use std::path::Path;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Open a Magellan database
+//! let db_path = Path::new(".codemcp/codegraph.db");
+//! let backend = Backend::detect_and_open(db_path)?;
+//!
+//! // Search for symbols
+//! let options = SearchOptions {
+//!     db_path,
+//!     query: "main",
+//!     limit: 10,
+//!     ..Default::default()
+//! };
+//!
+//! let (results, partial, _) = backend.search_symbols(options)?;
+//! println!("Found {} symbols", results.total_count);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Modules
+//!
+//! - [`algorithm`] - Magellan algorithm integration (reachable, dead-code, cycles)
+//! - [`ast`] - AST node queries and context
+//! - [`backend`] - Backend abstraction (SQLite, Native-V2)
+//! - [`error`] - Error types
+//! - [`output`] - Response types and formatting
+//! - [`query`] - Search functions and options
+//! - [`safe_extraction`] - Safe UTF-8 extraction
+
 pub mod algorithm;
 pub mod ast;
 pub mod backend;
