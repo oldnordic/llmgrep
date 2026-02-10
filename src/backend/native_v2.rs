@@ -12,13 +12,83 @@ use crate::output::{
     SearchResponse, SymbolMatch, Span,
 };
 use crate::query::SearchOptions;
+use magellan::common::extract_symbol_content_safe;
 use magellan::graph::{query, SymbolNode};
 use magellan::CodeGraph;
 use regex::Regex;
 use std::cell::UnsafeCell;
+use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use sqlitegraph::SnapshotId;
 use sqlitegraph::backend::KvValue;
+
+/// File cache for snippet extraction
+///
+/// Caches file bytes to avoid re-reading files when extracting multiple snippets.
+struct FileCache {
+    bytes: Vec<u8>,
+}
+
+/// Load a file into cache, returning cached version if already loaded
+fn load_file<'a>(path: &str, cache: &'a mut HashMap<String, FileCache>) -> Option<&'a FileCache> {
+    if !cache.contains_key(path) {
+        let bytes = match fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(_) => return None,
+        };
+        cache.insert(path.to_string(), FileCache { bytes });
+    }
+    cache.get(path)
+}
+
+/// Extract snippet from file at specified byte range
+///
+/// # Arguments
+/// * `file_path` - Path to source file
+/// * `byte_start` - Start byte offset
+/// * `byte_end` - End byte offset
+/// * `max_bytes` - Maximum bytes to extract
+/// * `cache` - File cache for performance
+///
+/// # Returns
+/// * (snippet_content, truncated_flag) or (None, None) on failure
+fn extract_snippet(
+    file_path: &str,
+    byte_start: u64,
+    byte_end: u64,
+    max_bytes: usize,
+    cache: &mut HashMap<String, FileCache>,
+) -> (Option<String>, Option<bool>) {
+    if max_bytes == 0 {
+        return (None, None);
+    }
+    let file = match load_file(file_path, cache) {
+        Some(f) => f,
+        None => return (None, None),
+    };
+
+    let start = byte_start as usize;
+    let end = byte_end as usize;
+
+    if start >= file.bytes.len() || end > file.bytes.len() || start >= end {
+        return (None, None);
+    }
+
+    let capped_end = end.min(start + max_bytes);
+    let truncated = capped_end < end;
+
+    // Use safe UTF-8 extraction to handle multi-byte characters
+    let snippet = match extract_symbol_content_safe(&file.bytes, start, capped_end) {
+        Some(s) => s,
+        None => {
+            // Fallback to from_utf8_lossy if safe extraction fails
+            String::from_utf8_lossy(&file.bytes[start..capped_end]).to_string()
+        }
+    };
+
+    (Some(snippet), Some(truncated))
+}
 
 /// Native-V2 backend implementation.
 ///
@@ -75,7 +145,13 @@ impl NativeV2Backend {
     }
 
     /// Convert SymbolNode to SymbolMatch
-    fn symbol_node_to_match(&self, node: &SymbolNode, index: usize) -> SymbolMatch {
+    fn symbol_node_to_match(
+        &self,
+        node: &SymbolNode,
+        index: usize,
+        snippet: Option<String>,
+        snippet_truncated: Option<bool>,
+    ) -> SymbolMatch {
         // Extract file path from canonical_fqn if available
         // Format: crate_name::file_path::kind symbol_name
         let file_path = node.canonical_fqn
@@ -118,8 +194,8 @@ impl NativeV2Backend {
             display_fqn: node.display_fqn.clone(),
             content_hash: None,
             symbol_kind_from_chunk: None,
-            snippet: None,
-            snippet_truncated: None,
+            snippet,
+            snippet_truncated,
             language: infer_language(&file_path).map(|s| s.to_string()),
             kind_normalized: node.kind_normalized.clone(),
             complexity_score: None,
@@ -222,6 +298,7 @@ impl super::BackendTrait for NativeV2Backend {
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
         let mut results = Vec::new();
         let query_lower = options.query.to_lowercase();
+        let mut file_cache = HashMap::new();
 
         // Compile regex pattern if using regex search
         let regex_pattern = if options.use_regex {
@@ -284,13 +361,25 @@ impl super::BackendTrait for NativeV2Backend {
                     }
                 }
 
-                // Convert SymbolFact to SymbolMatch
+                // Extract snippet if requested
                 let file_path_str = symbol.file_path.to_string_lossy().to_string();
+                let (snippet, snippet_truncated) = if options.snippet.include {
+                    extract_snippet(
+                        &file_path_str,
+                        symbol.byte_start as u64,
+                        symbol.byte_end as u64,
+                        options.snippet.max_bytes,
+                        &mut file_cache,
+                    )
+                } else {
+                    (None, None)
+                };
+
+                // Calculate score if requested
                 let name = symbol.name.as_deref().unwrap_or("");
                 let display_fqn = symbol.display_fqn.as_deref().unwrap_or("");
                 let fqn = symbol.fqn.as_deref().unwrap_or("");
 
-                // Calculate score if requested
                 let score = if options.include_score {
                     Some(Self::score_match(
                         options.query,
@@ -303,6 +392,7 @@ impl super::BackendTrait for NativeV2Backend {
                     None
                 };
 
+                // Create SymbolMatch directly (SymbolFact, not SymbolNode)
                 let span = Span {
                     span_id: format!("{}:{}:{}", file_path_str, symbol.byte_start, symbol.byte_end),
                     file_path: file_path_str.clone(),
@@ -328,8 +418,8 @@ impl super::BackendTrait for NativeV2Backend {
                     display_fqn: symbol.display_fqn.clone(),
                     content_hash: None,
                     symbol_kind_from_chunk: None,
-                    snippet: None,
-                    snippet_truncated: None,
+                    snippet,
+                    snippet_truncated,
                     language: infer_language(&file_path_str).map(|s| s.to_string()),
                     kind_normalized: Some(symbol.kind_normalized.clone()),
                     complexity_score: None,
@@ -364,6 +454,7 @@ impl super::BackendTrait for NativeV2Backend {
     ) -> Result<(ReferenceSearchResponse, bool), LlmError> {
         let mut results = Vec::new();
         let query_lower = options.query.to_lowercase();
+        let mut file_cache = HashMap::new();
 
         // Compile regex pattern if using regex search
         let regex_pattern = if options.use_regex {
@@ -441,6 +532,20 @@ impl super::BackendTrait for NativeV2Backend {
                     };
 
                     let file_path = reference.file_path.to_string_lossy().to_string();
+
+                    // Extract snippet if requested
+                    let (snippet, snippet_truncated) = if options.snippet.include {
+                        extract_snippet(
+                            &file_path,
+                            reference.byte_start as u64,
+                            reference.byte_end as u64,
+                            options.snippet.max_bytes,
+                            &mut file_cache,
+                        )
+                    } else {
+                        (None, None)
+                    };
+
                     let span = Span {
                         span_id: format!("{}:{}:{}", file_path, reference.byte_start, reference.byte_end),
                         file_path,
@@ -462,8 +567,8 @@ impl super::BackendTrait for NativeV2Backend {
                         score,
                         content_hash: None,
                         symbol_kind_from_chunk: None,
-                        snippet: None,
-                        snippet_truncated: None,
+                        snippet,
+                        snippet_truncated,
                     });
                 }
             }
@@ -488,6 +593,7 @@ impl super::BackendTrait for NativeV2Backend {
     ) -> Result<(CallSearchResponse, bool), LlmError> {
         let mut results = Vec::new();
         let query_lower = options.query.to_lowercase();
+        let mut file_cache = HashMap::new();
 
         // Compile regex pattern if using regex search
         let regex_pattern = if options.use_regex {
@@ -581,6 +687,20 @@ impl super::BackendTrait for NativeV2Backend {
                     };
 
                     let file_path = call.file_path.to_string_lossy().to_string();
+
+                    // Extract snippet if requested
+                    let (snippet, snippet_truncated) = if options.snippet.include {
+                        extract_snippet(
+                            &file_path,
+                            call.byte_start as u64,
+                            call.byte_end as u64,
+                            options.snippet.max_bytes,
+                            &mut file_cache,
+                        )
+                    } else {
+                        (None, None)
+                    };
+
                     let span = Span {
                         span_id: format!("{}:{}:{}", file_path, call.byte_start, call.byte_end),
                         file_path,
@@ -603,8 +723,8 @@ impl super::BackendTrait for NativeV2Backend {
                         score,
                         content_hash: None,
                         symbol_kind_from_chunk: None,
-                        snippet: None,
-                        snippet_truncated: None,
+                        snippet,
+                        snippet_truncated,
                     });
                 }
             }
@@ -716,7 +836,7 @@ impl super::BackendTrait for NativeV2Backend {
                 reason: format!("Failed to parse SymbolNode: {}", e),
             })?;
 
-        Ok(self.symbol_node_to_match(&symbol_node, 0))
+        Ok(self.symbol_node_to_match(&symbol_node, 0, None, None))
     }
 
     fn search_by_label(
@@ -776,7 +896,7 @@ impl super::BackendTrait for NativeV2Backend {
             match backend.get_node(snapshot, symbol_id) {
                 Ok(node) => {
                     if let Ok(symbol_node) = serde_json::from_value::<SymbolNode>(node.data) {
-                        results.push(self.symbol_node_to_match(&symbol_node, results.len()));
+                        results.push(self.symbol_node_to_match(&symbol_node, results.len(), None, None));
                     }
                 }
                 Err(_) => continue,
