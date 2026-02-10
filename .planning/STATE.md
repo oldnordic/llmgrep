@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** Fast, reliable search of Magellan code databases (SQLite or native-v2) with CLI behavior consistent with Splice and Magellan. Dual backend support enables O(1) KV lookups with native-v2 while maintaining SQLite compatibility. Optimized for LLM consumption with intelligent relevance scoring, AST-based structural queries, and graph algorithm integration.
-**Current focus:** Phase 23 - Feature Parity Native-V2
+**Current focus:** Phase 23 - Feature Parity Native-V2 (COMPLETE)
 
 ## Current Position
 
-Phase: 23 of 23 (Feature Parity Native-V2)
-Current Plan: 23-05 (Cross-Backend Feature Parity Tests)
-Status: 4 of 6 plans in Phase 23 complete
-Last activity: 2026-02-10 — Cross-Backend Feature Parity Tests (7 min)
+Phase: 23 of 23 (Feature Parity Native-V2) - COMPLETE
+Current Plan: 23-06 (Documentation and Verification)
+Status: 6 of 6 plans in Phase 23 complete
+Last activity: 2026-02-10 — Documentation and Verification (15 min)
 
-Progress: [██████████░] 76% (35/37 plans complete in v3.0)
+Progress: [█████████] 100% (37/37 plans complete in v3.0 milestone)
 
 ## Performance Metrics
 
@@ -124,19 +124,19 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Phase 23: Remaining plans (23-05, 23-06)
+- Phase 24: Code Quality Polish (7 plans, not yet started)
 
 ## Session Continuity
 
-Last session: 2026-02-10 — Phase 23 plan 23-04 (COMPLETE)
-Stopped at: Completed Phase 23-04: Metrics Extraction for Native-V2
+Last session: 2026-02-10 — Phase 23 plan 23-06 (COMPLETE)
+Stopped at: Completed Phase 23: Feature Parity Native-V2
 Resume file: None
 
 ### Blockers/Concerns
 
-**From Phase 23 Execution:**
-- **Linter conflict:** Automatic rustfmt runs while editing src/backend/native_v2.rs, causing edit conflicts
-- **Resolution needed:** Disable automatic rustfmt, use different working tree, or apply comprehensive single-write
+**Resolved in Phase 23:**
+- **watch_cmd compilation:** Fixed by cfg-gating behind unstable-watch feature
+- **Test pattern mismatch:** Fixed by adding Some() wrappers for Option<Command>
 
 **From Research:**
 - **Phase 18**: SqliteBackend refactor must preserve exact SQL query logic to maintain output parity
@@ -362,45 +362,39 @@ Resume file: None
 ## Phase 23 Summary
 
 **Started:** 2026-02-10
-**Plans:** 3 of 6 complete (23-03, 23-04, 23-05)
-**Status:** IN PROGRESS
+**Completed:** 2026-02-10
+**Plans:** 6 of 6 complete (23-01 through 23-06)
+**Status:** COMPLETE
 
 **Artifacts Created:**
 - .planning/phases/23-feature-parity-native-v2/23-03-SUMMARY.md — Relevance scoring summary
 - .planning/phases/23-feature-parity-native-v2/23-04-SUMMARY.md — Metrics extraction summary
 - .planning/phases/23-feature-parity-native-v2/23-05-SUMMARY.md — Cross-backend parity tests summary
+- .planning/phases/23-feature-parity-native-v2/23-06-VERIFICATION.md — Comprehensive verification report
+- .planning/phases/23-feature-parity-native-v2/23-06-SUMMARY.md — Phase 23 summary
 - tests/backend_parity_extended_test.rs — 13 comprehensive parity tests
+- README.md — Feature Parity section added
+- .planning/ROADMAP.md — Phase 23 marked complete
 
 **Commits:**
 - 4786210 (23-03: Relevance scoring for Native-V2 backend)
 - 3f0a3ff (23-04: Metrics extraction for Native-V2 backend)
 - d002743 (23-05: Cross-backend feature parity tests)
+- 7079b6e (23-06: cfg-gate incomplete watch command)
+- 2f77481 (23-06: Add feature parity section to README)
 
 **Verification:**
-- [x] Relevance scoring (23-03):
-  - [x] score_match() function ported from src/query.rs verbatim
-  - [x] use regex::Regex import added
-  - [x] search_symbols() calculates score when include_score is true
-  - [x] search_references() calculates score for referenced symbols
-  - [x] search_calls() calculates score (max of caller/callee)
-  - [x] Regex pattern compilation when use_regex is true
-- [x] Metrics extraction (23-04):
-  - [x] SymbolMetrics import added from magellan::graph::metrics::schema
-  - [x] get_metrics() helper implemented for KV store lookup
-  - [x] search_symbols() extracts metrics using entity_id
-  - [x] Metrics filters applied (min_fan_in, min_fan_out, min_complexity)
-  - [x] symbol_node_to_match() updated to accept metrics parameters
-  - [x] Graceful degradation when metrics not available
-- [x] Cross-backend parity tests (23-05):
-  - [x] 13 comprehensive parity tests created
-  - [x] Backend detection tests (2 tests)
-  - [x] Context extraction parity tests (2 tests)
-  - [x] Snippet extraction parity tests (2 tests)
-  - [x] Score calculation parity tests (2 tests)
-  - [x] Metrics API parity tests (1 test)
-  - [x] Filter API parity tests (3 tests)
-  - [x] Cross-backend compatibility test (1 test)
-  - [x] All tests use #[cfg(feature = "native-v2")] attribute
-- [x] All 151 library tests passing (zero regressions)
-- [x] Build successful with native-v2 feature
+- [x] All success criteria met:
+  - [x] `--with-context` flag works with Native-V2 backend
+  - [x] `--with-snippet` flag works with Native-V2 backend
+  - [x] Search results include relevance score with Native-V2 backend
+  - [x] Metrics fields populated from CodeGraph
+  - [x] `--min-fan-in`, `--min-fan-out`, `--min-complexity` flags work with Native-V2
+  - [x] Cross-backend tests verify identical output
+- [x] 399 tests passing (zero failures)
+- [x] Binary builds successfully with native-v2 feature
+- [x] Documentation updated (README.md, ROADMAP.md)
+- [x] User verification approved
+
+**Key Achievement:** Full feature parity between SQLite and Native-V2 backends for all core search functionality
 
