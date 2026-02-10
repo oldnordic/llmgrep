@@ -231,7 +231,7 @@ struct CallNodeData {
 ///
 /// Returns standard language label based on file extension.
 /// Returns None for unknown extensions.
-fn infer_language(file_path: &str) -> Option<&'static str> {
+pub fn infer_language(file_path: &str) -> Option<&'static str> {
     match Path::new(file_path).extension().and_then(|s| s.to_str()) {
         Some("rs") => Some("rust"),
         Some("py") => Some("python"),

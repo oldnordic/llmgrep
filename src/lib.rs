@@ -11,6 +11,9 @@ pub mod safe_extraction;
 // Re-export safe extraction functions for testing and external use
 pub use safe_extraction::*;
 
+// Re-export query functions for external use
+pub use query::infer_language;
+
 // Re-export algorithm types for external use
 pub use algorithm::{
     AlgorithmOptions, parse_symbol_set_file, resolve_fqn_to_symbol_id, run_magellan_algorithm,
