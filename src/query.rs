@@ -2923,8 +2923,8 @@ mod tests {
 
     // Helper to create a test database with sample data for search_symbols tests
     fn create_test_db() -> (tempfile::NamedTempFile, Connection) {
-        let db_file = tempfile::NamedTempFile::new().unwrap();
-        let conn = Connection::open(db_file.path()).unwrap();
+        let db_file = tempfile::NamedTempFile::new().expect("failed to create temp file for test database");
+        let conn = Connection::open(db_file.path()).expect("failed to open test database connection");
 
         // Create schema
         conn.execute(
@@ -2935,7 +2935,7 @@ mod tests {
             )",
             [],
         )
-        .unwrap();
+        .expect("failed to create graph_entities table");
         conn.execute(
             "CREATE TABLE graph_edges (
                 id INTEGER PRIMARY KEY,
@@ -2945,7 +2945,7 @@ mod tests {
             )",
             [],
         )
-        .unwrap();
+        .expect("failed to create graph_edges table");
         // Create symbol_metrics table (required for LEFT JOIN in queries)
         conn.execute(
             "CREATE TABLE symbol_metrics (
@@ -2963,13 +2963,13 @@ mod tests {
             )",
             [],
         )
-        .unwrap();
+        .expect("failed to create symbol_metrics table");
 
         // Insert test File entity
         conn.execute(
             "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"/test/file.rs\"}')",
             [],
-        ).unwrap();
+        ).expect("failed to insert test File entity");
 
         // Insert test Symbol entities
         conn.execute(
@@ -2978,13 +2978,13 @@ mod tests {
                 (11, 'Symbol', '{\"name\":\"TestStruct\",\"kind\":\"Struct\",\"kind_normalized\":\"struct\",\"display_fqn\":\"TestStruct\",\"fqn\":\"module::TestStruct\",\"canonical_fqn\":\"/test/file.rs::TestStruct\",\"symbol_id\":\"sym2\",\"byte_start\":300,\"byte_end\":400,\"start_line\":15,\"start_col\":0,\"end_line\":20,\"end_col\":1}'),
                 (12, 'Symbol', '{\"name\":\"helper\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"helper\",\"fqn\":\"module::helper\",\"canonical_fqn\":\"/test/file.rs::helper\",\"symbol_id\":\"sym3\",\"byte_start\":500,\"byte_end\":600,\"start_line\":25,\"start_col\":0,\"end_line\":30,\"end_col\":1}')",
             [],
-        ).unwrap();
+        ).expect("failed to insert test Symbol entities");
 
         // Insert DEFINES edges from File to Symbols
         conn.execute(
             "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES'), (1, 11, 'DEFINES'), (1, 12, 'DEFINES')",
             [],
-        ).unwrap();
+        ).expect("failed to insert test DEFINES edges");
 
         (db_file, conn)
     }
@@ -3021,7 +3021,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
             assert_eq!(
@@ -3058,7 +3058,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 0, "Should find 0 results");
         }
@@ -3091,7 +3091,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 2, "Should find 2 results");
 
@@ -3128,7 +3128,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
             assert_eq!(response.results[0].name, "helper", "Should match helper");
@@ -3162,7 +3162,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 Function result");
             assert_eq!(response.results[0].name, "test_func", "Should be test_func");
@@ -3200,7 +3200,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(
                 response.results.len(),
@@ -3237,7 +3237,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(
                 response.results.len(),
@@ -3275,7 +3275,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 0, "Should find 0 results");
         }
@@ -3308,7 +3308,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
             assert_eq!(
@@ -3346,7 +3346,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 2, "Should find 2 results");
 
@@ -3354,7 +3354,7 @@ mod tests {
                 .results
                 .iter()
                 .find(|r| r.name == "test_func")
-                .unwrap();
+                .expect("test_func should be in results");
             assert_eq!(
                 test_func.score,
                 Some(80),
@@ -3365,7 +3365,7 @@ mod tests {
                 .results
                 .iter()
                 .find(|r| r.name == "TestStruct")
-                .unwrap();
+                .expect("TestStruct should be in results");
             assert_eq!(
                 test_struct.score,
                 Some(0),
@@ -3401,7 +3401,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(partial, "Should be partial since candidates < total count");
             assert_eq!(response.results.len(), 1, "Should return at most 1 result");
         }
@@ -3434,7 +3434,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.total_count, 2, "Total count should be 2");
         }
@@ -3467,7 +3467,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 2, "Should find 2 results");
 
@@ -3519,7 +3519,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
             assert!(
@@ -3561,7 +3561,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1, "Should find 1 result");
             assert_eq!(
@@ -3582,8 +3582,8 @@ mod tests {
         use tempfile::NamedTempFile;
 
         fn create_test_db_with_calls() -> (NamedTempFile, Connection) {
-            let db_file = NamedTempFile::new().unwrap();
-            let conn = Connection::open(db_file.path()).unwrap();
+            let db_file = NamedTempFile::new().expect("failed to create temp file");
+            let conn = Connection::open(db_file.path()).expect("failed to open database");
 
             // Create schema
             conn.execute(
@@ -3594,7 +3594,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to create graph_entities table");
 
             // Insert test Call entities
             conn.execute(
@@ -3603,7 +3603,7 @@ mod tests {
                     (11, 'Call', '{\"file\":\"/test/file.rs\",\"caller\":\"main\",\"callee\":\"helper\",\"caller_symbol_id\":\"sym1\",\"callee_symbol_id\":\"sym3\",\"byte_start\":100,\"byte_end\":115,\"start_line\":10,\"start_col\":4,\"end_line\":10,\"end_col\":19}'),
                     (12, 'Call', '{\"file\":\"/test/other.rs\",\"caller\":\"process\",\"callee\":\"test_func\",\"caller_symbol_id\":\"sym4\",\"callee_symbol_id\":\"sym2\",\"byte_start\":200,\"byte_end\":220,\"start_line\":20,\"start_col\":0,\"end_line\":20,\"end_col\":20}')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             (db_file, conn)
         }
@@ -3635,7 +3635,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // Should find 2 calls where callee is "test_func"
             assert_eq!(response.results.len(), 2);
@@ -3675,7 +3675,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // Should find 2 calls where caller is "main"
             assert_eq!(response.results.len(), 2);
@@ -3714,7 +3714,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // Should find 0 results
             assert_eq!(response.results.len(), 0);
@@ -3748,7 +3748,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // Should find 2 calls matching "test.*" pattern (callee is "test_func")
             assert_eq!(response.results.len(), 2);
@@ -3787,7 +3787,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // Should find 0 results - nothing matches "xyz.*"
             assert_eq!(response.results.len(), 0);
@@ -3821,7 +3821,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // Should find results with scores
             assert!(!response.results.is_empty());
@@ -3830,7 +3830,7 @@ mod tests {
             for result in &response.results {
                 assert!(result.score.is_some());
                 // Exact match on callee should give score 100
-                assert_eq!(result.score.unwrap(), 100);
+                assert_eq!(result.score.expect("score should be Some"), 100);
             }
         }
 
@@ -3861,7 +3861,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // Should find results with scores
             assert!(!response.results.is_empty());
@@ -3870,7 +3870,7 @@ mod tests {
             for result in &response.results {
                 assert!(result.score.is_some());
                 // Exact match on caller should give score 100
-                assert_eq!(result.score.unwrap(), 100);
+                assert_eq!(result.score.expect("score should be Some"), 100);
             }
         }
 
@@ -3901,7 +3901,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // Should return only 1 result due to limit
             assert_eq!(response.results.len(), 1);
@@ -3936,7 +3936,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // total_count should accurately reflect all matching results
             assert_eq!(response.total_count, 2);
@@ -3970,7 +3970,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // Should only find calls in /test/file.rs
             assert_eq!(response.results.len(), 1);
@@ -4007,12 +4007,12 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // All results should include scores when include_score is true
             for result in &response.results {
                 assert!(result.score.is_some());
-                assert!(result.score.unwrap() > 0);
+                assert!(result.score.expect("score should be Some") > 0);
             }
         }
 
@@ -4043,7 +4043,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial) = search_calls(options).unwrap();
+            let (response, _partial) = search_calls(options).expect("search_calls should succeed");
 
             // Results should be sorted by score (all same here), then by start_line
             if response.results.len() > 1 {
@@ -4051,7 +4051,7 @@ mod tests {
                     let prev = &response.results[i - 1];
                     let curr = &response.results[i];
                     // Scores should be non-increasing
-                    assert!(prev.score.unwrap() >= curr.score.unwrap());
+                    assert!(prev.score.expect("score should be Some") >= curr.score.expect("score should be Some"));
                     // Within same score, sorted by start_line
                     if prev.score == curr.score {
                         assert!(prev.span.start_line <= curr.span.start_line);
@@ -4062,8 +4062,8 @@ mod tests {
 
         // Helper function to create a test database with reference data
         fn create_test_db_with_references() -> (NamedTempFile, Connection) {
-            let db_file = NamedTempFile::new().unwrap();
-            let conn = Connection::open(db_file.path()).unwrap();
+            let db_file = NamedTempFile::new().expect("failed to create temp file");
+            let conn = Connection::open(db_file.path()).expect("failed to open database");
 
             // Create schema
             conn.execute(
@@ -4075,7 +4075,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
             conn.execute(
                 "CREATE TABLE graph_edges (
                     id INTEGER PRIMARY KEY,
@@ -4085,7 +4085,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             // Insert test Symbol entity
             let symbol_data = json!({
@@ -4099,7 +4099,7 @@ mod tests {
                 "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'Symbol', ?1)",
                 [symbol_data],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             // Insert test Reference entities
             let ref1_data = json!({
@@ -4117,7 +4117,7 @@ mod tests {
                     (10, 'Reference', 'ref to test_func', ?1)",
                 [ref1_data],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             let ref2_data = json!({
                 "file": "/test/file.rs",
@@ -4134,7 +4134,7 @@ mod tests {
                     (11, 'Reference', 'ref to TestStruct', ?1)",
                 [ref2_data],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             let ref3_data = json!({
                 "file": "/test/other.rs",
@@ -4151,14 +4151,14 @@ mod tests {
                     (12, 'Reference', 'ref to helper', ?1)",
                 [ref3_data],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             // Insert REFERENCES edge
             conn.execute(
                 "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (10, 1, 'REFERENCES')",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             (db_file, conn)
         }
@@ -4190,7 +4190,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (result, _partial) = search_references(options).unwrap();
+            let (result, _partial) = search_references(options).expect("search_references should succeed");
             assert_eq!(
                 result.results.len(),
                 1,
@@ -4227,7 +4227,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (result, _partial) = search_references(options).unwrap();
+            let (result, _partial) = search_references(options).expect("search_references should succeed");
             assert_eq!(
                 result.results.len(),
                 0,
@@ -4262,7 +4262,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (result, _partial) = search_references(options).unwrap();
+            let (result, _partial) = search_references(options).expect("search_references should succeed");
             assert_eq!(
                 result.results.len(),
                 1,
@@ -4298,7 +4298,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (result, _partial) = search_references(options).unwrap();
+            let (result, _partial) = search_references(options).expect("search_references should succeed");
             assert_eq!(
                 result.results.len(),
                 1,
@@ -4334,7 +4334,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (result, _partial) = search_references(options).unwrap();
+            let (result, _partial) = search_references(options).expect("search_references should succeed");
             assert_eq!(
                 result.results.len(),
                 0,
@@ -4369,7 +4369,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (result, _partial) = search_references(options).unwrap();
+            let (result, _partial) = search_references(options).expect("search_references should succeed");
             assert_eq!(result.results.len(), 1);
             assert_eq!(
                 result.results[0].score,
@@ -4405,7 +4405,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (result, _partial) = search_references(options).unwrap();
+            let (result, _partial) = search_references(options).expect("search_references should succeed");
             assert_eq!(
                 result.results.len(),
                 1,
@@ -4440,7 +4440,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (result, _partial) = search_references(options).unwrap();
+            let (result, _partial) = search_references(options).expect("search_references should succeed");
             assert_eq!(result.total_count, 1, "Total count should be 1");
         }
 
@@ -4472,7 +4472,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (result, _partial) = search_references(options).unwrap();
+            let (result, _partial) = search_references(options).expect("search_references should succeed");
             assert_eq!(
                 result.results.len(),
                 1,
@@ -4508,7 +4508,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (result, _partial) = search_references(options).unwrap();
+            let (result, _partial) = search_references(options).expect("search_references should succeed");
             assert_eq!(result.results.len(), 1);
             assert!(
                 result.results[0].score.is_some(),
@@ -4543,7 +4543,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (result, _partial) = search_references(options).unwrap();
+            let (result, _partial) = search_references(options).expect("search_references should succeed");
             // Verify that results are sorted by score (descending)
             for i in 1..result.results.len() {
                 let prev_score = result.results[i - 1].score.unwrap_or(0);
@@ -4569,15 +4569,15 @@ mod tests {
         use std::io::Write;
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join("llmgrep_test_load_file.txt");
-        let mut file = std::fs::File::create(&temp_file).unwrap();
-        file.write_all(b"line1\nline2\nline3").unwrap();
+        let mut file = std::fs::File::create(&temp_file).expect("failed to create temp file");
+        file.write_all(b"line1\nline2\nline3").expect("failed to execute SQL");
 
         let mut cache = HashMap::new();
-        let path_str = temp_file.to_str().unwrap();
+        let path_str = temp_file.to_str().expect("failed to convert path to string");
 
         let result1 = load_file(path_str, &mut cache);
         assert!(result1.is_some());
-        assert_eq!(result1.unwrap().lines.len(), 3);
+        assert_eq!(result1.expect("result should be Some").lines.len(), 3);
 
         let result2 = load_file(path_str, &mut cache);
         assert!(result2.is_some());
@@ -4592,8 +4592,8 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let fake_db = temp_dir.join("llmgrep_test_corrupt.db");
         {
-            let mut file = std::fs::File::create(&fake_db).unwrap();
-            file.write_all(b"This is not a SQLite database").unwrap();
+            let mut file = std::fs::File::create(&fake_db).expect("search_symbols should handle corrupted database");
+            file.write_all(b"This is not a SQLite database").expect("failed to execute SQL");
         }
 
         let result = search_symbols(SearchOptions {
@@ -4636,8 +4636,8 @@ mod tests {
 
         /// Create a test database with code_chunks table for chunk tests
         fn create_test_db_with_chunks() -> (NamedTempFile, Connection) {
-            let db_file = NamedTempFile::new().unwrap();
-            let conn = Connection::open(db_file.path()).unwrap();
+            let db_file = NamedTempFile::new().expect("failed to create temp file");
+            let conn = Connection::open(db_file.path()).expect("failed to open database");
 
             // Create code_chunks table
             conn.execute(
@@ -4654,7 +4654,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             // Insert test chunks
             // SHA-256 hash of "fn test_func() { }"
@@ -4665,7 +4665,7 @@ mod tests {
                     ('/test/file.rs', 300, 400, 'struct TestStruct { }', 'b1e3eb9e2f9c2b9d9f9c2b9d9f9c2b9d9f9c2b9d9f9c2b9d9f9c2b9d9f9c2b9d', 'TestStruct', 'Struct', 1700000001),
                     ('/test/other.rs', 500, 600, 'fn helper() { }', 'c2f4fc0f3g0d3c0e0g0d3c0e0g0d3c0e0g0d3c0e0g0d3c0e0g0d3c0e0g0d3c0e', 'helper', 'Function', 1700000002)",
                 [hash1],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             (db_file, conn)
         }
@@ -4675,7 +4675,7 @@ mod tests {
             let (_db_file, conn) = create_test_db_with_chunks();
 
             // Query for test_func symbol
-            let chunks = search_chunks_by_symbol_name(&conn, "test_func").unwrap();
+            let chunks = search_chunks_by_symbol_name(&conn, "test_func").expect("failed to search chunks by symbol name");
             assert_eq!(chunks.len(), 1, "Should find 1 chunk for test_func");
 
             let chunk = &chunks[0];
@@ -4692,7 +4692,7 @@ mod tests {
             let (_db_file, conn) = create_test_db_with_chunks();
 
             // Query for non-existent symbol
-            let chunks = search_chunks_by_symbol_name(&conn, "nonexistent").unwrap();
+            let chunks = search_chunks_by_symbol_name(&conn, "nonexistent").expect("failed to search chunks by symbol name");
             assert_eq!(
                 chunks.len(),
                 0,
@@ -4705,10 +4705,10 @@ mod tests {
             let (_db_file, conn) = create_test_db_with_chunks();
 
             // Query for exact span
-            let chunk = search_chunks_by_span(&conn, "/test/file.rs", 100, 200).unwrap();
+            let chunk = search_chunks_by_span(&conn, "/test/file.rs", 100, 200).expect("failed to search chunks by span");
             assert!(chunk.is_some(), "Should find chunk for exact span");
 
-            let chunk = chunk.unwrap();
+            let chunk = chunk.expect("chunk should be Some");
             assert_eq!(chunk.file_path, "/test/file.rs");
             assert_eq!(chunk.byte_start, 100);
             assert_eq!(chunk.byte_end, 200);
@@ -4722,11 +4722,11 @@ mod tests {
             let (_db_file, conn) = create_test_db_with_chunks();
 
             // Query for non-existent span
-            let chunk = search_chunks_by_span(&conn, "/test/file.rs", 999, 1000).unwrap();
+            let chunk = search_chunks_by_span(&conn, "/test/file.rs", 999, 1000).expect("failed to search chunks by span");
             assert!(chunk.is_none(), "Should return None for non-existent span");
 
             // Query for non-existent file
-            let chunk = search_chunks_by_span(&conn, "/test/nonexistent.rs", 100, 200).unwrap();
+            let chunk = search_chunks_by_span(&conn, "/test/nonexistent.rs", 100, 200).expect("failed to search chunks by span");
             assert!(chunk.is_none(), "Should return None for non-existent file");
         }
 
@@ -4735,14 +4735,14 @@ mod tests {
             let (_db_file, conn) = create_test_db_with_chunks();
 
             // Query with wrong byte_start
-            let chunk = search_chunks_by_span(&conn, "/test/file.rs", 101, 200).unwrap();
+            let chunk = search_chunks_by_span(&conn, "/test/file.rs", 101, 200).expect("failed to search chunks by span");
             assert!(
                 chunk.is_none(),
                 "Should return None when byte_start doesn't match"
             );
 
             // Query with wrong byte_end
-            let chunk = search_chunks_by_span(&conn, "/test/file.rs", 100, 201).unwrap();
+            let chunk = search_chunks_by_span(&conn, "/test/file.rs", 100, 201).expect("failed to search chunks by span");
             assert!(
                 chunk.is_none(),
                 "Should return None when byte_end doesn't match"
@@ -4753,7 +4753,7 @@ mod tests {
         fn test_content_hash_format() {
             let (_db_file, conn) = create_test_db_with_chunks();
 
-            let chunks = search_chunks_by_symbol_name(&conn, "test_func").unwrap();
+            let chunks = search_chunks_by_symbol_name(&conn, "test_func").expect("failed to search chunks by symbol name");
             assert_eq!(chunks.len(), 1);
 
             let hash = &chunks[0].content_hash;
@@ -4769,18 +4769,18 @@ mod tests {
             let (_db_file, conn) = create_test_db_with_chunks();
 
             // Test Function kind
-            let chunks = search_chunks_by_symbol_name(&conn, "test_func").unwrap();
+            let chunks = search_chunks_by_symbol_name(&conn, "test_func").expect("failed to search chunks by symbol name");
             assert_eq!(chunks[0].symbol_kind, Some("Function".to_string()));
 
             // Test Struct kind
-            let chunks = search_chunks_by_symbol_name(&conn, "TestStruct").unwrap();
+            let chunks = search_chunks_by_symbol_name(&conn, "TestStruct").expect("failed to search chunks by symbol name");
             assert_eq!(chunks[0].symbol_kind, Some("Struct".to_string()));
         }
 
         #[test]
         fn test_multiple_chunks_same_symbol() {
-            let db_file = NamedTempFile::new().unwrap();
-            let conn = Connection::open(db_file.path()).unwrap();
+            let db_file = NamedTempFile::new().expect("failed to create temp file");
+            let conn = Connection::open(db_file.path()).expect("failed to open database");
 
             // Create code_chunks table
             conn.execute(
@@ -4797,7 +4797,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             // Insert multiple chunks for the same symbol (e.g., different parts)
             conn.execute(
@@ -4805,10 +4805,10 @@ mod tests {
                     ('/test/file.rs', 100, 150, 'part1', 'hash1', 'my_symbol', 'Function', 1700000000),
                     ('/test/file.rs', 150, 200, 'part2', 'hash2', 'my_symbol', 'Function', 1700000001)",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             // Query should return all chunks for the symbol
-            let chunks = search_chunks_by_symbol_name(&conn, "my_symbol").unwrap();
+            let chunks = search_chunks_by_symbol_name(&conn, "my_symbol").expect("failed to search chunks by symbol name");
             assert_eq!(chunks.len(), 2, "Should find 2 chunks for my_symbol");
         }
     }
@@ -4818,8 +4818,8 @@ mod tests {
         use super::*;
 
         fn create_test_db_with_metrics() -> (tempfile::NamedTempFile, Connection) {
-            let db_file = tempfile::NamedTempFile::new().unwrap();
-            let conn = Connection::open(db_file.path()).unwrap();
+            let db_file = tempfile::NamedTempFile::new().expect("failed to create temp file");
+            let conn = Connection::open(db_file.path()).expect("failed to open database");
 
             // Create schema
             conn.execute(
@@ -4830,7 +4830,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to create graph_entities table");
             conn.execute(
                 "CREATE TABLE graph_edges (
                     id INTEGER PRIMARY KEY,
@@ -4840,7 +4840,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
             conn.execute(
                 "CREATE TABLE symbol_metrics (
                     symbol_id INTEGER PRIMARY KEY,
@@ -4857,13 +4857,13 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             // Insert test File entity
             conn.execute(
                 "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"/test/file.rs\"}')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             // Insert test Symbol entities with varying metrics
             // sym1: complexity=5, fan_in=10, fan_out=2
@@ -4875,13 +4875,13 @@ mod tests {
                     (11, 'Symbol', '{\"name\":\"med_complexity\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"med_complexity\",\"fqn\":\"module::med_complexity\",\"symbol_id\":\"sym2\",\"byte_start\":300,\"byte_end\":400,\"start_line\":15,\"start_col\":0,\"end_line\":20,\"end_col\":1}'),
                     (12, 'Symbol', '{\"name\":\"high_complexity\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"high_complexity\",\"fqn\":\"module::high_complexity\",\"symbol_id\":\"sym3\",\"byte_start\":500,\"byte_end\":600,\"start_line\":25,\"start_col\":0,\"end_line\":30,\"end_col\":1}')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             // Insert DEFINES edges from File to Symbols
             conn.execute(
                 "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES'), (1, 11, 'DEFINES'), (1, 12, 'DEFINES')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             // Insert metrics - symbol_id now references graph_entities.id (INTEGER)
             conn.execute(
@@ -4890,7 +4890,7 @@ mod tests {
                     (11, 'med_complexity', 'Function', '/test/file.rs', 100, 0.0, 5, 8, 15, 0),
                     (12, 'high_complexity', 'Function', '/test/file.rs', 150, 0.0, 2, 15, 25, 0)",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             (db_file, conn)
         }
@@ -4928,7 +4928,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             // Should find med_complexity (15) and high_complexity (25), but not low_complexity (5)
             assert_eq!(
@@ -4985,7 +4985,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             // Should find only low_complexity (5), not med (15) or high (25)
             assert_eq!(
@@ -5029,7 +5029,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             // Should find only med_complexity (15), not low (5) or high (25)
             assert_eq!(
@@ -5073,7 +5073,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             // Should find only low_complexity (fan_in=10)
             assert_eq!(
@@ -5122,7 +5122,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             // Should find only high_complexity (fan_out=15)
             assert_eq!(
@@ -5166,7 +5166,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
@@ -5216,7 +5216,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
@@ -5266,7 +5266,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
@@ -5316,7 +5316,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(response.results.len(), 1);
 
@@ -5339,8 +5339,8 @@ mod tests {
         #[test]
         fn test_metrics_null_handling() {
             // Create a DB where some symbols have metrics and some don't
-            let db_file = tempfile::NamedTempFile::new().unwrap();
-            let conn = Connection::open(db_file.path()).unwrap();
+            let db_file = tempfile::NamedTempFile::new().expect("failed to create temp file");
+            let conn = Connection::open(db_file.path()).expect("failed to open database");
 
             conn.execute(
                 "CREATE TABLE graph_entities (
@@ -5350,7 +5350,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
             conn.execute(
                 "CREATE TABLE graph_edges (
                     id INTEGER PRIMARY KEY,
@@ -5360,7 +5360,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
             conn.execute(
                 "CREATE TABLE symbol_metrics (
                     symbol_id INTEGER PRIMARY KEY,
@@ -5377,12 +5377,12 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             conn.execute(
                 "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"/test/file.rs\"}')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             // Insert 3 symbols: only sym1 has metrics
             conn.execute(
@@ -5391,19 +5391,19 @@ mod tests {
                     (11, 'Symbol', '{\"name\":\"no_metrics_1\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"no_metrics_1\",\"fqn\":\"module::no_metrics_1\",\"symbol_id\":\"sym2\",\"byte_start\":300,\"byte_end\":400,\"start_line\":15,\"start_col\":0,\"end_line\":20,\"end_col\":1}'),
                     (12, 'Symbol', '{\"name\":\"no_metrics_2\",\"kind\":\"Function\",\"kind_normalized\":\"function\",\"display_fqn\":\"no_metrics_2\",\"fqn\":\"module::no_metrics_2\",\"symbol_id\":\"sym3\",\"byte_start\":500,\"byte_end\":600,\"start_line\":25,\"start_col\":0,\"end_line\":30,\"end_col\":1}')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             conn.execute(
                 "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES'), (1, 11, 'DEFINES'), (1, 12, 'DEFINES')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             // Only sym1 has metrics - symbol_id now references graph_entities.id (INTEGER)
             conn.execute(
                 "INSERT INTO symbol_metrics (symbol_id, symbol_name, kind, file_path, loc, estimated_loc, fan_in, fan_out, cyclomatic_complexity, last_updated) VALUES
                     (10, 'with_metrics', 'Function', '/test/file.rs', 50, 0.0, 10, 2, 5, 0)",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             let db_path = db_file.path();
 
@@ -5431,7 +5431,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial, _) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert_eq!(response.results.len(), 3, "Should find all 3 symbols");
 
             // Symbols without metrics should have None for metrics fields
@@ -5439,8 +5439,7 @@ mod tests {
             let with_metrics = response
                 .results
                 .iter()
-                .find(|r| r.name == "with_metrics")
-                .unwrap();
+                .find(|r| r.name == "with_metrics").expect("result should be found");
             assert_eq!(
                 with_metrics.fan_in,
                 Some(10),
@@ -5450,8 +5449,7 @@ mod tests {
             let no_metrics_1 = response
                 .results
                 .iter()
-                .find(|r| r.name == "no_metrics_1")
-                .unwrap();
+                .find(|r| r.name == "no_metrics_1").expect("result should be found");
             assert_eq!(
                 no_metrics_1.fan_in, None,
                 "Symbol without metrics should have None for fan_in"
@@ -5460,8 +5458,7 @@ mod tests {
             let no_metrics_2 = response
                 .results
                 .iter()
-                .find(|r| r.name == "no_metrics_2")
-                .unwrap();
+                .find(|r| r.name == "no_metrics_2").expect("result should be found");
             assert_eq!(
                 no_metrics_2.fan_in, None,
                 "Symbol without metrics should have None for fan_in"
@@ -5494,7 +5491,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response_filter, _, _) = search_symbols(options_filter).unwrap();
+            let (response_filter, _, _) = search_symbols(options_filter).expect("search_symbols with filter should succeed");
             assert_eq!(
                 response_filter.results.len(),
                 1,
@@ -5537,7 +5534,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, partial, _) = search_symbols(options).unwrap();
+            let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert!(!partial, "Should not be partial");
             assert_eq!(
                 response.results.len(),
@@ -5577,7 +5574,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial, _) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
             // All test symbols are in /test/file.rs
             assert!(
                 !response.results.is_empty(),
@@ -5618,7 +5615,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial, _) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert_eq!(
                 response.results.len(),
                 1,
@@ -5663,7 +5660,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial, _) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
             // All test symbols have symbol_id
             for result in &response.results {
                 assert!(
@@ -5684,8 +5681,8 @@ mod tests {
         #[test]
         fn test_ambiguity_detection_with_duplicate_names() {
             // Create a database with duplicate symbol names
-            let db_file = tempfile::NamedTempFile::new().unwrap();
-            let conn = Connection::open(db_file.path()).unwrap();
+            let db_file = tempfile::NamedTempFile::new().expect("failed to create temp file");
+            let conn = Connection::open(db_file.path()).expect("failed to open database");
 
             // Create schema
             conn.execute(
@@ -5696,7 +5693,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to create graph_entities table");
             conn.execute(
                 "CREATE TABLE graph_edges (
                     id INTEGER PRIMARY KEY,
@@ -5706,7 +5703,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
             conn.execute(
                 "CREATE TABLE symbol_metrics (
                     symbol_id TEXT PRIMARY KEY,
@@ -5717,17 +5714,17 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             // Insert file
             conn.execute(
                 "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"/test/a.rs\"}')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
             conn.execute(
                 "INSERT INTO graph_entities (id, kind, data) VALUES (2, 'File', '{\"path\":\"/test/b.rs\"}')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             // Insert two symbols with same name "parse" in different modules
             conn.execute(
@@ -5735,13 +5732,13 @@ mod tests {
                     (10, 'Symbol', '{\"name\":\"parse\",\"kind\":\"Function\",\"display_fqn\":\"parse\",\"fqn\":\"a::parse\",\"canonical_fqn\":\"/test/a.rs::parse\",\"symbol_id\":\"parse_a\",\"byte_start\":100,\"byte_end\":200,\"start_line\":5,\"start_col\":0,\"end_line\":10,\"end_col\":1}'),
                     (11, 'Symbol', '{\"name\":\"parse\",\"kind\":\"Function\",\"display_fqn\":\"parse\",\"fqn\":\"b::parse\",\"canonical_fqn\":\"/test/b.rs::parse\",\"symbol_id\":\"parse_b\",\"byte_start\":300,\"byte_end\":400,\"start_line\":15,\"start_col\":0,\"end_line\":20,\"end_col\":1}')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             // Insert edges
             conn.execute(
                 "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES'), (2, 11, 'DEFINES')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             let db_path = db_file.path();
 
@@ -5774,7 +5771,7 @@ mod tests {
             };
 
             // Capture stderr to check for warning
-            let (response, _partial, _) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
             // Should find both symbols
             assert_eq!(
                 response.results.len(),
@@ -5793,8 +5790,8 @@ mod tests {
         #[test]
         fn test_symbol_id_bypasses_ambiguity() {
             // Create a database with duplicate symbol names
-            let db_file = tempfile::NamedTempFile::new().unwrap();
-            let conn = Connection::open(db_file.path()).unwrap();
+            let db_file = tempfile::NamedTempFile::new().expect("failed to create temp file");
+            let conn = Connection::open(db_file.path()).expect("failed to open database");
 
             // Create schema
             conn.execute(
@@ -5805,7 +5802,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to create graph_entities table");
             conn.execute(
                 "CREATE TABLE graph_edges (
                     id INTEGER PRIMARY KEY,
@@ -5815,7 +5812,7 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
             conn.execute(
                 "CREATE TABLE symbol_metrics (
                     symbol_id TEXT PRIMARY KEY,
@@ -5826,13 +5823,13 @@ mod tests {
                 )",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             // Insert file
             conn.execute(
                 "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"/test/a.rs\"}')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             // Insert two symbols with same name "parse"
             conn.execute(
@@ -5840,14 +5837,14 @@ mod tests {
                     (10, 'Symbol', '{\"name\":\"parse\",\"kind\":\"Function\",\"display_fqn\":\"parse\",\"fqn\":\"a::parse\",\"canonical_fqn\":\"/test/a.rs::parse\",\"symbol_id\":\"target_parse\",\"byte_start\":100,\"byte_end\":200,\"start_line\":5,\"start_col\":0,\"end_line\":10,\"end_col\":1}'),
                     (11, 'Symbol', '{\"name\":\"parse\",\"kind\":\"Function\",\"display_fqn\":\"parse\",\"fqn\":\"b::parse\",\"canonical_fqn\":\"/test/b.rs::parse\",\"symbol_id\":\"other_parse\",\"byte_start\":300,\"byte_end\":400,\"start_line\":15,\"start_col\":0,\"end_line\":20,\"end_col\":1}')",
                 [],
-            ).unwrap();
+            ).expect("failed to execute SQL");
 
             // Insert edges
             conn.execute(
                 "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES')",
                 [],
             )
-            .unwrap();
+            .expect("failed to execute SQL");
 
             let db_path = db_file.path();
 
@@ -5879,7 +5876,7 @@ mod tests {
                 language_filter: None,
             };
 
-            let (response, _partial, _) = search_symbols(options).unwrap();
+            let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
             assert_eq!(
                 response.results.len(),
                 1,
