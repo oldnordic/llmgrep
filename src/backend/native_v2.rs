@@ -365,6 +365,15 @@ impl super::BackendTrait for NativeV2Backend {
         let mut results = Vec::new();
         let query_lower = options.query.to_lowercase();
 
+        // Compile regex pattern if using regex search
+        let regex_pattern = if options.use_regex {
+            Some(Regex::new(options.query).map_err(|e| LlmError::InvalidQuery {
+                query: format!("Invalid regex: {}", e),
+            })?)
+        } else {
+            None
+        };
+
         // SAFETY: We have exclusive access through &self
         let graph = unsafe { self.graph() };
 
@@ -418,6 +427,19 @@ impl super::BackendTrait for NativeV2Backend {
                         continue;
                     }
 
+                    // Calculate score if requested
+                    let score = if options.include_score {
+                        Some(Self::score_match(
+                            options.query,
+                            &reference.referenced_symbol,
+                            &reference.referenced_symbol,
+                            "",
+                            regex_pattern.as_ref(),
+                        ))
+                    } else {
+                        None
+                    };
+
                     let file_path = reference.file_path.to_string_lossy().to_string();
                     let span = Span {
                         span_id: format!("{}:{}:{}", file_path, reference.byte_start, reference.byte_end),
@@ -437,7 +459,7 @@ impl super::BackendTrait for NativeV2Backend {
                         referenced_symbol: reference.referenced_symbol,
                         reference_kind: None,
                         target_symbol_id: None,
-                        score: None,
+                        score,
                         content_hash: None,
                         symbol_kind_from_chunk: None,
                         snippet: None,
@@ -466,6 +488,15 @@ impl super::BackendTrait for NativeV2Backend {
     ) -> Result<(CallSearchResponse, bool), LlmError> {
         let mut results = Vec::new();
         let query_lower = options.query.to_lowercase();
+
+        // Compile regex pattern if using regex search
+        let regex_pattern = if options.use_regex {
+            Some(Regex::new(options.query).map_err(|e| LlmError::InvalidQuery {
+                query: format!("Invalid regex: {}", e),
+            })?)
+        } else {
+            None
+        };
 
         // SAFETY: We have exclusive access through &self
         let graph = unsafe { self.graph() };
@@ -528,6 +559,27 @@ impl super::BackendTrait for NativeV2Backend {
                         continue;
                     }
 
+                    // Calculate score if requested (use max of caller and callee scores)
+                    let score = if options.include_score {
+                        let caller_score = Self::score_match(
+                            options.query,
+                            &call.caller,
+                            &call.caller,
+                            "",
+                            regex_pattern.as_ref(),
+                        );
+                        let callee_score = Self::score_match(
+                            options.query,
+                            &call.callee,
+                            &call.callee,
+                            "",
+                            regex_pattern.as_ref(),
+                        );
+                        Some(caller_score.max(callee_score))
+                    } else {
+                        None
+                    };
+
                     let file_path = call.file_path.to_string_lossy().to_string();
                     let span = Span {
                         span_id: format!("{}:{}:{}", file_path, call.byte_start, call.byte_end),
@@ -548,7 +600,7 @@ impl super::BackendTrait for NativeV2Backend {
                         callee: call.callee,
                         caller_symbol_id: call.caller_symbol_id,
                         callee_symbol_id: call.callee_symbol_id,
-                        score: None,
+                        score,
                         content_hash: None,
                         symbol_kind_from_chunk: None,
                         snippet: None,
