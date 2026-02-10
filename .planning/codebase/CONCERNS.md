@@ -1,52 +1,59 @@
 # Codebase Concerns
 
 **Analysis Date:** 2026-02-10
+**Last Updated:** 2026-02-10 (Phase 24 polish updates)
 **Verified Against:** v3.0.1 (native-v2 feature enabled)
 
-## Confirmed Production Issues
+---
 
-### 1. Hardcoded Language String - CONFIRMED BUG
+## Recently Resolved (Phase 24 - Code Quality Polish)
+
+The following concerns were addressed during Phase 24:
+
+| Issue | Phase 24 Plan | Resolution |
+|-------|--------------|------------|
+| Compiler warnings (unused/dead code) | 24-01 | Removed unused `db_path()` method, prefixed unused variables |
+| Test code using `.unwrap()` | 24-02 | Replaced 266 `.unwrap()` with `.expect("descriptive message")` |
+| Missing safety documentation | 24-03 | Added `# Safety` docs for all 8 unsafe blocks in native_v2.rs |
+| Undocumented public APIs | 24-04 | Added module-level docs to lib.rs, query.rs; comprehensive docs to output.rs |
+| Code consistency issues | 24-05 | Fixed redundant closures, added Default impl, fixed needless borrows |
+
+---
+
+## ~~Confirmed Production Issues~~ - ALL RESOLVED
+
+### ~~1. Hardcoded Language String~~ - FIXED in Phase 22
 - **Severity:** High (Misleading data)
 - **Files:** `src/backend/native_v2.rs` (lines 121, 228)
 - **Issue:** Native-V2 backend hardcodes `language: Some("Rust".to_string())` in all search results
-- **Impact:** Non-Rust codebases show incorrect language. Python, JavaScript, TypeScript, Java, C, C++ files all report as "Rust"
-- **Verification:** Tested with `test.py` file - returned `"language": "Rust"`
-- **Fix approach:** Infer language from file extension using existing `infer_language()` function from `query.rs`
+- **Fix applied:** Language inference from file extension using `infer_language()` function
+- **Resolution:** Phase 22-01 implemented language detection for 7+ languages
 
-### 2. Production Debug Output Pollution - CONFIRMED BUG
+### ~~2. Production Debug Output Pollution~~ - FIXED in Phase 22
 - **Severity:** High (UX/Production readiness)
 - **Files:** `src/backend/native_v2.rs` (lines 522-559 in `complete()` method)
-- **Issue:** Production code contains 10+ `eprintln!("DEBUG: ...")` statements
-- **Impact:** Every `llmgrep complete` command prints 15+ lines of debug output to stderr
-- **Verification:** Running `llmgrep complete --prefix "hel" --limit 1` outputs:
-  ```
-  DEBUG: Found 5 total KV entries with 'sym:' prefix
-  DEBUG:   "sym:fqn:hello" -> Integer(4)
-  DEBUG: KV indexing 1 symbols for file /tmp/test_code/test.py
-  DEBUG: populate_symbol_index called with 1 symbols, file_id=1
-  [... 11 more DEBUG lines]
-  ```
-- **Fix approach:** Remove all debug statements or conditionally compile behind `#[cfg(debug_assertions)]`
+- **Issue:** Production code contained 10+ `eprintln!("DEBUG: ...")` statements
+- **Fix applied:** Removed all debug statements (36 lines)
+- **Resolution:** Phase 22-02 cleaned up production debug output
 
-### 3. Native-V2 Backend Missing Features - CONFIRMED
+### ~~3. Native-V2 Backend Missing Features~~ - FIXED in Phase 23
 - **Severity:** Medium (Feature parity gap)
 - **Files:** `src/backend/native_v2.rs`
-- **Issues:**
-  - `score` always returns `None` (line 113, 220)
-  - `context` always returns `None` (line 103, 210)
-  - `snippet` always returns `None` (line 119, 226)
-  - `fan_in`, `fan_out`, `cyclomatic_complexity` always return `None` (lines 124-126, 231-233)
-- **Impact:** `--with-context`, `--with-snippet`, `--min-complexity`, `--min-fan-in`, relevance sorting don't work with native-v2
-- **Verification:** These fields are hardcoded to `None` in `symbol_node_to_match()` and search methods
+- **Issues resolved:**
+  - `score` - Implemented with relevance scoring (Phase 23-03)
+  - `context` - Implemented with context extraction (Phase 23-03)
+  - `snippet` - Implemented with snippet extraction (Phase 23-03)
+  - `fan_in`, `fan_out`, `cyclomatic_complexity` - Implemented via KV metrics (Phase 23-04)
+- **Resolution:** Full feature parity achieved with SQLite backend
 
 ## Technical Debt
 
-### UnsafeCell Usage Pattern
+### UnsafeCell Usage Pattern - PARTIALLY DOCUMENTED
 - **Files:** `src/backend/native_v2.rs` (lines 33-73, 148, 264, 366, 481, 503)
 - **Issue:** Uses `UnsafeCell` for interior mutability because `CodeGraph` requires `&mut self` but `BackendTrait` takes `&self`
-- **Why fragile:** Manual verification required that no concurrent access occurs
-- **Current safety:** Relies on exclusive ownership claim in documentation
-- **Test coverage:** No tests for concurrent access scenarios
+- **Status:** Safety documentation added (Phase 24-03)
+- **Documentation:** All 8 unsafe blocks now have comprehensive `# Safety` comments explaining invariants
+- **Remaining concern:** No tests for concurrent access scenarios
 - **Mitigation:** `Send` is implemented but `Sync` is NOT - prevents multi-threaded access
 
 ### String Cloning in Hot Paths
@@ -59,18 +66,10 @@
 - **Impact:** ~6 heap allocations per search result
 - **Improvement path:** Use `Cow<str>` or reuse string buffers
 
-### Test Code Using unwrap() Excessively
-- **Files:** `src/query.rs` (lines 2926-3638)
-- **Issue:** Test code uses `.unwrap()` instead of proper error assertions
-- **Count:** ~40+ occurrences of `.unwrap()` in test module
-- **Impact:** Tests panic with unclear messages instead of showing assertion failures
-- **Examples:**
-  ```rust
-  let db_file = tempfile::NamedTempFile::new().unwrap();
-  let conn = Connection::open(db_file.path()).unwrap();
-  let (response, partial, _) = search_symbols(options).unwrap();
-  ```
-- **Fix approach:** Use `.expect("descriptive message")` or proper result assertions
+### ~~Test Code Using wrap() Excessively~~ - RESOLVED
+- **Status:** Fixed in Phase 24-02
+- **Resolution:** Replaced all 266 `.unwrap()` calls with `.expect("descriptive message")` in test code
+- **Files modified:** src/query.rs, tests/algorithm_tests.rs, tests/ast_tests.rs, tests/backend_detection_test.rs, tests/backend_parity_extended_test.rs, tests/cli_integration_test.rs, tests/integration_tests.rs, tests/language_detection_test.rs, tests/native_v2_commands_test.rs, tests/shorthand_tests.rs, tests/unit_tests.rs
 
 ## Shell-Out External Process Dependency
 
@@ -112,17 +111,13 @@
 
 ## Code Quality Issues
 
-### Unused Variable Warning
-- **Files:** `src/backend/sqlite.rs` (line 159)
-- **Issue:** `let partial = fqn.rsplit("::").next().unwrap_or(fqn);` - variable defined but never used
-- **Compiler warning:** `warning: unused variable: partial`
-- **Fix:** Remove or prefix with underscore
+### ~~Unused Variable Warning~~ - RESOLVED
+- **Status:** Fixed in Phase 24-01
+- **Resolution:** Variable already prefixed with underscore (`_partial`), no changes needed
 
-### Dead Code Warning
-- **Files:** `src/backend/sqlite.rs` (line 45)
-- **Issue:** `pub(crate) fn db_path(&self)` method defined but never called
-- **Compiler warning:** `warning: method 'db_path' is never used`
-- **Fix:** Remove or make public if needed externally
+### ~~Dead Code Warning~~ - RESOLVED
+- **Status:** Fixed in Phase 24-01
+- **Resolution:** Removed unused `db_path()` method from src/backend/sqlite.rs
 
 ---
 
@@ -130,11 +125,13 @@
 
 | Priority | Issue | Files | Status |
 |----------|-------|-------|--------|
-| **HIGH** | Hardcoded "Rust" language | `native_v2.rs:121, 228` | Confirmed Bug |
-| **HIGH** | Debug output in production | `native_v2.rs:522-559` | Confirmed Bug |
-| **MEDIUM** | Missing native-v2 features (score, context, snippet, metrics) | `native_v2.rs` | Feature Gap |
+| ~~**HIGH**~~ | Hardcoded "Rust" language | `native_v2.rs:121, 228` | ~~Confirmed Bug~~ Fixed in Phase 22 |
+| ~~**HIGH**~~ | Debug output in production | `native_v2.rs:522-559` | ~~Confirmed Bug~~ Fixed in Phase 22 |
+| ~~**MEDIUM**~~ | Missing native-v2 features (score, context, snippet, metrics) | `native_v2.rs` | ~~Feature Gap~~ Fixed in Phase 23 |
 | **MEDIUM** | String cloning in hot paths | `native_v2.rs` | Performance |
-| **LOW** | Test code using unwrap() | `query.rs` tests | Code Quality |
-| **LOW** | Unused/dead code warnings | `sqlite.rs` | Code Quality |
+| ~~**LOW**~~ | Test code using .unwrap() | `query.rs` tests | ~~Code Quality~~ Fixed in Phase 24-02 |
+| ~~**LOW**~~ | Unused/dead code warnings | `sqlite.rs` | ~~Code Quality~~ Fixed in Phase 24-01 |
+| ~~**LOW**~~ | Missing safety documentation | `native_v2.rs` | ~~Code Quality~~ Fixed in Phase 24-03 |
+| ~~**LOW**~~ | Undocumented public APIs | `lib.rs`, `query.rs`, `output.rs` | ~~Code Quality~~ Fixed in Phase 24-04 |
 
-*Concerns audit: 2026-02-10*
+*Concerns audit: 2026-02-10 (updated after Phase 24 polish)*
