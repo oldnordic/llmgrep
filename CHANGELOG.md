@@ -5,6 +5,88 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-02-10
+
+### Native-V2 Backend Support
+
+**Major release adding dual backend support with Magellan's native-v2 storage.**
+
+**New commands (native-v2 exclusive):**
+- `llmgrep complete --db <DB> --prefix <PREFIX>` — FQN autocomplete via KV prefix scan
+  - O(1) prefix-based autocomplete using `magellan::kv::kv_prefix_scan()`
+  - Supports `--limit <N>` for result limiting
+  - Human output (one FQN per line) and JSON formats
+- `llmgrep lookup --db <DB> --fqn <FQN>` — O(1) exact symbol lookup
+  - Two-phase lookup: KV store for SymbolId, SQL for full metadata
+  - Returns `SymbolNotFound` error (LLM-E112) with helpful hints
+
+**New search features:**
+- `--mode label` flag — Purpose-based semantic search
+  - Search by semantic role: `test`, `entry_point`, `public_api`
+  - Uses `magellan::kv::label_key()` for O(1) label lookups
+  - Default label: `test` when `--label` not specified
+
+**Performance instrumentation:**
+- `--show-metrics` global flag — Display timing breakdown
+  - Three-phase timing: backend detection, query execution, output formatting
+  - Metrics printed to stderr (human) or included in JSON output
+  - Helps identify bottlenecks in query pipelines
+
+**Backend architecture:**
+- **Dual backend support:** SQLite (rusqlite) + Native-V2 (Magellan CodeGraph API)
+- **Runtime detection:** Automatic backend format detection (no `--backend` flag needed)
+- **Graceful fallback:** Native-v2 commands return `RequiresNativeV2Backend` error (LLM-E111) on SQLite databases
+- **Feature flag:** Native-v2 support requires `--features native-v2` at compile time
+
+**New error codes:**
+- `LLM-E109`: NativeV2BackendNotSupported — native-v2 database detected but llmgrep built without native-v2 feature
+- `LLM-E110`: BackendDetectionFailed — unable to determine database format
+- `LLM-E111`: RequiresNativeV2Backend — native-v2-only command run on SQLite database
+- `LLM-E112`: SymbolNotFound — exact FQN lookup failed with suggestions
+
+**Test coverage:**
+- 30 new integration tests for native-v2 exclusive features
+- Total: 371 tests passing (zero regressions)
+
+**Dependencies:**
+- Updated magellan to 2.2.0+
+- Updated sqlitegraph to 1.5.5+
+- Added native-v2 feature flag (`--features native-v2`)
+
+**Documentation:**
+- Updated README.md with v3.0 features
+- Updated CHANGELOG.md with v3.0.0 entry
+- All Phase 17-21 planning artifacts in `.planning/phases/`
+
+**Migration from v2.1.x:**
+- SQLite backend continues to work without changes
+- Native-v2 features are opt-in via feature flag
+- No breaking changes to existing commands
+- Rebuild with `--features native-v2` to enable native-v2 support
+
+**Compatibility:**
+- Magellan 2.2.0+ recommended for native-v2 features
+- SQLite databases continue to work with rusqlite backend
+- Native-v2 storage provides O(1) KV lookups and smaller file sizes
+
+---
+
+## [2.1.1] - 2026-02-04
+
+### Added
+- **Windows Support:** Full cross-platform compatibility via explicit feature flag
+  - Use `--features windows` to enable Windows builds
+  - Default: `--features unix` (Linux/macOS)
+  - Platform detection centralized in `platform.rs` module
+  - llmgrep is fully functional on Windows (read-only tool, no background processes)
+
+### Changed
+- Feature model: `default = ["unix"]`, `windows` opt-in
+- Updated magellan dependency to 2.1.1
+
+**One sentence for the docs:**
+> Windows support is opt-in via `--features windows`. Fully supported — llmgrep is a read-only tool.
+
 ## [2.1.0] - 2026-02-04
 
 ### Added

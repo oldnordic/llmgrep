@@ -1,6 +1,6 @@
 [package]
 name = "llmgrep"
-version = "2.1.1"
+version = "3.0.0"
 edition = "2021"
 description = "Smart grep over Magellan code maps with schema-aligned JSON output"
 license = "GPL-3.0-only"
@@ -33,3 +33,6 @@ tempfile = "3.10"
 thiserror = "1.0"
 # Use local path for development - will be "2.1.1" on crates.io
 magellan = { version = "2.2", path = "../magellan" }
+
+[dev-dependencies]
+rusqlite = "0.31"

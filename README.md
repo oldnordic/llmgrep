@@ -92,6 +92,41 @@ cd llmgrep
 cargo install --path .
 ```
 
+## Platform Support
+
+llmgrep uses a shared platform feature model across the SQLiteGraph toolset:
+
+| Platform | Feature | Status |
+|----------|---------|--------|
+| **Linux** | `unix` (default) | ✅ Full support |
+| **macOS** | `unix` (default) | ✅ Full support |
+| **Windows** | `windows` (opt-in) | ✅ Full support |
+
+### Building for Windows
+
+Windows support is opt-in via feature flag:
+
+```bash
+# Build for Windows
+cargo build --release --features windows
+
+# Install from source on Windows
+cargo install llmgrep --features windows
+```
+
+**llmgrep is fully functional on Windows.**
+
+llmgrep is a read-only query tool with no background processes, file watching, or signal handling. All features work identically across platforms.
+
+### Feature Model
+
+```toml
+[features]
+default = ["unix"]
+unix = []
+windows = []
+```
+
 ## Quick Start
 
 ### 1. Install the Toolset
@@ -126,17 +161,19 @@ llmgrep --db .codemcp/codegraph.db search --query "^Token" --regex --output json
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `search` | Search symbols, references, calls |
-| `ast` | Query raw AST tree for a file |
-| `find-ast` | Find AST nodes by kind |
+| Command | Description | Backend |
+|---------|-------------|---------|
+| `search` | Search symbols, references, calls | SQLite + Native-V2 |
+| `ast` | Query raw AST tree for a file | SQLite + Native-V2 |
+| `find-ast` | Find AST nodes by kind | SQLite + Native-V2 |
+| `complete` | FQN autocomplete via KV prefix scan (v3.0) | Native-V2 only |
+| `lookup` | O(1) exact symbol lookup by FQN (v3.0) | Native-V2 only |
 
 ### Search Options
 
-**Search mode:** `--mode {symbols|references|calls|auto}`
+**Search mode:** `--mode {symbols|references|calls|label}` (v3.0 adds `label`)
 
-**Filters:** `--path`, `--kind`, `--language`, `--regex`, `--fqn`, `--symbol-id`
+**Filters:** `--path`, `--kind`, `--language`, `--regex`, `--fqn`, `--symbol-id`, `--label` (v3.0)
 
 **Metrics:** `--min-complexity`, `--max-complexity`, `--min-fan-in`, `--min-fan-out`
 
@@ -147,6 +184,8 @@ llmgrep --db .codemcp/codegraph.db search --query "^Token" --regex --output json
 **Sorting:** `--sort-by {relevance|position|fan-in|fan-out|complexity|nesting-depth}`
 
 **Output:** `--output {human|json|pretty}`
+
+**Performance:** `--show-metrics` (v3.0) — Display timing breakdown for queries
 
 ## Examples
 
@@ -220,14 +259,66 @@ llmgrep --db code.db find-ast --kind function_item
 llmgrep --db code.db find-ast --kind for_expression
 ```
 
+### Native-V2 Features (v3.0)
+
+> **Requires:** `--features native-v2` at compile time and native-v2 database format
+
+```bash
+# Build with native-v2 support
+cargo install llmgrep --features native-v2
+
+# Index with native-v2 storage (smaller, faster)
+magellan watch --root ./src --db code.db --storage native-v2
+
+# FQN autocomplete
+llmgrep --db code.db complete --prefix "my_crate::"
+# Returns: my_crate::module::function_name
+#         my_crate::module::AnotherStruct
+
+# O(1) exact symbol lookup
+llmgrep --db code.db lookup --fqn "my_crate::module::function_name"
+# Returns full symbol details in JSON
+
+# Purpose-based semantic search
+llmgrep --db code.db search --mode label --label test
+# Returns all test functions
+
+llmgrep --db code.db search --mode label --label entry_point
+# Returns: main(), lib exports, public API
+
+# Performance metrics
+llmgrep --db code.db search --query "main" --show-metrics
+# Output includes timing breakdown:
+#   Backend detection: 5ms
+#   Query execution: 23ms
+#   Output formatting: 2ms
+#   Total: 30ms
+```
+
+**Error handling on SQLite databases:**
+
+Native-v2 exclusive commands gracefully fallback with helpful errors on SQLite databases:
+
+```bash
+# On SQLite database, returns LLM-E111
+llmgrep --db sqlite.db complete --prefix "test"
+# ERROR LLM-E111: The 'complete' command requires native-v2 backend.
+# Reindex with: magellan watch --root . --db code.db --storage native-v2
+```
+
 ## Requirements
 
-- **[Magellan](https://github.com/oldnordic/magellan)** 2.1.0+ — Required for code indexing
+- **[Magellan](https://github.com/oldnordic/magellan)** 2.2.0+ — Required for code indexing
   ```bash
   cargo install magellan
   magellan watch --root ./src --db .codemcp/codegraph.db
   ```
-- **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 1.3.0+ — Included automatically
+- **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 1.5.5+ — Included automatically
+- **Optional:** Native-v2 features require `--features native-v2` at compile time
+  ```bash
+  cargo install llmgrep --features native-v2
+  magellan watch --root ./src --db code.db --storage native-v2
+  ```
 
 ## Documentation
 
