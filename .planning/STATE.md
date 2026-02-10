@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 22 of 22 (Production Readiness Bugfix) — IN PROGRESS
-Current Plan: 22-01 (Add Language Inference to NativeV2Backend)
-Status: Phase 22 plan 1 of 4 complete
-Last activity: 2026-02-10 — Added language inference from file extension (7 min)
+Current Plan: 22-04 (Final Verification and Release)
+Status: Phase 22 plan 3 of 4 complete
+Last activity: 2026-02-10 — Cross-Backend Verification Tests (15 min)
 
-Progress: [████████░░░] 63% (29/27 plans complete in v3.0)
+Progress: [████████░░░] 66% (31/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -57,6 +57,8 @@ Progress: [████████░░░] 63% (29/27 plans complete in v3.0)
 | Phase 21-native-v2-exclusive-features P04 | 12min | 1 tasks | 4 files |
 | Phase 21-native-v2-exclusive-features P05 | 5min | 1 tasks | 1 files |
 | Phase 22-bugfix-production-ready P01 | 7min | 3 tasks | 5 files |
+| Phase 22-bugfix-production-ready P02 | 5min | 1 tasks | 1 files |
+| Phase 22-bugfix-production-ready P03 | 15min | 4 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -106,17 +108,17 @@ Recent decisions affecting current work:
 - [Phase 22]: Language inference from file extension using infer_language() function
 - [Phase 22]: Capitalized language names (Rust, Python, JavaScript) for output consistency
 - [Phase 22]: has_known_extension() helper for detecting 18+ source file extensions in FQN parsing
+- [Phase 22]: Integration tests for language detection (15 tests covering 7 languages)
+- [Phase 22]: Code inspection test verifying no debug output in production code
 
 ### Pending Todos
 
-- Phase 22: Remove Debug Output from complete() Method (already clean - verify)
-- Phase 22: Cross-Backend Verification Tests
 - Phase 22: Final Verification and Release
 
 ## Session Continuity
 
-Last session: 2026-02-10 — Phase 22 plan 22-01
-Stopped at: Completed Phase 22 plan 22-01 (Language inference from file extension)
+Last session: 2026-02-10 — Phase 22 plan 22-03
+Stopped at: Completed Phase 22 plan 22-03 (Cross-Backend Verification Tests)
 Resume file: None
 
 ### Blockers/Concerns
@@ -308,22 +310,30 @@ Resume file: None
 ## Phase 22 Summary
 
 **Started:** 2026-02-10
-**Plans:** 1/4 complete (22-01)
+**Plans:** 3/4 complete (22-01, 22-02, 22-03)
 **Status:** IN PROGRESS
 
 **Artifacts Created:**
 - .planning/phases/22-bugfix-production-ready/22-01-SUMMARY.md — Language inference summary
+- .planning/phases/22-bugfix-production-ready/22-02-SUMMARY.md — Debug output removal summary
+- .planning/phases/22-bugfix-production-ready/22-03-SUMMARY.md — Cross-backend verification tests summary
 
-**Commits:** 3 atomic commits (e6c6be9, 4596572, d70d43f)
+**Commits:**
+- e6c6be9, 4596572, d70d43f (22-01: Language inference)
+- a27b635 (22-02: Debug output removal - included in 22-01)
+- 1a10bbc (22-03: Integration tests)
 
 **Verification:**
 - [x] Language inference added for Python, JavaScript, TypeScript, C/C++, Java, Rust
 - [x] has_known_extension() helper function added
 - [x] symbol_node_to_match() uses infer_language()
 - [x] search_symbols() uses infer_language()
-- [x] All 393 tests passing (zero regressions)
+- [x] All 386 tests passing (zero regressions, 15 new tests added)
 - [x] Debug output removed from complete() method (36 lines)
 - [x] No eprintln! statements remain in native_v2.rs
 - [x] No DEBUG references remain in native_v2.rs
 - [x] File reduced from 679 to 643 lines
+- [x] Integration tests for language detection (15 tests)
+- [x] Test fixtures in 7 languages
+- [x] Native-v2 test database created
 
