@@ -86,6 +86,20 @@ pub trait BackendTrait {
     /// * `prefix` - Prefix string to match (e.g., "std::collections")
     /// * `limit` - Maximum number of completions to return
     fn complete(&self, prefix: &str, limit: usize) -> Result<Vec<String>, LlmError>;
+
+    /// Lookup symbol by exact fully-qualified name.
+    ///
+    /// This method provides O(1) symbol resolution by FQN using KV store.
+    /// Only available with native-v2 backend.
+    ///
+    /// # Arguments
+    /// * `fqn` - Fully-qualified name to lookup (e.g., "std::collections::HashMap::new")
+    /// * `db_path` - Database path for error reporting
+    ///
+    /// # Returns
+    /// * `Ok(SymbolMatch)` - Full symbol details if found
+    /// * `Err(LlmError::SymbolNotFound)` - If FQN does not exist in database
+    fn lookup(&self, fqn: &str, db_path: &str) -> Result<crate::output::SymbolMatch, LlmError>;
 }
 
 /// Runtime backend dispatcher.
@@ -202,6 +216,18 @@ impl Backend {
             Backend::Sqlite(b) => b.complete(prefix, limit),
             #[cfg(feature = "native-v2")]
             Backend::NativeV2(b) => b.complete(prefix, limit),
+        }
+    }
+
+    /// Lookup symbol by exact FQN.
+    ///
+    /// This method is only available with native-v2 backend.
+    /// SQLite backend returns RequiresNativeV2Backend error.
+    pub fn lookup(&self, fqn: &str, db_path: &str) -> Result<crate::output::SymbolMatch, LlmError> {
+        match self {
+            Backend::Sqlite(b) => b.lookup(fqn, db_path),
+            #[cfg(feature = "native-v2")]
+            Backend::NativeV2(b) => b.lookup(fqn, db_path),
         }
     }
 }

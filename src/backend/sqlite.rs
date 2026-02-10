@@ -152,4 +152,14 @@ impl super::BackendTrait for SqliteBackend {
             path: self.db_path.display().to_string(),
         })
     }
+
+    fn lookup(&self, fqn: &str, db_path: &str) -> Result<crate::output::SymbolMatch, LlmError> {
+        // SQLite backend cannot efficiently do exact FQN lookups
+        // Extract partial name from FQN for error message
+        let partial = fqn.rsplit("::").next().unwrap_or(fqn);
+        Err(LlmError::RequiresNativeV2Backend {
+            command: "lookup".to_string(),
+            path: db_path.to_string(),
+        })
+    }
 }

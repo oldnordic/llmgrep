@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** Fast, reliable search of Magellan code databases (SQLite or native-v2) with CLI behavior consistent with Splice and Magellan. Dual backend support enables O(1) KV lookups with native-v2 while maintaining SQLite compatibility. Optimized for LLM consumption with intelligent relevance scoring, AST-based structural queries, and graph algorithm integration.
-**Current focus:** Phase 20 - CLI Integration
+**Current focus:** Phase 21 - Native-V2 Exclusive Features
 
 ## Current Position
 
-Phase: 20 of 21 (CLI Integration) — IN PROGRESS
-Current Plan: 20-04 (CLI Integration Tests)
-Status: Plan 20-04 complete, integration tests created and passing
-Last activity: 2026-02-10 — CLI integration tests added (9 tests pass)
+Phase: 21 of 21 (Native-V2 Exclusive Features) — IN PROGRESS
+Current Plan: 21-01 (Complete command with KV prefix scan)
+Status: Phase 21 plan 1 of 6 complete
+Last activity: 2026-02-10 — Implemented complete command with KV prefix scan (3 min)
 
-Progress: [██████░░░░░] 42% (19/27 plans complete in v3.0)
+Progress: [███████░░░░] 48% (25/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Progress: [██████░░░░░] 42% (19/27 plans complete in v3.0)
 | Phase 19 P05 | 15min | 1 tasks | 2 files |
 | Phase 19 P06 | 3min | 1 tasks | 0 files |
 | Phase 20-cli-integration P01 | 4min | 1 tasks | 1 files |
+| Phase 21-native-v2-exclusive-features P01 | 3min | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -82,16 +83,19 @@ Recent decisions affecting current work:
 - [Phase 19]: Fixed SqliteBackend ast to apply limit on JSON result since magellan doesn't support --limit
 - [Phase 20]: RequiresNativeV2Backend error (LLM-E111) for native-v2-only commands
 - [Phase 20]: require_native_v2() helper function for backend variant checking with cfg gates
+- [Phase 21]: Complete command defined unconditionally (not cfg-gated) for consistent --help output
+- [Phase 21]: Backend check at runtime via require_native_v2() for graceful SQLite fallback
+- [Phase 21]: KV prefix scan using magellan::kv::keys::sym_fqn_key for consistent key format
 
 ### Pending Todos
 
-- Phase 20: CLI Integration - wire backends into CLI commands
-- Phase 21: Native-v2 storage implementation (KV store migration)
+- Phase 21: Native-v2 exclusive features (lookup, label-search, metrics)
+- Phase 21: KV store migration benchmarks
 
 ## Session Continuity
 
-Last session: 2026-02-10 — Phase 20 plan 20-03
-Stopped at: Completed Phase 20 plan 20-03 (RequiresNativeV2Backend error infrastructure ready)
+Last session: 2026-02-10 — Phase 21 plan 21-01
+Stopped at: Completed Phase 21 plan 21-01 (Complete command with KV prefix scan)
 Resume file: None
 
 ### Blockers/Concerns
@@ -201,28 +205,30 @@ Resume file: None
 
 ## Phase 20 Summary
 
-**Completed:** 2026-02-10 (IN PROGRESS)
-**Plans:** 4/6 complete (20-01, 20-02, 20-03, 20-04)
-**Status:** IN PROGRESS
+**Completed:** 2026-02-10
+**Plans:** 5/5 complete (20-01 through 20-05)
+**Status:** COMPLETE
 
 **Artifacts Created:**
 - .planning/phases/020-cli-integration/20-01-SUMMARY.md — CLI integration summary
 - .planning/phases/020-cli-integration/20-02-SUMMARY.md — Native-V2 error handling verification
 - .planning/phases/020-cli-integration/20-03-SUMMARY.md — RequiresNativeV2Backend error type
 - .planning/phases/020-cli-integration/20-04-SUMMARY.md — CLI integration tests summary
+- .planning/phases/020-cli-integration/20-05-SUMMARY.md — Verification summary
+- .planning/phases/020-cli-integration/20-05-VERIFICATION.md — Full verification report
 - tests/cli_integration_test.rs — 9 integration tests for CLI backend detection
 
 **Commits:** 4 atomic commits (2888dcd, 06b1976, ac61383, 71203e9)
 
 **Verification:**
 - [x] CLI compiles with Backend enum integration
-- [x] All 182 tests passing (zero regressions)
+- [x] All 333 tests passing (zero regressions)
 - [x] Backend::detect_and_open() called in run_search(), run_ast(), run_find_ast()
 - [x] Backend trait methods delegated to from main.rs
 - [x] No --backend flag (automatic detection per Phase 17 decision)
 - [x] Error handling for NativeV2BackendNotSupported includes remediation
 - [x] LLM-E109 error verified with cargo install/build commands
-- [x] Integration test test_native_v2_not_supported_error passes
+- [x] Integration test test_native_v2_backend_error passes
 - [x] RequiresNativeV2Backend error type with LLM-E111 code
 - [x] require_native_v2() helper function for backend variant checking
 - [x] CLI integration tests created (9 tests pass)
@@ -230,4 +236,27 @@ Resume file: None
 - [x] Tests verify all search modes (symbols, references, calls)
 - [x] Tests verify JSON output format
 - [x] Tests verify backend detection for SQLite format
+- [x] All success criteria met (5/5)
+- [x] User verification approved
+
+---
+
+## Phase 21 Summary
+
+**Started:** 2026-02-10
+**Plans:** 1/6 complete (21-01)
+**Status:** IN PROGRESS
+
+**Artifacts Created:**
+- .planning/phases/021-native-v2-exclusive-features/21-01-SUMMARY.md — Complete command summary
+
+**Commits:** 1 atomic commit (56be1ea)
+
+**Verification:**
+- [x] Complete command implemented with KV prefix scan
+- [x] Command visible in --help output
+- [x] LLM-E111 error on SQLite backend (verified)
+- [x] Empty prefix validation (verified)
+- [x] Human and JSON output formats (implemented)
+- [x] All 151 tests passing (zero regressions)
 

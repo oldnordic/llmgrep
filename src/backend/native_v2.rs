@@ -433,4 +433,87 @@ impl super::BackendTrait for NativeV2Backend {
 
         Ok(completions)
     }
+
+    fn lookup(&self, fqn: &str, db_path: &str) -> Result<SymbolMatch, LlmError> {
+        use magellan::kv::lookup_symbol_by_fqn;
+
+        // Extract partial name from FQN for error messages
+        let partial = fqn.rsplit("::").next().unwrap_or(fqn);
+
+        // O(1) lookup by FQN using KV store
+        let symbol_id = lookup_symbol_by_fqn(&*self.graph.backend(), fqn)
+            .ok_or_else(|| LlmError::SymbolNotFound {
+                fqn: fqn.to_string(),
+                db: db_path.to_string(),
+                partial: partial.to_string(),
+            })?;
+
+        // Query symbol_nodes table for full details
+        let conn = self.connect()?;
+
+        let mut stmt = conn.prepare(
+            "SELECT symbol_id, name, kind, fqn, canonical_fqn, display_fqn,
+                    file_path, byte_start, byte_end, start_line, start_col,
+                    end_line, end_col, language, parent_name
+             FROM symbol_nodes WHERE id = ?"
+        ).map_err(LlmError::from)?;
+
+        let mut rows = stmt.query(rusqlite::params![symbol_id])?;
+
+        if let Some(row) = rows.next()? {
+            let file_path: String = row.get(6)?;
+            let byte_start: u64 = row.get(7)?;
+            let byte_end: u64 = row.get(8)?;
+            let start_line: u64 = row.get(9)?;
+            let start_col: u64 = row.get(10)?;
+            let end_line: u64 = row.get(11)?;
+            let end_col: u64 = row.get(12)?;
+
+            let span = Span {
+                span_id: format!("{}:{}:{}", file_path, byte_start, byte_end),
+                file_path,
+                byte_start,
+                byte_end,
+                start_line,
+                start_col,
+                end_line,
+                end_col,
+                context: None,
+            };
+
+            Ok(SymbolMatch {
+                match_id: format!("sym-{}", symbol_id),
+                span,
+                name: row.get(1)?,
+                kind: row.get(2)?,
+                parent: row.get(14)?,
+                symbol_id: row.get(0)?,
+                score: None,
+                fqn: row.get(3)?,
+                canonical_fqn: row.get(4)?,
+                display_fqn: row.get(5)?,
+                content_hash: None,
+                symbol_kind_from_chunk: None,
+                snippet: None,
+                snippet_truncated: None,
+                language: row.get(13)?,
+                kind_normalized: None,
+                complexity_score: None,
+                fan_in: None,
+                fan_out: None,
+                cyclomatic_complexity: None,
+                ast_context: None,
+                supernode_id: None,
+            })
+        } else {
+            // Symbol ID was found in KV but not in symbol_nodes table
+            // This is a data inconsistency
+            Err(LlmError::SearchFailed {
+                reason: format!(
+                    "Symbol ID {} found in KV store but not in symbol_nodes table. Database may be corrupted.",
+                    symbol_id
+                ),
+            })
+        }
+    }
 }

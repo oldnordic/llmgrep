@@ -195,6 +195,12 @@ enum Command {
         #[arg(long, default_value_t = 50, value_parser = ranged_usize(1, 1000))]
         limit: usize,
     },
+
+    #[command(after_help = LOOKUP_EXAMPLES)]
+    Lookup {
+        #[arg(long)]
+        fqn: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -364,6 +370,21 @@ EXAMPLES:
   llmgrep --db code.db complete --prefix "crate::backend::" --limit 10
 "#;
 
+const LOOKUP_EXAMPLES: &str = r#"
+EXAMPLES:
+  # Lookup symbol by exact FQN
+  llmgrep --db code.db lookup --fqn "llmgrep::main"
+
+  # Lookup with full module path
+  llmgrep --db code.db lookup --fqn "std::collections::HashMap::new"
+
+  # JSON output for programmatic use
+  llmgrep --db code.db lookup --fqn "crate::backend::NativeV2Backend" --output json
+
+  # Get all symbol metadata in one query
+  llmgrep --db code.db lookup --fqn "parse" --output pretty
+"#;
+
 fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
     // Canonicalize the path to resolve symlinks and .. components
     let canonical = path
@@ -439,6 +460,8 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
         Command::FindAst { kind } => run_find_ast(cli, kind),
 
         Command::Complete { prefix, limit } => run_complete(cli, prefix.clone(), *limit),
+
+        Command::Lookup { fqn } => run_lookup(cli, fqn),
 
         Command::Search {
             query,
@@ -1147,6 +1170,74 @@ fn run_complete(
                 "prefix": prefix,
                 "count": completions.len()
             });
+            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
+                serde_json::to_string_pretty(&response)?
+            } else {
+                serde_json::to_string(&response)?
+            };
+            println!("{}", rendered);
+        }
+    }
+
+    Ok(())
+}
+
+fn run_lookup(
+    cli: &Cli,
+    fqn: &str,
+) -> Result<(), LlmError> {
+    // Validate database path
+    let db_path = if let Some(db_path) = &cli.db {
+        validate_path(db_path, true)?
+    } else {
+        return Err(LlmError::DatabaseNotFound {
+            path: "none".to_string(),
+        });
+    };
+
+    // Validate FQN is not empty
+    if fqn.trim().is_empty() {
+        return Err(LlmError::InvalidQuery {
+            query: "--fqn cannot be empty".to_string(),
+        });
+    }
+
+    // Detect and open backend automatically (SQLite or Native-V2)
+    let backend = Backend::detect_and_open(&db_path)?;
+
+    // Check if backend supports lookup command (native-v2 only)
+    require_native_v2(&backend, "lookup", &db_path)?;
+
+    // Lookup symbol by FQN via backend
+    let symbol = backend.lookup(fqn, &db_path.to_string_lossy())?;
+
+    // Render output based on format
+    match cli.output {
+        OutputFormat::Human => {
+            println!("Symbol: {}", symbol.name);
+            println!("Kind: {}", symbol.kind);
+            println!("FQN: {}", symbol.fqn.as_deref().unwrap_or(&"<none>".to_string()));
+            if let Some(canonical_fqn) = &symbol.canonical_fqn {
+                println!("Canonical FQN: {}", canonical_fqn);
+            }
+            if let Some(display_fqn) = &symbol.display_fqn {
+                println!("Display FQN: {}", display_fqn);
+            }
+            println!("Location: {}:{}:{}",
+                symbol.span.file_path,
+                symbol.span.start_line,
+                symbol.span.start_col
+            );
+            if let Some(parent) = &symbol.parent {
+                println!("Parent: {}", parent);
+            }
+            if let Some(language) = &symbol.language {
+                println!("Language: {}", language);
+            }
+        }
+        OutputFormat::Json | OutputFormat::Pretty => {
+            // Create a response with just the single symbol
+            let response = vec![symbol];
             let rendered = if matches!(cli.output, OutputFormat::Pretty) {
                 serde_json::to_string_pretty(&response)?
             } else {
