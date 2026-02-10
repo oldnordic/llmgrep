@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 21 of 21 (Native-V2 Exclusive Features) — IN PROGRESS
-Current Plan: 21-05 (KV store migration benchmarks)
-Status: Phase 21 plan 4 of 6 complete
-Last activity: 2026-02-10 — Implemented performance metrics instrumentation with 3-phase timing (12 min)
+Current Plan: 21-06 (KV store migration benchmarks)
+Status: Phase 21 plan 5 of 6 complete
+Last activity: 2026-02-10 — Added comprehensive test suite for native-v2 exclusive features (5 min)
 
-Progress: [███████░░░░] 56% (28/27 plans complete in v3.0)
+Progress: [████████░░░] 60% (29/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [███████░░░░] 56% (28/27 plans complete in v3.0)
 | Phase 21-native-v2-exclusive-features P02 | 7min | 2 tasks | 5 files |
 | Phase 21-native-v2-exclusive-features P03 | 7min | 1 tasks | 4 files |
 | Phase 21-native-v2-exclusive-features P04 | 12min | 1 tasks | 4 files |
+| Phase 21-native-v2-exclusive-features P05 | 5min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,9 @@ Recent decisions affecting current work:
 - [Phase 21]: Performance metrics with --show-metrics flag and 3-phase timing breakdown
 - [Phase 21]: Metrics printed to stderr for human output, included in JSON for structured output
 - [Phase 21]: std::time::Instant for high-precision timing measurements
+- [Phase 21]: Comprehensive test suite for native-v2 exclusive commands with 30 tests
+- [Phase 21]: Tests verify complete, lookup, label search error handling on SQLite backend
+- [Phase 21]: Performance metrics structure validation and JSON serialization tests
 
 ### Pending Todos
 
@@ -106,8 +110,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-10 — Phase 21 plan 21-04
-Stopped at: Completed Phase 21 plan 21-04 (Performance metrics instrumentation)
+Last session: 2026-02-10 — Phase 21 plan 21-05
+Stopped at: Completed Phase 21 plan 21-05 (Native-v2 exclusive features test suite)
 Resume file: None
 
 ### Blockers/Concerns
@@ -256,15 +260,17 @@ Resume file: None
 ## Phase 21 Summary
 
 **Started:** 2026-02-10
-**Plans:** 3/6 complete (21-01, 21-02, 21-03)
+**Plans:** 5/6 complete (21-01, 21-02, 21-03, 21-04, 21-05)
 **Status:** IN PROGRESS
 
 **Artifacts Created:**
 - .planning/phases/021-native-v2-exclusive-features/21-01-SUMMARY.md — Complete command summary
 - .planning/phases/021-native-v2-exclusive-features/21-02-SUMMARY.md — Lookup command summary
 - .planning/phases/021-native-v2-exclusive-features/21-03-SUMMARY.md — Label search mode summary
+- .planning/phases/021-native-v2-exclusive-features/21-04-SUMMARY.md — Performance metrics summary
+- .planning/phases/021-native-v2-exclusive-features/21-05-SUMMARY.md — Test suite summary
 
-**Commits:** 4 atomic commits (56be1ea, f94c08e, 42e5b8c, 352fefc)
+**Commits:** 5 atomic commits (56be1ea, f94c08e, 42e5b8c, 352fefc, 84b9a01)
 
 **Verification:**
 - [x] Complete command implemented with KV prefix scan
@@ -288,4 +294,7 @@ Resume file: None
 - [x] Metrics included in JSON output under "performance" key
 - [x] All 5 command functions instrumented (run_search, run_ast, run_find_ast, run_complete, run_lookup)
 - [x] Magellan API compatibility fixes (__backend_for_benchmarks)
+- [x] Comprehensive test suite with 30 integration tests for native-v2 exclusive features
+- [x] Tests verify complete/lookup/label command error handling on SQLite backend
+- [x] Performance metrics structure validation and JSON serialization tests
 
