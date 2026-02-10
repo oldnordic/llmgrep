@@ -11,6 +11,9 @@
 //!   - LLM-E106: Ambiguous symbol name
 //!   - LLM-E107: Magellan version mismatch
 //!   - LLM-E108: Magellan execution failed
+//!   - LLM-E109: Native-V2 backend detected but feature not enabled
+//!   - LLM-E110: Backend detection failed
+//!   - LLM-E111: Command requires native-v2 backend
 //! - **LLM-E200 to LLM-E299**: Search execution errors
 //! - **LLM-E300 to LLM-E399**: Path and argument validation errors
 //! - **LLM-E900 to LLM-E999**: Internal and miscellaneous errors
@@ -118,6 +121,22 @@ pub enum LlmError {
     /// Backend detection failed for the database.
     #[error("LLM-E110: Backend detection failed for database: {path}\nReason: {reason}")]
     BackendDetectionFailed { path: String, reason: String },
+
+    /// Command requires native-v2 backend but database is SQLite.
+    #[error(
+        "LLM-E111: The '{command}' command requires native-v2 backend.\n\n\
+         Current database: {path}\n\
+         Detected backend: SQLite\n\n\
+         This command is only available with native-v2 storage which provides:\n\
+         \x20  - O(1) KV store lookups\n\
+         \x20  - Prefix-based autocomplete\n\
+         \x20  - Smaller database sizes\n\n\
+         To use this command:\n\
+         \x20  1. Reindex your codebase with native-v2: magellan watch --root . --db code.db --storage native-v2\n\
+         \x20  2. Ensure llmgrep is built with native-v2 feature: cargo install llmgrep --features native-v2\n\n\
+         For more information, see: https://docs.rs/llmgrep/latest/llmgrep/"
+    )]
+    RequiresNativeV2Backend { command: String, path: String },
 }
 
 impl LlmError {
@@ -144,6 +163,7 @@ impl LlmError {
             LlmError::MagellanExecutionFailed { .. } => "LLM-E108",
             LlmError::NativeV2BackendNotSupported { .. } => "LLM-E109",
             LlmError::BackendDetectionFailed { .. } => "LLM-E110",
+            LlmError::RequiresNativeV2Backend { .. } => "LLM-E111",
         }
     }
 
@@ -161,6 +181,7 @@ impl LlmError {
             LlmError::MagellanExecutionFailed { .. } => "error",
             LlmError::NativeV2BackendNotSupported { .. } => "error",
             LlmError::BackendDetectionFailed { .. } => "error",
+            LlmError::RequiresNativeV2Backend { .. } => "error",
             _ => "error",
         }
     }
@@ -219,6 +240,9 @@ impl LlmError {
             }
             LlmError::BackendDetectionFailed { .. } => {
                 Some("Check that the database file exists and is a valid Magellan database.")
+            }
+            LlmError::RequiresNativeV2Backend { .. } => {
+                Some("Reindex with native-v2 storage: magellan watch --root . --db code.db --storage native-v2")
             }
         }
     }
