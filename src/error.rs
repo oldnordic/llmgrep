@@ -14,6 +14,7 @@
 //!   - LLM-E109: Native-V2 backend detected but feature not enabled
 //!   - LLM-E110: Backend detection failed
 //!   - LLM-E111: Command requires native-v2 backend
+//!   - LLM-E112: Symbol not found in exact FQN lookup
 //! - **LLM-E200 to LLM-E299**: Search execution errors
 //! - **LLM-E300 to LLM-E399**: Path and argument validation errors
 //! - **LLM-E900 to LLM-E999**: Internal and miscellaneous errors
@@ -137,6 +138,18 @@ pub enum LlmError {
          For more information, see: https://docs.rs/llmgrep/latest/llmgrep/"
     )]
     RequiresNativeV2Backend { command: String, path: String },
+
+    /// Symbol not found by exact FQN lookup.
+    #[error(
+        "LLM-E112: Symbol not found: {fqn}\n\n\
+         The fully-qualified name does not exist in the database.\n\n\
+         Suggestions:\n\
+         \x20  1. Use 'llmgrep --db {db} complete --partial \"{partial}\"' to find similar symbols\n\
+         \x20  2. Check the FQN spelling and module path\n\
+         \x20  3. Verify the database is up to date: magellan status --db {db}\n\n\
+         For more information, see: https://docs.rs/llmgrep/latest/llmgrep/"
+    )]
+    SymbolNotFound { fqn: String, db: String, partial: String },
 }
 
 impl LlmError {
@@ -164,6 +177,7 @@ impl LlmError {
             LlmError::NativeV2BackendNotSupported { .. } => "LLM-E109",
             LlmError::BackendDetectionFailed { .. } => "LLM-E110",
             LlmError::RequiresNativeV2Backend { .. } => "LLM-E111",
+            LlmError::SymbolNotFound { .. } => "LLM-E112",
         }
     }
 
@@ -182,6 +196,7 @@ impl LlmError {
             LlmError::NativeV2BackendNotSupported { .. } => "error",
             LlmError::BackendDetectionFailed { .. } => "error",
             LlmError::RequiresNativeV2Backend { .. } => "error",
+            LlmError::SymbolNotFound { .. } => "error",
             _ => "error",
         }
     }
@@ -243,6 +258,9 @@ impl LlmError {
             }
             LlmError::RequiresNativeV2Backend { .. } => {
                 Some("Reindex with native-v2 storage: magellan watch --root . --db code.db --storage native-v2")
+            }
+            LlmError::SymbolNotFound { .. } => {
+                Some("Use 'complete' command with --partial flag to find similar symbols by partial name match.")
             }
         }
     }

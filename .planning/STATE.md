@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 20 of 21 (CLI Integration) — IN PROGRESS
-Current Plan: 20-03 (Prepare error handling for native-v2-only commands)
-Status: Plan 20-03 complete, error infrastructure ready for Phase 21
-Last activity: 2026-02-10 — RequiresNativeV2Backend error (LLM-E111) added
+Current Plan: 20-04 (CLI Integration Tests)
+Status: Plan 20-04 complete, integration tests created and passing
+Last activity: 2026-02-10 — CLI integration tests added (9 tests pass)
 
-Progress: [██████░░░░░] 41% (18/27 plans complete in v3.0)
+Progress: [██████░░░░░] 42% (19/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -202,15 +202,17 @@ Resume file: None
 ## Phase 20 Summary
 
 **Completed:** 2026-02-10 (IN PROGRESS)
-**Plans:** 3/6 complete (20-01, 20-02, 20-03)
+**Plans:** 4/6 complete (20-01, 20-02, 20-03, 20-04)
 **Status:** IN PROGRESS
 
 **Artifacts Created:**
 - .planning/phases/020-cli-integration/20-01-SUMMARY.md — CLI integration summary
 - .planning/phases/020-cli-integration/20-02-SUMMARY.md — Native-V2 error handling verification
 - .planning/phases/020-cli-integration/20-03-SUMMARY.md — RequiresNativeV2Backend error type
+- .planning/phases/020-cli-integration/20-04-SUMMARY.md — CLI integration tests summary
+- tests/cli_integration_test.rs — 9 integration tests for CLI backend detection
 
-**Commits:** 3 atomic commits (2888dcd, 06b1976, ac61383)
+**Commits:** 4 atomic commits (2888dcd, 06b1976, ac61383, 71203e9)
 
 **Verification:**
 - [x] CLI compiles with Backend enum integration
@@ -223,4 +225,9 @@ Resume file: None
 - [x] Integration test test_native_v2_not_supported_error passes
 - [x] RequiresNativeV2Backend error type with LLM-E111 code
 - [x] require_native_v2() helper function for backend variant checking
+- [x] CLI integration tests created (9 tests pass)
+- [x] Tests verify search/ast/find-ast commands with SQLite backend
+- [x] Tests verify all search modes (symbols, references, calls)
+- [x] Tests verify JSON output format
+- [x] Tests verify backend detection for SQLite format
 
