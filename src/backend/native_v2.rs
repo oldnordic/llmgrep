@@ -14,6 +14,7 @@ use crate::output::{
 use crate::query::SearchOptions;
 use magellan::common::extract_symbol_content_safe;
 use magellan::graph::{query, SymbolNode};
+use magellan::graph::metrics::schema::SymbolMetrics;
 use magellan::CodeGraph;
 use regex::Regex;
 use std::cell::UnsafeCell;
@@ -202,6 +203,9 @@ impl NativeV2Backend {
         snippet: Option<String>,
         snippet_truncated: Option<bool>,
         context: Option<SpanContext>,
+        fan_in: Option<u64>,
+        fan_out: Option<u64>,
+        cyclomatic_complexity: Option<u64>,
     ) -> SymbolMatch {
         // Extract file path from canonical_fqn if available
         // Format: crate_name::file_path::kind symbol_name
@@ -250,9 +254,9 @@ impl NativeV2Backend {
             language: infer_language(&file_path).map(|s| s.to_string()),
             kind_normalized: node.kind_normalized.clone(),
             complexity_score: None,
-            fan_in: None,
-            fan_out: None,
-            cyclomatic_complexity: None,
+            fan_in,
+            fan_out,
+            cyclomatic_complexity,
             ast_context: None,
             supernode_id: None,
         }
@@ -262,6 +266,39 @@ impl NativeV2Backend {
     fn backend(&self) -> &std::rc::Rc<dyn sqlitegraph::GraphBackend> {
         // SAFETY: We're only reading the backend, getting a shared reference
         unsafe { (*self.graph.get()).__backend_for_benchmarks() }
+    }
+
+    /// Get metrics for a symbol from the KV store
+    ///
+    /// # Arguments
+    /// * `entity_id` - The symbol's entity ID
+    ///
+    /// # Returns
+    /// * Some((fan_in, fan_out, cyclomatic_complexity)) if metrics are available
+    /// * None if metrics are not populated (graceful degradation for native-v2 databases)
+    fn get_metrics(&self, entity_id: u64) -> Option<(u64, u64, u64)> {
+        use sqlitegraph::backend::KvValue;
+
+        // KV key format for symbol metrics
+        let metrics_key = format!("sm:symbol:{}", entity_id);
+        let snapshot = SnapshotId::current();
+        let backend = self.backend();
+
+        // Try to get metrics from KV store
+        match backend.kv_get(snapshot, metrics_key.as_bytes()) {
+            Ok(Some(KvValue::Bytes(data))) => {
+                // Deserialize the SymbolMetrics struct
+                match serde_json::from_slice::<SymbolMetrics>(&data) {
+                    Ok(metrics) => Some((
+                        metrics.fan_in.max(0) as u64,
+                        metrics.fan_out.max(0) as u64,
+                        metrics.cyclomatic_complexity.max(0) as u64,
+                    )),
+                    Err(_) => None, // Deserialization failed - return None gracefully
+                }
+            }
+            _ => None, // Key not found or wrong type - return None gracefully
+        }
     }
 
     /// Check if a path has a known source file extension
@@ -391,7 +428,7 @@ impl super::BackendTrait for NativeV2Backend {
                     reason: format!("Failed to query symbols in {}: {}", file_path, e),
                 })?;
 
-            for (_node_id, symbol, _symbol_id) in entries {
+            for (entity_id, symbol, _symbol_id) in entries {
                 if results.len() >= options.limit {
                     break;
                 }
@@ -409,6 +446,41 @@ impl super::BackendTrait for NativeV2Backend {
                 if let Some(kind_filter) = options.kind_filter {
                     if symbol.kind_normalized != kind_filter.to_string() {
                         continue;
+                    }
+                }
+
+                // Get metrics for this symbol (graceful degradation if not available)
+                let metrics = self.get_metrics(entity_id as u64);
+
+                // Apply metrics filters if specified
+                if let Some(min_cc) = options.metrics.min_complexity {
+                    match metrics {
+                        Some((_, _, cc)) => {
+                            if cc < min_cc as u64 {
+                                continue;
+                            }
+                        }
+                        None => continue, // Filter out symbols without metrics when filter is active
+                    }
+                }
+                if let Some(min_fi) = options.metrics.min_fan_in {
+                    match metrics {
+                        Some((fi, _, _)) => {
+                            if fi < min_fi as u64 {
+                                continue;
+                            }
+                        }
+                        None => continue, // Filter out symbols without metrics when filter is active
+                    }
+                }
+                if let Some(min_fo) = options.metrics.min_fan_out {
+                    match metrics {
+                        Some((_, fo, _)) => {
+                            if fo < min_fo as u64 {
+                                continue;
+                            }
+                        }
+                        None => continue, // Filter out symbols without metrics when filter is active
                     }
                 }
 
@@ -488,9 +560,9 @@ impl super::BackendTrait for NativeV2Backend {
                     language: infer_language(&file_path_str).map(|s| s.to_string()),
                     kind_normalized: Some(symbol.kind_normalized.clone()),
                     complexity_score: None,
-                    fan_in: None,
-                    fan_out: None,
-                    cyclomatic_complexity: None,
+                    fan_in: metrics.map(|(fi, _, _)| fi),
+                    fan_out: metrics.map(|(_, fo, _)| fo),
+                    cyclomatic_complexity: metrics.map(|(_, _, cc)| cc),
                     ast_context: None,
                     supernode_id: None,
                 });
@@ -901,7 +973,7 @@ impl super::BackendTrait for NativeV2Backend {
                 reason: format!("Failed to parse SymbolNode: {}", e),
             })?;
 
-        Ok(self.symbol_node_to_match(&symbol_node, 0, None, None, None))
+        Ok(self.symbol_node_to_match(&symbol_node, 0, None, None, None, None, None, None))
     }
 
     fn search_by_label(
@@ -961,7 +1033,7 @@ impl super::BackendTrait for NativeV2Backend {
             match backend.get_node(snapshot, symbol_id) {
                 Ok(node) => {
                     if let Ok(symbol_node) = serde_json::from_value::<SymbolNode>(node.data) {
-                        results.push(self.symbol_node_to_match(&symbol_node, results.len(), None, None, None));
+                        results.push(self.symbol_node_to_match(&symbol_node, results.len(), None, None, None, None, None, None));
                     }
                 }
                 Err(_) => continue,
