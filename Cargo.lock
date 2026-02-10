@@ -670,7 +670,7 @@ checksum = "df1d3c3b53da64cf5760482273a98e575c651a67eec7f77df96b5b642de8f039"
 
 [[package]]
 name = "llmgrep"
-version = "2.1.1"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1219,9 +1219,9 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "sqlitegraph"
-version = "1.5.5"
+version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "320270c9facd018863ddaccc948c980ce10101872c0b63b1af0b85faf97b64d9"
+checksum = "67fd7f7019ab531c05353d0d14868ff9cf96ad69d2e12638c440b18db780bafd"
 dependencies = [
  "ahash",
  "arc-swap",

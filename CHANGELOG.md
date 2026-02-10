@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2026-02-10
+
+### Fixed
+
+**KV Data Persistence (Critical Fix):**
+- Fixed KV index data not being persisted across process restarts
+  - Updated magellan to 2.2.1 (includes WAL buffer flush fix)
+  - Updated sqlitegraph to 1.5.7 (includes `flush()` method)
+  - `complete` and `lookup` commands now work reliably after magellan exits
+  - WAL file properly contains KV data (1.4MB with 1000+ entries)
+
+### Changed
+
+- **Dependencies:**
+  - magellan: 2.2.0 → 2.2.1
+  - sqlitegraph: 1.5.6 → 1.5.7
+
+### Verified
+
+- Cross-process KV communication works (magellan → llmgrep)
+- `complete` command returns 1000+ FQN entries
+- `lookup` command finds symbols by exact FQN
+- WAL persists at 1.4MB after magellan exits
+
+---
+
 ## [3.0.0] - 2026-02-10
 
 ### Native-V2 Backend Support

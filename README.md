@@ -308,12 +308,12 @@ llmgrep --db sqlite.db complete --prefix "test"
 
 ## Requirements
 
-- **[Magellan](https://github.com/oldnordic/magellan)** 2.2.0+ — Required for code indexing
+- **[Magellan](https://github.com/oldnordic/magellan)** 2.2.1+ — Required for code indexing
   ```bash
   cargo install magellan
   magellan watch --root ./src --db .codemcp/codegraph.db
   ```
-- **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 1.5.5+ — Included automatically
+- **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 1.5.7+ — Included automatically
 - **Optional:** Native-v2 features require `--features native-v2` at compile time
   ```bash
   cargo install llmgrep --features native-v2
