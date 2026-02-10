@@ -407,4 +407,30 @@ impl super::BackendTrait for NativeV2Backend {
         // Return JSON-serializable results
         serde_json::to_value(nodes).map_err(LlmError::JsonError)
     }
+
+    fn complete(&self, prefix: &str, limit: usize) -> Result<Vec<String>, LlmError> {
+        use magellan::kv::keys::sym_fqn_key;
+
+        // Construct prefix key for KV scan
+        let prefix_key = sym_fqn_key(prefix);
+        let snapshot = SnapshotId::current();
+
+        // Perform KV prefix scan via graph backend
+        let entries = self.graph.backend().kv_prefix_scan(snapshot, &prefix_key)
+            .map_err(|e| LlmError::SearchFailed {
+                reason: format!("KV prefix scan failed: {}", e),
+            })?;
+
+        // Extract FQNs from keys by stripping "sym:fqn:" prefix
+        let completions: Vec<String> = entries
+            .iter()
+            .filter_map(|(key, _value)| {
+                let key_str = String::from_utf8(key.clone()).ok()?;
+                key_str.strip_prefix("sym:fqn:").map(|s| s.to_string())
+            })
+            .take(limit)
+            .collect();
+
+        Ok(completions)
+    }
 }

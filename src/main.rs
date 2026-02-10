@@ -186,6 +186,15 @@ enum Command {
         #[arg(long)]
         kind: String,
     },
+
+    #[command(after_help = COMPLETE_EXAMPLES)]
+    Complete {
+        #[arg(long)]
+        prefix: String,
+
+        #[arg(long, default_value_t = 50, value_parser = ranged_usize(1, 1000))]
+        limit: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -340,6 +349,21 @@ EXAMPLES:
     block, call_expression, let_declaration
 "#;
 
+const COMPLETE_EXAMPLES: &str = r#"
+EXAMPLES:
+  # Complete symbol names starting with prefix
+  llmgrep --db code.db complete --prefix "llmgrep::"
+
+  # Complete with custom limit
+  llmgrep --db code.db complete --prefix "std::collections" --limit 20
+
+  # JSON output for programmatic use
+  llmgrep --db code.db complete --prefix "parse" --output json
+
+  # Use for interactive autocomplete
+  llmgrep --db code.db complete --prefix "crate::backend::" --limit 10
+"#;
+
 fn validate_path(path: &Path, is_database: bool) -> Result<PathBuf, LlmError> {
     // Canonicalize the path to resolve symlinks and .. components
     let canonical = path
@@ -413,6 +437,8 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
         } => run_ast(cli, file, *position, *limit),
 
         Command::FindAst { kind } => run_find_ast(cli, kind),
+
+        Command::Complete { prefix, limit } => run_complete(cli, prefix.clone(), *limit),
 
         Command::Search {
             query,
@@ -1073,6 +1099,62 @@ fn run_find_ast(
     };
 
     println!("{}", rendered);
+
+    Ok(())
+}
+
+fn run_complete(
+    cli: &Cli,
+    prefix: String,
+    limit: usize,
+) -> Result<(), LlmError> {
+    // Validate database path
+    let db_path = if let Some(db_path) = &cli.db {
+        validate_path(db_path, true)?
+    } else {
+        return Err(LlmError::DatabaseNotFound {
+            path: "none".to_string(),
+        });
+    };
+
+    // Validate prefix is not empty
+    if prefix.trim().is_empty() {
+        return Err(LlmError::InvalidQuery {
+            query: "--prefix cannot be empty".to_string(),
+        });
+    }
+
+    // Detect and open backend automatically (SQLite or Native-V2)
+    let backend = Backend::detect_and_open(&db_path)?;
+
+    // Check if backend supports complete command (native-v2 only)
+    require_native_v2(&backend, "complete", &db_path)?;
+
+    // Get completions via backend
+    let completions = backend.complete(&prefix, limit)?;
+
+    // Render output based on format
+    match cli.output {
+        OutputFormat::Human => {
+            for completion in &completions {
+                println!("{}", completion);
+            }
+        }
+        OutputFormat::Json | OutputFormat::Pretty => {
+            use serde_json::json;
+            let response = json!({
+                "completions": completions,
+                "prefix": prefix,
+                "count": completions.len()
+            });
+            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
+                serde_json::to_string_pretty(&response)?
+            } else {
+                serde_json::to_string(&response)?
+            };
+            println!("{}", rendered);
+        }
+    }
 
     Ok(())
 }

@@ -144,4 +144,12 @@ impl super::BackendTrait for SqliteBackend {
         serde_json::from_slice(&output.stdout)
             .map_err(|e| LlmError::JsonError(e))
     }
+
+    fn complete(&self, _prefix: &str, _limit: usize) -> Result<Vec<String>, LlmError> {
+        // SQLite backend cannot efficiently do prefix scans on FQNs
+        Err(LlmError::RequiresNativeV2Backend {
+            command: "complete".to_string(),
+            path: self.db_path.display().to_string(),
+        })
+    }
 }

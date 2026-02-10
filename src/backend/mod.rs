@@ -76,6 +76,16 @@ pub trait BackendTrait {
     /// # Arguments
     /// * `kind` - AST node kind (e.g., "function_item", "if_expression")
     fn find_ast(&self, kind: &str) -> Result<serde_json::Value, LlmError>;
+
+    /// Get FQN completions for a prefix.
+    ///
+    /// This method provides prefix-based autocomplete for fully qualified names.
+    /// Only available with native-v2 backend (KV prefix scan).
+    ///
+    /// # Arguments
+    /// * `prefix` - Prefix string to match (e.g., "std::collections")
+    /// * `limit` - Maximum number of completions to return
+    fn complete(&self, prefix: &str, limit: usize) -> Result<Vec<String>, LlmError>;
 }
 
 /// Runtime backend dispatcher.
@@ -180,6 +190,18 @@ impl Backend {
             Backend::Sqlite(b) => b.find_ast(kind),
             #[cfg(feature = "native-v2")]
             Backend::NativeV2(b) => b.find_ast(kind),
+        }
+    }
+
+    /// Get FQN completions for a prefix.
+    ///
+    /// This method is only available with native-v2 backend.
+    /// SQLite backend returns RequiresNativeV2Backend error.
+    pub fn complete(&self, prefix: &str, limit: usize) -> Result<Vec<String>, LlmError> {
+        match self {
+            Backend::Sqlite(b) => b.complete(prefix, limit),
+            #[cfg(feature = "native-v2")]
+            Backend::NativeV2(b) => b.complete(prefix, limit),
         }
     }
 }
