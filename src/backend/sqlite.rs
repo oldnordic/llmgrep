@@ -24,7 +24,7 @@ use std::process::Command;
 /// The actual SQL queries will be moved from query.rs in Phase 18.
 #[derive(Debug)]
 pub struct SqliteBackend {
-    pub(crate) conn: Connection,
+    pub conn: Connection,
     db_path: PathBuf,
 }
 
@@ -156,7 +156,7 @@ impl super::BackendTrait for SqliteBackend {
     fn lookup(&self, fqn: &str, db_path: &str) -> Result<crate::output::SymbolMatch, LlmError> {
         // SQLite backend cannot efficiently do exact FQN lookups
         // Extract partial name from FQN for error message
-        let partial = fqn.rsplit("::").next().unwrap_or(fqn);
+        let _partial = fqn.rsplit("::").next().unwrap_or(fqn);
         Err(LlmError::RequiresNativeV2Backend {
             command: "lookup".to_string(),
             path: db_path.to_string(),

@@ -14,12 +14,12 @@ use crate::query::SearchOptions;
 use std::path::Path;
 
 // Backend implementation modules
-mod sqlite;
+pub mod sqlite;
 mod native_v2;
 
-use sqlite::SqliteBackend;
+pub use sqlite::SqliteBackend;
 #[cfg(feature = "native-v2")]
-use native_v2::NativeV2Backend;
+pub use native_v2::NativeV2Backend;
 
 /// Backend trait for abstracting over SQLite and Native-V2 storage.
 ///

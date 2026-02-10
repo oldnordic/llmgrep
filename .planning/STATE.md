@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 23 of 23 (Feature Parity Native-V2)
-Current Plan: 23-04 (Metrics Extraction for Native-V2)
-Status: 3 of 6 plans in Phase 23 complete
-Last activity: 2026-02-10 — Metrics Extraction for Native-V2 (3 min)
+Current Plan: 23-05 (Cross-Backend Feature Parity Tests)
+Status: 4 of 6 plans in Phase 23 complete
+Last activity: 2026-02-10 — Cross-Backend Feature Parity Tests (7 min)
 
-Progress: [██████████░] 73% (34/37 plans complete in v3.0)
+Progress: [██████████░] 76% (35/37 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -61,6 +61,8 @@ Progress: [██████████░] 73% (34/37 plans complete in v3.0)
 | Phase 22-bugfix-production-ready P03 | 15min | 4 tasks | 12 files |
 | Phase 23-feature-parity-native-v2 P03 | 16min | 1 tasks | 1 files |
 | Phase 23-feature-parity-native-v2 P04 | 3min | 1 tasks | 1 files |
+| Phase 23-feature-parity-native-v2 P05 | 7min | 1 tasks | 1 files |
+| Phase 23 P23-05 | 7 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -360,16 +362,19 @@ Resume file: None
 ## Phase 23 Summary
 
 **Started:** 2026-02-10
-**Plans:** 2 of 6 complete (23-03, 23-04)
+**Plans:** 3 of 6 complete (23-03, 23-04, 23-05)
 **Status:** IN PROGRESS
 
 **Artifacts Created:**
 - .planning/phases/23-feature-parity-native-v2/23-03-SUMMARY.md — Relevance scoring summary
 - .planning/phases/23-feature-parity-native-v2/23-04-SUMMARY.md — Metrics extraction summary
+- .planning/phases/23-feature-parity-native-v2/23-05-SUMMARY.md — Cross-backend parity tests summary
+- tests/backend_parity_extended_test.rs — 13 comprehensive parity tests
 
 **Commits:**
 - 4786210 (23-03: Relevance scoring for Native-V2 backend)
 - 3f0a3ff (23-04: Metrics extraction for Native-V2 backend)
+- d002743 (23-05: Cross-backend feature parity tests)
 
 **Verification:**
 - [x] Relevance scoring (23-03):
@@ -386,6 +391,16 @@ Resume file: None
   - [x] Metrics filters applied (min_fan_in, min_fan_out, min_complexity)
   - [x] symbol_node_to_match() updated to accept metrics parameters
   - [x] Graceful degradation when metrics not available
+- [x] Cross-backend parity tests (23-05):
+  - [x] 13 comprehensive parity tests created
+  - [x] Backend detection tests (2 tests)
+  - [x] Context extraction parity tests (2 tests)
+  - [x] Snippet extraction parity tests (2 tests)
+  - [x] Score calculation parity tests (2 tests)
+  - [x] Metrics API parity tests (1 test)
+  - [x] Filter API parity tests (3 tests)
+  - [x] Cross-backend compatibility test (1 test)
+  - [x] All tests use #[cfg(feature = "native-v2")] attribute
 - [x] All 151 library tests passing (zero regressions)
 - [x] Build successful with native-v2 feature
 
