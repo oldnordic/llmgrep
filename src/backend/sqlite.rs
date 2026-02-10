@@ -162,4 +162,17 @@ impl super::BackendTrait for SqliteBackend {
             path: db_path.to_string(),
         })
     }
+
+    fn search_by_label(
+        &self,
+        _label: &str,
+        _limit: usize,
+        db_path: &str,
+    ) -> Result<(SearchResponse, bool, bool), LlmError> {
+        // SQLite backend does not have label index
+        Err(LlmError::RequiresNativeV2Backend {
+            command: "search --mode label".to_string(),
+            path: db_path.to_string(),
+        })
+    }
 }

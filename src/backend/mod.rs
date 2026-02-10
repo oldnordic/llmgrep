@@ -100,6 +100,27 @@ pub trait BackendTrait {
     /// * `Ok(SymbolMatch)` - Full symbol details if found
     /// * `Err(LlmError::SymbolNotFound)` - If FQN does not exist in database
     fn lookup(&self, fqn: &str, db_path: &str) -> Result<crate::output::SymbolMatch, LlmError>;
+
+    /// Search for symbols by label.
+    ///
+    /// This method provides purpose-based semantic search using Magellan's label system.
+    /// Labels group symbols by semantic category (e.g., "test", "entry_point", "public_api").
+    /// Only available with native-v2 backend.
+    ///
+    /// # Arguments
+    /// * `label` - Label name to search for (e.g., "test", "entry_point")
+    /// * `limit` - Maximum number of symbols to return
+    /// * `db_path` - Database path for error reporting
+    ///
+    /// # Returns
+    /// * `Ok((SearchResponse, partial, paths_bounded))` - Search results and metadata
+    /// * `Err(LlmError::RequiresNativeV2Backend)` - If SQLite backend detected
+    fn search_by_label(
+        &self,
+        label: &str,
+        limit: usize,
+        db_path: &str,
+    ) -> Result<(SearchResponse, bool, bool), LlmError>;
 }
 
 /// Runtime backend dispatcher.
@@ -228,6 +249,23 @@ impl Backend {
             Backend::Sqlite(b) => b.lookup(fqn, db_path),
             #[cfg(feature = "native-v2")]
             Backend::NativeV2(b) => b.lookup(fqn, db_path),
+        }
+    }
+
+    /// Search for symbols by label.
+    ///
+    /// This method is only available with native-v2 backend.
+    /// SQLite backend returns RequiresNativeV2Backend error.
+    pub fn search_by_label(
+        &self,
+        label: &str,
+        limit: usize,
+        db_path: &str,
+    ) -> Result<(SearchResponse, bool, bool), LlmError> {
+        match self {
+            Backend::Sqlite(b) => b.search_by_label(label, limit, db_path),
+            #[cfg(feature = "native-v2")]
+            Backend::NativeV2(b) => b.search_by_label(label, limit, db_path),
         }
     }
 }

@@ -3,10 +3,11 @@ use clap::{Parser, Subcommand, ValueEnum};
 use llmgrep::algorithm::AlgorithmOptions;
 use llmgrep::error::LlmError;
 use llmgrep::output::{
-    json_response, json_response_with_partial, CallSearchResponse, CombinedSearchResponse,
-    ErrorResponse, OutputFormat, ReferenceSearchResponse, SearchResponse,
+    json_response, json_response_with_partial_and_performance, CallSearchResponse,
+    CombinedSearchResponse, ErrorResponse, OutputFormat, PerformanceMetrics,
+    ReferenceSearchResponse, SearchResponse,
 };
-use llmgrep::output_common::{format_partial_footer, format_total_header, render_json_response};
+use llmgrep::output_common::{format_partial_footer, format_total_header};
 use llmgrep::backend::Backend;
 use llmgrep::query::{
     AstOptions, ContextOptions, DepthOptions, FqnOptions, MetricsOptions, SearchOptions,
@@ -36,6 +37,9 @@ struct Cli {
     #[arg(long, global = true)]
     db: Option<PathBuf>,
 
+    #[arg(long, global = true)]
+    show_metrics: bool,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -58,6 +62,9 @@ enum Command {
 
         #[arg(long)]
         language: Option<String>,
+
+        #[arg(long)]
+        label: Option<String>,
 
         #[arg(long, default_value_t = 50, value_parser = ranged_usize(1, 1000))]
         limit: usize,
@@ -209,6 +216,7 @@ enum SearchMode {
     References,
     Calls,
     Auto,
+    Labels,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -469,6 +477,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             path,
             kind,
             language,
+            label,
             limit,
             regex,
             candidates,
@@ -510,6 +519,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             path,
             kind,
             language,
+            label.as_ref(),
             *limit,
             *regex,
             *candidates,
@@ -556,6 +566,7 @@ fn run_search(
     path: &Option<PathBuf>,
     kind: &Option<String>,
     language: &Option<String>,
+    label: Option<&String>,
     limit: usize,
     regex: bool,
     candidates: usize,
@@ -674,8 +685,13 @@ fn run_search(
 
     let db_path = validated_db.as_ref().expect("validated db path missing");
 
+    // Start total timing
+    let total_start = std::time::Instant::now();
+
     // Detect and open backend automatically (SQLite or Native-V2)
+    let detect_start = std::time::Instant::now();
     let backend = Backend::detect_and_open(&db_path)?;
+    let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
 
     // Validate path filter if provided
     let validated_path = if let Some(p) = path {
@@ -767,7 +783,11 @@ fn run_search(
                 fqn_pattern: fqn.map(|s| s.as_str()),
                 exact_fqn: exact_fqn.map(|s| s.as_str()),
             };
+
+            // Time query execution
+            let query_start = std::time::Instant::now();
             let (mut response, partial, paths_bounded) = backend.search_symbols(options)?;
+            let query_execution_ms = query_start.elapsed().as_millis() as u64;
 
             // Compute SCC count from results when condense was active
             let scc_count: usize = response
@@ -800,7 +820,32 @@ fn run_search(
                 }
             }
 
-            output_symbols(cli, response, partial, scc_count)?;
+            // Time output formatting
+            let format_start = std::time::Instant::now();
+            let metrics = if cli.show_metrics {
+                Some(PerformanceMetrics {
+                    backend_detection_ms,
+                    query_execution_ms,
+                    output_formatting_ms: 0, // Will update after formatting
+                    total_ms: 0, // Will update after formatting
+                })
+            } else {
+                None
+            };
+
+            output_symbols(cli, response, partial, scc_count, metrics.as_ref())?;
+
+            let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+            let total_ms = total_start.elapsed().as_millis() as u64;
+
+            // Print metrics to stderr for human output
+            if cli.show_metrics {
+                eprintln!("Performance metrics:");
+                eprintln!("  Backend detection: {}ms", backend_detection_ms);
+                eprintln!("  Query execution: {}ms", query_execution_ms);
+                eprintln!("  Output formatting: {}ms", output_formatting_ms);
+                eprintln!("  Total: {}ms", total_ms);
+            }
         }
         SearchMode::References => {
             let options = SearchOptions {
@@ -832,8 +877,38 @@ fn run_search(
                 fqn_pattern: None,
                 exact_fqn: None,
             };
+
+            // Time query execution
+            let query_start = std::time::Instant::now();
             let (response, partial) = backend.search_references(options)?;
-            output_references(cli, response, partial)?;
+            let query_execution_ms = query_start.elapsed().as_millis() as u64;
+
+            // Time output formatting
+            let format_start = std::time::Instant::now();
+            let metrics = if cli.show_metrics {
+                Some(PerformanceMetrics {
+                    backend_detection_ms,
+                    query_execution_ms,
+                    output_formatting_ms: 0,
+                    total_ms: 0,
+                })
+            } else {
+                None
+            };
+
+            output_references(cli, response, partial, metrics.as_ref())?;
+
+            let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+            let total_ms = total_start.elapsed().as_millis() as u64;
+
+            // Print metrics to stderr for human output
+            if cli.show_metrics {
+                eprintln!("Performance metrics:");
+                eprintln!("  Backend detection: {}ms", backend_detection_ms);
+                eprintln!("  Query execution: {}ms", query_execution_ms);
+                eprintln!("  Output formatting: {}ms", output_formatting_ms);
+                eprintln!("  Total: {}ms", total_ms);
+            }
         }
         SearchMode::Calls => {
             let options = SearchOptions {
@@ -865,8 +940,38 @@ fn run_search(
                 fqn_pattern: None,
                 exact_fqn: None,
             };
+
+            // Time query execution
+            let query_start = std::time::Instant::now();
             let (response, partial) = backend.search_calls(options)?;
-            output_calls(cli, response, partial)?;
+            let query_execution_ms = query_start.elapsed().as_millis() as u64;
+
+            // Time output formatting
+            let format_start = std::time::Instant::now();
+            let metrics = if cli.show_metrics {
+                Some(PerformanceMetrics {
+                    backend_detection_ms,
+                    query_execution_ms,
+                    output_formatting_ms: 0,
+                    total_ms: 0,
+                })
+            } else {
+                None
+            };
+
+            output_calls(cli, response, partial, metrics.as_ref())?;
+
+            let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+            let total_ms = total_start.elapsed().as_millis() as u64;
+
+            // Print metrics to stderr for human output
+            if cli.show_metrics {
+                eprintln!("Performance metrics:");
+                eprintln!("  Backend detection: {}ms", backend_detection_ms);
+                eprintln!("  Query execution: {}ms", query_execution_ms);
+                eprintln!("  Output formatting: {}ms", output_formatting_ms);
+                eprintln!("  Total: {}ms", total_ms);
+            }
         }
         SearchMode::Auto => {
             if !wants_json {
@@ -998,13 +1103,80 @@ fn run_search(
                 },
             };
             let partial = symbols_partial || refs_partial || calls_partial;
-            let payload = json_response_with_partial(combined, partial);
+
+            let query_execution_ms = total_start.elapsed().as_millis() as u64 - backend_detection_ms;
+
+            // Time output formatting
+            let format_start = std::time::Instant::now();
+            let metrics = if cli.show_metrics {
+                Some(PerformanceMetrics {
+                    backend_detection_ms,
+                    query_execution_ms,
+                    output_formatting_ms: 0,
+                    total_ms: 0,
+                })
+            } else {
+                None
+            };
+
+            let payload = json_response_with_partial_and_performance(combined, partial, metrics);
             let rendered = if matches!(cli.output, OutputFormat::Pretty) {
                 serde_json::to_string_pretty(&payload)
             } else {
                 serde_json::to_string(&payload)
             }?;
             println!("{}", rendered);
+
+            let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+            let total_ms = total_start.elapsed().as_millis() as u64;
+
+            // Print metrics to stderr for human output
+            if cli.show_metrics {
+                eprintln!("Performance metrics:");
+                eprintln!("  Backend detection: {}ms", backend_detection_ms);
+                eprintln!("  Query execution: {}ms", query_execution_ms);
+                eprintln!("  Output formatting: {}ms", output_formatting_ms);
+                eprintln!("  Total: {}ms", total_ms);
+            }
+        }
+        SearchMode::Labels => {
+            let label_name = label.unwrap_or(&"test".to_string()).clone();
+
+            // Time query execution
+            let query_start = std::time::Instant::now();
+            let db_path_str = db_path.to_str()
+                .ok_or_else(|| LlmError::SearchFailed {
+                    reason: format!("Database path {:?} is not valid UTF-8", db_path),
+                })?;
+            let (response, partial, _paths_bounded) = backend.search_by_label(&label_name, limit, db_path_str)?;
+            let query_execution_ms = query_start.elapsed().as_millis() as u64;
+
+            // Time output formatting
+            let format_start = std::time::Instant::now();
+            let metrics = if cli.show_metrics {
+                Some(PerformanceMetrics {
+                    backend_detection_ms,
+                    query_execution_ms,
+                    output_formatting_ms: 0,
+                    total_ms: 0,
+                })
+            } else {
+                None
+            };
+
+            output_symbols(cli, response, partial, 0, metrics.as_ref())?;
+
+            let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+            let total_ms = total_start.elapsed().as_millis() as u64;
+
+            // Print metrics to stderr for human output
+            if cli.show_metrics {
+                eprintln!("Performance metrics:");
+                eprintln!("  Backend detection: {}ms", backend_detection_ms);
+                eprintln!("  Query execution: {}ms", query_execution_ms);
+                eprintln!("  Output formatting: {}ms", output_formatting_ms);
+                eprintln!("  Total: {}ms", total_ms);
+            }
         }
     }
 
@@ -1037,11 +1209,18 @@ fn run_ast(
         });
     }
 
+    // Start total timing
+    let total_start = std::time::Instant::now();
+
     // Detect and open backend automatically (SQLite or Native-V2)
+    let detect_start = std::time::Instant::now();
     let backend = Backend::detect_and_open(&db_path)?;
+    let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
 
     // Query AST via backend
+    let query_start = std::time::Instant::now();
     let json_value = backend.ast(&validated_file, position, limit)?;
+    let query_execution_ms = query_start.elapsed().as_millis() as u64;
 
     // Check for truncation warning (file mode only, not position mode)
     if position.is_none() {
@@ -1062,13 +1241,25 @@ fn run_ast(
     }
 
     // Render output based on format
+    let format_start = std::time::Instant::now();
     let rendered = if matches!(cli.output, OutputFormat::Pretty) {
         serde_json::to_string_pretty(&json_value)?
     } else {
         serde_json::to_string(&json_value)?
     };
+    let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+    let total_ms = total_start.elapsed().as_millis() as u64;
 
     println!("{}", rendered);
+
+    // Print metrics to stderr if requested
+    if cli.show_metrics {
+        eprintln!("Performance metrics:");
+        eprintln!("  Backend detection: {}ms", backend_detection_ms);
+        eprintln!("  Query execution: {}ms", query_execution_ms);
+        eprintln!("  Output formatting: {}ms", output_formatting_ms);
+        eprintln!("  Total: {}ms", total_ms);
+    }
 
     Ok(())
 }
@@ -1093,11 +1284,18 @@ fn run_find_ast(
         });
     }
 
+    // Start total timing
+    let total_start = std::time::Instant::now();
+
     // Detect and open backend automatically (SQLite or Native-V2)
+    let detect_start = std::time::Instant::now();
     let backend = Backend::detect_and_open(&db_path)?;
+    let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
 
     // Query AST nodes by kind via backend
+    let query_start = std::time::Instant::now();
     let json_value = backend.find_ast(kind)?;
+    let query_execution_ms = query_start.elapsed().as_millis() as u64;
 
     // Check for empty nodes array (not an error, just no results)
     let nodes = if json_value["data"]["nodes"].is_array() {
@@ -1115,13 +1313,25 @@ fn run_find_ast(
     }
 
     // Render output based on format
+    let format_start = std::time::Instant::now();
     let rendered = if matches!(cli.output, OutputFormat::Pretty) {
         serde_json::to_string_pretty(&json_value)?
     } else {
         serde_json::to_string(&json_value)?
     };
+    let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+    let total_ms = total_start.elapsed().as_millis() as u64;
 
     println!("{}", rendered);
+
+    // Print metrics to stderr if requested
+    if cli.show_metrics {
+        eprintln!("Performance metrics:");
+        eprintln!("  Backend detection: {}ms", backend_detection_ms);
+        eprintln!("  Query execution: {}ms", query_execution_ms);
+        eprintln!("  Output formatting: {}ms", output_formatting_ms);
+        eprintln!("  Total: {}ms", total_ms);
+    }
 
     Ok(())
 }
@@ -1147,16 +1357,24 @@ fn run_complete(
         });
     }
 
+    // Start total timing
+    let total_start = std::time::Instant::now();
+
     // Detect and open backend automatically (SQLite or Native-V2)
+    let detect_start = std::time::Instant::now();
     let backend = Backend::detect_and_open(&db_path)?;
+    let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
 
     // Check if backend supports complete command (native-v2 only)
     require_native_v2(&backend, "complete", &db_path)?;
 
     // Get completions via backend
+    let query_start = std::time::Instant::now();
     let completions = backend.complete(&prefix, limit)?;
+    let query_execution_ms = query_start.elapsed().as_millis() as u64;
 
     // Render output based on format
+    let format_start = std::time::Instant::now();
     match cli.output {
         OutputFormat::Human => {
             for completion in &completions {
@@ -1177,6 +1395,17 @@ fn run_complete(
             };
             println!("{}", rendered);
         }
+    }
+    let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+    let total_ms = total_start.elapsed().as_millis() as u64;
+
+    // Print metrics to stderr if requested
+    if cli.show_metrics {
+        eprintln!("Performance metrics:");
+        eprintln!("  Backend detection: {}ms", backend_detection_ms);
+        eprintln!("  Query execution: {}ms", query_execution_ms);
+        eprintln!("  Output formatting: {}ms", output_formatting_ms);
+        eprintln!("  Total: {}ms", total_ms);
     }
 
     Ok(())
@@ -1202,16 +1431,24 @@ fn run_lookup(
         });
     }
 
+    // Start total timing
+    let total_start = std::time::Instant::now();
+
     // Detect and open backend automatically (SQLite or Native-V2)
+    let detect_start = std::time::Instant::now();
     let backend = Backend::detect_and_open(&db_path)?;
+    let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
 
     // Check if backend supports lookup command (native-v2 only)
     require_native_v2(&backend, "lookup", &db_path)?;
 
     // Lookup symbol by FQN via backend
+    let query_start = std::time::Instant::now();
     let symbol = backend.lookup(fqn, &db_path.to_string_lossy())?;
+    let query_execution_ms = query_start.elapsed().as_millis() as u64;
 
     // Render output based on format
+    let format_start = std::time::Instant::now();
     match cli.output {
         OutputFormat::Human => {
             println!("Symbol: {}", symbol.name);
@@ -1246,6 +1483,17 @@ fn run_lookup(
             println!("{}", rendered);
         }
     }
+    let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+    let total_ms = total_start.elapsed().as_millis() as u64;
+
+    // Print metrics to stderr if requested
+    if cli.show_metrics {
+        eprintln!("Performance metrics:");
+        eprintln!("  Backend detection: {}ms", backend_detection_ms);
+        eprintln!("  Query execution: {}ms", query_execution_ms);
+        eprintln!("  Output formatting: {}ms", output_formatting_ms);
+        eprintln!("  Total: {}ms", total_ms);
+    }
 
     Ok(())
 }
@@ -1259,7 +1507,13 @@ fn format_scc_summary(count: usize, supernode_count: usize) -> String {
     }
 }
 
-fn output_symbols(cli: &Cli, response: SearchResponse, partial: bool, scc_count: usize) -> Result<(), LlmError> {
+fn output_symbols(
+    cli: &Cli,
+    response: SearchResponse,
+    partial: bool,
+    scc_count: usize,
+    metrics: Option<&PerformanceMetrics>,
+) -> Result<(), LlmError> {
     match cli.output {
         OutputFormat::Human => {
             if scc_count > 0 {
@@ -1286,7 +1540,17 @@ fn output_symbols(cli: &Cli, response: SearchResponse, partial: bool, scc_count:
             }
         }
         OutputFormat::Json | OutputFormat::Pretty => {
-            println!("{}", render_json_response(&response, partial, cli.output)?);
+            let json_response = json_response_with_partial_and_performance(
+                response,
+                partial,
+                metrics.cloned(),
+            );
+            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
+                serde_json::to_string_pretty(&json_response)?
+            } else {
+                serde_json::to_string(&json_response)?
+            };
+            println!("{}", rendered);
         }
     }
     Ok(())
@@ -1296,6 +1560,7 @@ fn output_references(
     cli: &Cli,
     response: ReferenceSearchResponse,
     partial: bool,
+    metrics: Option<&PerformanceMetrics>,
 ) -> Result<(), LlmError> {
     match cli.output {
         OutputFormat::Human => {
@@ -1315,13 +1580,28 @@ fn output_references(
             }
         }
         OutputFormat::Json | OutputFormat::Pretty => {
-            println!("{}", render_json_response(&response, partial, cli.output)?);
+            let json_response = json_response_with_partial_and_performance(
+                response,
+                partial,
+                metrics.cloned(),
+            );
+            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
+                serde_json::to_string_pretty(&json_response)?
+            } else {
+                serde_json::to_string(&json_response)?
+            };
+            println!("{}", rendered);
         }
     }
     Ok(())
 }
 
-fn output_calls(cli: &Cli, response: CallSearchResponse, partial: bool) -> Result<(), LlmError> {
+fn output_calls(
+    cli: &Cli,
+    response: CallSearchResponse,
+    partial: bool,
+    metrics: Option<&PerformanceMetrics>,
+) -> Result<(), LlmError> {
     match cli.output {
         OutputFormat::Human => {
             println!("{}", format_total_header(response.total_count));
@@ -1341,7 +1621,17 @@ fn output_calls(cli: &Cli, response: CallSearchResponse, partial: bool) -> Resul
             }
         }
         OutputFormat::Json | OutputFormat::Pretty => {
-            println!("{}", render_json_response(&response, partial, cli.output)?);
+            let json_response = json_response_with_partial_and_performance(
+                response,
+                partial,
+                metrics.cloned(),
+            );
+            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
+                serde_json::to_string_pretty(&json_response)?
+            } else {
+                serde_json::to_string(&json_response)?
+            };
+            println!("{}", rendered);
         }
     }
     Ok(())

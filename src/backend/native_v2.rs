@@ -516,4 +516,179 @@ impl super::BackendTrait for NativeV2Backend {
             })
         }
     }
+
+    fn search_by_label(
+        &self,
+        label: &str,
+        limit: usize,
+        db_path: &str,
+    ) -> Result<(SearchResponse, bool, bool), LlmError> {
+        use magellan::kv::encoding::decode_symbol_ids;
+        use magellan::kv::keys::label_key;
+
+        // Construct label key for KV lookup
+        let key = label_key(label);
+        let snapshot = SnapshotId::current();
+
+        // Look up label value from KV store
+        let symbol_ids = match self.graph.backend().kv_get(snapshot, &key)
+            .map_err(|e| LlmError::SearchFailed {
+                reason: format!("KV lookup failed for label '{}': {}", label, e),
+            })? {
+            Some(kv_value) => {
+                match kv_value {
+                    sqlitegraph::KvValue::Bytes(data) => decode_symbol_ids(&data),
+                    _ => {
+                        // Wrong value type - return empty results
+                        return Ok((
+                            SearchResponse {
+                                results: vec![],
+                                query: format!("label:{}", label),
+                                path_filter: None,
+                                kind_filter: None,
+                                total_count: 0,
+                                notice: Some(format!("Label '{}' exists but has invalid data type", label)),
+                            },
+                            false,
+                            false,
+                        ));
+                    }
+                }
+            }
+            None => {
+                // Label not found - return empty results (not an error)
+                return Ok((
+                    SearchResponse {
+                        results: vec![],
+                        query: format!("label:{}", label),
+                        path_filter: None,
+                        kind_filter: None,
+                        total_count: 0,
+                        notice: None,
+                    },
+                    false,
+                    false,
+                ));
+            }
+        };
+
+        // Query symbol_nodes table for full details
+        let conn = self.connect()?;
+
+        // Build placeholders string for IN clause
+        let placeholders = symbol_ids.iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 1))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        if symbol_ids.is_empty() {
+            // No symbols for this label
+            return Ok((
+                SearchResponse {
+                    results: vec![],
+                    query: format!("label:{}", label),
+                    path_filter: None,
+                    kind_filter: None,
+                    total_count: 0,
+                    notice: None,
+                },
+                false,
+                false,
+            ));
+        }
+
+        let mut query = format!(
+            "SELECT
+                s.symbol_id,
+                s.name,
+                s.kind,
+                s.fqn,
+                s.canonical_fqn,
+                s.display_fqn,
+                s.file_path,
+                s.byte_start,
+                s.byte_end,
+                s.start_line,
+                s.start_col,
+                s.end_line,
+                s.end_col,
+                s.language,
+                s.parent_name
+            FROM symbol_nodes s
+            WHERE s.id IN ({})
+            LIMIT {}",
+            placeholders, limit
+        );
+
+        let mut stmt = conn.prepare(&query)?;
+
+        let mut results = Vec::new();
+        let param_refs: Vec<&dyn rusqlite::ToSql> = symbol_ids.iter()
+            .map(|id| id as &dyn rusqlite::ToSql)
+            .collect();
+
+        let mut rows = stmt.query(param_refs.as_slice())?;
+
+        while let Some(row) = rows.next()? {
+            let file_path: String = row.get(6)?;
+            let byte_start: u64 = row.get(7)?;
+            let byte_end: u64 = row.get(8)?;
+            let start_line: u64 = row.get(9)?;
+            let start_col: u64 = row.get(10)?;
+            let end_line: u64 = row.get(11)?;
+            let end_col: u64 = row.get(12)?;
+
+            let span = Span {
+                span_id: format!("{}:{}:{}", file_path, byte_start, byte_end),
+                file_path,
+                byte_start,
+                byte_end,
+                start_line,
+                start_col,
+                end_line,
+                end_col,
+                context: None,
+            };
+
+            results.push(SymbolMatch {
+                match_id: format!("sym-{}", results.len()),
+                span,
+                name: row.get(1)?,
+                kind: row.get(2)?,
+                parent: row.get(14)?,
+                symbol_id: row.get(0)?,
+                score: None,
+                fqn: row.get(3)?,
+                canonical_fqn: row.get(4)?,
+                display_fqn: row.get(5)?,
+                content_hash: None,
+                symbol_kind_from_chunk: None,
+                snippet: None,
+                snippet_truncated: None,
+                language: row.get(13)?,
+                kind_normalized: None,
+                complexity_score: None,
+                fan_in: None,
+                fan_out: None,
+                cyclomatic_complexity: None,
+                ast_context: None,
+                supernode_id: None,
+            });
+        }
+
+        let total_count = results.len() as u64;
+        let partial = total_count >= limit as u64;
+
+        let response = SearchResponse {
+            results,
+            query: format!("label:{}", label),
+            path_filter: None,
+            kind_filter: None,
+            total_count,
+            notice: None,
+        };
+
+        Ok((response, partial, false))
+    }
 }
