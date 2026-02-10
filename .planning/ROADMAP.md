@@ -479,10 +479,10 @@ Plans:
 - [x] 21-05-PLAN.md — Write tests for native-v2 exclusive features (Wave 3)
 - [x] 21-06-PLAN.md — Verify graceful degradation on SQLite backend (Wave 4)
 
-#### Phase 22: Production Readiness Bugfix 🔧
+#### Phase 22: Production Readiness Bugfix ✅
 **Goal:** Fix critical bugs discovered after Phase 21 verification
 **Depends on**: Phase 21
-**Status:** Pending
+**Status:** COMPLETE — 2026-02-10
 **Success Criteria** (what must be TRUE):
   1. Language field accurately reflects source file language (not hardcoded "Rust")
   2. No debug output pollutes stderr during normal operation
@@ -492,10 +492,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 22-01 — Add language inference to NativeV2Backend (infer from file extension)
-- [ ] 22-02 — Remove debug output from complete() method
-- [ ] 22-03 — Cross-backend verification tests for language detection
-- [ ] 22-04 — Final verification and release
+- [x] 22-01 — Add language inference to NativeV2Backend (infer from file extension)
+- [x] 22-02 — Remove debug output from complete() method
+- [x] 22-03 — Cross-backend verification tests for language detection
+- [x] 22-04 — Final verification and release
 
 #### Phase 23: Native-V2 Feature Parity 🔄
 **Goal:** Achieve full feature parity between SQLite and Native-V2 backends
@@ -579,7 +579,7 @@ Phases execute in numeric order: 17 → 18 → 19 → 20 → 21 → 22 → 23 �
 | 19. NativeV2Backend | v3.0 | 6/6 | Complete | 2026-02-09 |
 | 20. CLI Integration | v3.0 | 5/5 | Complete | 2026-02-10 |
 | 21. Native-V2 Features | v3.0 | 6/6 | Complete | 2026-02-10 |
-| 22. Production Bugfix | v3.0.1 | 0/4 | Pending | — |
+| 22. Production Bugfix | v3.0.1 | 4/4 | Complete | 2026-02-10 |
 | 23. Feature Parity | v3.1 | 0/6 | Pending | — |
 | 24. Code Quality Polish | v3.1 | 0/7 | Pending | — |
 

@@ -40,8 +40,11 @@ struct Cli {
     #[arg(long, global = true)]
     show_metrics: bool,
 
+    #[arg(long, global = true, default_value = "false")]
+    detect_backend: bool,
+
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand)]
@@ -63,7 +66,7 @@ enum Command {
         #[arg(long)]
         language: Option<String>,
 
-        #[arg(long)]
+        #[arg(long, alias = "purpose")]
         label: Option<String>,
 
         #[arg(long, default_value_t = 50, value_parser = ranged_usize(1, 1000))]
@@ -458,7 +461,47 @@ fn main() {
 }
 
 fn dispatch(cli: &Cli) -> Result<(), LlmError> {
+    // Handle --detect-backend flag before command dispatch
+    if cli.detect_backend {
+        let db_path = cli.db.as_ref().ok_or(LlmError::DatabaseNotFound {
+            path: "none".to_string(),
+        })?;
+        let validated_db = validate_path(db_path, true)?;
+
+        use magellan::migrate_backend_cmd::{detect_backend_format, BackendFormat};
+        let format = detect_backend_format(&validated_db).map_err(|e| {
+            LlmError::BackendDetectionFailed {
+                path: validated_db.display().to_string(),
+                reason: e.to_string(),
+            }
+        })?;
+
+        let backend_str = match format {
+            BackendFormat::Sqlite => "sqlite",
+            BackendFormat::NativeV2 => "native-v2",
+        };
+
+        if matches!(cli.output, OutputFormat::Json | OutputFormat::Pretty) {
+            use serde_json::json;
+            let output = json!({
+                "backend": backend_str,
+                "database": validated_db.to_string_lossy(),
+            });
+            println!("{}", serde_json::to_string(&output)?);
+        } else {
+            println!("{}", backend_str);
+        }
+        return Ok(());
+    }
+
     match &cli.command {
+        None => {
+            // No subcommand provided and --detect-backend not set
+            Err(LlmError::InvalidQuery {
+                query: "No subcommand provided. Use --help for usage information.".to_string(),
+            })
+        }
+        Some(cmd) => match cmd {
         Command::Ast {
             file,
             position,
@@ -555,6 +598,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             paths_from.as_ref(),
             paths_to.as_ref(),
         ),
+        }
     }
 }
 
