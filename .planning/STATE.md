@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** Fast, reliable search of Magellan code databases (SQLite or native-v2) with CLI behavior consistent with Splice and Magellan. Dual backend support enables O(1) KV lookups with native-v2 while maintaining SQLite compatibility. Optimized for LLM consumption with intelligent relevance scoring, AST-based structural queries, and graph algorithm integration.
-**Current focus:** Phase 22 - Production Readiness Bugfix — COMPLETE
+**Current focus:** Phase 23 - Feature Parity Native-V2
 
 ## Current Position
 
-Phase: 22 of 22 (Production Readiness Bugfix) — COMPLETE
-Current Plan: 22-04 (Final Verification and Release) — COMPLETE
-Status: All 4 plans in Phase 22 complete
-Last activity: 2026-02-10 — Final Verification and Release (10 min)
+Phase: 23 of 23 (Feature Parity Native-V2)
+Current Plan: 23-03 (Relevance Scoring for Native-V2) — COMPLETE
+Status: 1 of 6 plans in Phase 23 complete
+Last activity: 2026-02-10 — Relevance Scoring for Native-V2 (12 min)
 
-Progress: [██████████░] 69% (31/27 plans complete in v3.0)
+Progress: [██████████░] 70% (32/37 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -110,15 +110,19 @@ Recent decisions affecting current work:
 - [Phase 22]: has_known_extension() helper for detecting 18+ source file extensions in FQN parsing
 - [Phase 22]: Integration tests for language detection (15 tests covering 7 languages)
 - [Phase 22]: Code inspection test verifying no debug output in production code
+- [Phase 23]: Verbatim port of score_match() from src/query.rs to NativeV2Backend
+- [Phase 23]: Relevance scoring for Native-V2 backend with regex pattern support
+- [Phase 23]: Conditional score calculation only when include_score option is true
+- [Phase 23]: Max score aggregation for calls (caller_score.max(callee_score))
 
 ### Pending Todos
 
-- Phase 22: Final Verification and Release
+- Phase 23: Remaining plans (23-04, 23-05, 23-06)
 
 ## Session Continuity
 
-Last session: 2026-02-10 — Phase 23 plan 23-01 (INCOMPLETE)
-Stopped at: Blocked on Phase 23-01: Automatic rustfmt/linter conflicts preventing atomic edits to src/backend/native_v2.rs
+Last session: 2026-02-10 — Phase 23 plan 23-03 (COMPLETE)
+Stopped at: Completed Phase 23-03: Relevance Scoring for Native-V2
 Resume file: None
 
 ### Blockers/Concerns
@@ -345,4 +349,28 @@ Resume file: None
 - [x] Native-v2 test database created
 - [x] Binary builds successfully with native-v2 feature
 - [x] Production-ready v3.0.1 release
+
+---
+
+## Phase 23 Summary
+
+**Started:** 2026-02-10
+**Plans:** 1 of 6 complete (23-03)
+**Status:** IN PROGRESS
+
+**Artifacts Created:**
+- .planning/phases/23-feature-parity-native-v2/23-03-SUMMARY.md — Relevance scoring summary
+
+**Commits:**
+- 4786210 (23-03: Relevance scoring for Native-V2 backend)
+
+**Verification:**
+- [x] score_match() function ported from src/query.rs verbatim
+- [x] use regex::Regex import added
+- [x] search_symbols() calculates score when include_score is true
+- [x] search_references() calculates score for referenced symbols
+- [x] search_calls() calculates score (max of caller/callee)
+- [x] Regex pattern compilation when use_regex is true
+- [x] All 151 library tests passing (zero regressions)
+- [x] Build successful with native-v2 feature
 
