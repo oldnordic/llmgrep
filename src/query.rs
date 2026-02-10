@@ -1,3 +1,42 @@
+//! Query module for symbol, reference, and call search operations.
+//!
+//! This module provides the core search functionality for llmgrep, including:
+//!
+//! - Symbol search with fuzzy matching and filtering
+//! - Reference search (find incoming edges to symbols)
+//! - Call search (find outgoing function calls from symbols)
+//! - AST-based filtering by node kind
+//! - Metrics-based filtering (complexity, fan-in, fan-out)
+//! - Algorithm-based filtering (reachable, dead-code, cycles, etc.)
+//!
+//! # Search Options
+//!
+//! All search operations use `SearchOptions` to configure the query:
+//!
+//! ```no_run
+//! use llmgrep::query::{SearchOptions, ContextOptions, SnippetOptions};
+//! use std::path::Path;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let options = SearchOptions {
+//!     db_path: Path::new("code.db"),
+//!     query: "main",
+//!     limit: 10,
+//!     use_regex: false,
+//!     context: ContextOptions { include: true, lines: 3, max_lines: 10 },
+//!     snippet: SnippetOptions { include: true, max_bytes: 500 },
+//!     // ... other options ...
+//!     ..Default::default()
+//! };
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Language Inference
+//!
+//! The `infer_language` function detects programming language from file extensions,
+//! used for labeling symbols with their source language.
+
 use crate::algorithm::{apply_algorithm_filters, create_symbol_set_temp_table, symbol_set_filter_strategy, AlgorithmOptions, SymbolSetStrategy};
 use crate::ast::{check_ast_table_exists, AstContext};
 use crate::error::LlmError;
@@ -19,20 +58,28 @@ use serde_json::json;
 
 const MAX_REGEX_SIZE: usize = 10_000; // 10KB limit to prevent memory exhaustion
 
-/// Code chunk from Magellan's code_chunks table
+/// Code chunk from Magellan's code_chunks table.
 ///
 /// Represents pre-extracted code content with SHA-256 hash for deduplication.
 /// Chunks are created during Magellan indexing and provide faster snippet retrieval
 /// than file I/O.
 #[derive(Debug, Clone)]
 pub struct CodeChunk {
+    /// Database row ID
     pub id: i64,
+    /// Absolute path to the source file
     pub file_path: String,
+    /// Byte offset from file start (inclusive)
     pub byte_start: u64,
+    /// Byte offset from file start (exclusive)
     pub byte_end: u64,
+    /// The source code content
     pub content: String,
+    /// SHA-256 hash of the content for deduplication
     pub content_hash: String,
+    /// Name of the symbol this chunk belongs to (if available)
     pub symbol_name: Option<String>,
+    /// Kind of the symbol (e.g., "function_item", "struct_item")
     pub symbol_kind: Option<String>,
 }
 
@@ -389,7 +436,7 @@ pub(crate) fn search_symbols_impl(
     );
 
     // Check if ast_nodes table exists for AST filtering
-    let has_ast_table = check_ast_table_exists(&conn)
+    let has_ast_table = check_ast_table_exists(conn)
         .map_err(|e| LlmError::SearchFailed {
             reason: format!("Failed to check ast_nodes table: {}", e),
         })?;
@@ -424,7 +471,7 @@ pub(crate) fn search_symbols_impl(
     // Note: temp_table_name will be used in Plan 11-04 for JOIN logic
     let temp_table_name = if symbol_set_strategy == SymbolSetStrategy::TempTable {
         if let Some(ids) = symbol_set_filter {
-            Some(create_symbol_set_temp_table(&conn, ids)?)
+            Some(create_symbol_set_temp_table(conn, ids)?)
         } else {
             None
         }
@@ -516,7 +563,7 @@ pub(crate) fn search_symbols_impl(
         let (snippet, snippet_truncated, content_hash, symbol_kind_from_chunk) =
             if options.snippet.include {
                 // Try chunks table first for faster, pre-validated content
-                match search_chunks_by_span(&conn, &file_path, symbol.byte_start, symbol.byte_end) {
+                match search_chunks_by_span(conn, &file_path, symbol.byte_start, symbol.byte_end) {
                     Ok(Some(chunk)) => {
                         // Apply max_bytes limit to chunk content
                         let content_bytes = chunk.content.as_bytes();
@@ -660,19 +707,19 @@ pub(crate) fn search_symbols_impl(
                         Ok(None) => {
                             // No preferred kind found, fall back to enriching the existing context
                             if let Ok(depth) = if has_depth_filter {
-                                crate::ast::calculate_decision_depth(&conn, ctx.ast_id)
+                                crate::ast::calculate_decision_depth(conn, ctx.ast_id)
                             } else {
-                                crate::ast::calculate_ast_depth(&conn, ctx.ast_id)
+                                crate::ast::calculate_ast_depth(conn, ctx.ast_id)
                             } {
                                 ctx.depth = depth;
                             }
-                            if let Ok(kind) = crate::ast::get_parent_kind(&conn, ctx.parent_id) {
+                            if let Ok(kind) = crate::ast::get_parent_kind(conn, ctx.parent_id) {
                                 ctx.parent_kind = kind;
                             }
-                            if let Ok(children) = crate::ast::count_children_by_kind(&conn, ctx.ast_id) {
+                            if let Ok(children) = crate::ast::count_children_by_kind(conn, ctx.ast_id) {
                                 ctx.children_count_by_kind = Some(children);
                             }
-                            if let Ok(decision_points) = crate::ast::count_decision_points(&conn, ctx.ast_id) {
+                            if let Ok(decision_points) = crate::ast::count_decision_points(conn, ctx.ast_id) {
                                 ctx.decision_points = Some(decision_points);
                             }
                             Some(ctx)
@@ -680,19 +727,19 @@ pub(crate) fn search_symbols_impl(
                         Err(e) => {
                             eprintln!("Warning: Failed to get preferred AST context: {}", e);
                             if let Ok(depth) = if has_depth_filter {
-                                crate::ast::calculate_decision_depth(&conn, ctx.ast_id)
+                                crate::ast::calculate_decision_depth(conn, ctx.ast_id)
                             } else {
-                                crate::ast::calculate_ast_depth(&conn, ctx.ast_id)
+                                crate::ast::calculate_ast_depth(conn, ctx.ast_id)
                             } {
                                 ctx.depth = depth;
                             }
-                            if let Ok(kind) = crate::ast::get_parent_kind(&conn, ctx.parent_id) {
+                            if let Ok(kind) = crate::ast::get_parent_kind(conn, ctx.parent_id) {
                                 ctx.parent_kind = kind;
                             }
-                            if let Ok(children) = crate::ast::count_children_by_kind(&conn, ctx.ast_id) {
+                            if let Ok(children) = crate::ast::count_children_by_kind(conn, ctx.ast_id) {
                                 ctx.children_count_by_kind = Some(children);
                             }
-                            if let Ok(decision_points) = crate::ast::count_decision_points(&conn, ctx.ast_id) {
+                            if let Ok(decision_points) = crate::ast::count_decision_points(conn, ctx.ast_id) {
                                 ctx.decision_points = Some(decision_points);
                             }
                             Some(ctx)
@@ -702,33 +749,33 @@ pub(crate) fn search_symbols_impl(
                     // Populate enriched fields
                     // Use decision depth when depth filtering is active, otherwise use AST depth
                     if has_depth_filter {
-                        match crate::ast::calculate_decision_depth(&conn, ctx.ast_id) {
+                        match crate::ast::calculate_decision_depth(conn, ctx.ast_id) {
                             Ok(depth) => ctx.depth = depth,
                             Err(e) => {
                                 eprintln!("Warning: Failed to calculate decision depth: {}", e);
                             }
                         }
                     } else {
-                        match crate::ast::calculate_ast_depth(&conn, ctx.ast_id) {
+                        match crate::ast::calculate_ast_depth(conn, ctx.ast_id) {
                             Ok(depth) => ctx.depth = depth,
                             Err(e) => {
                                 eprintln!("Warning: Failed to calculate AST depth: {}", e);
                             }
                         }
                     }
-                    match crate::ast::get_parent_kind(&conn, ctx.parent_id) {
+                    match crate::ast::get_parent_kind(conn, ctx.parent_id) {
                         Ok(kind) => ctx.parent_kind = kind,
                         Err(e) => {
                             eprintln!("Warning: Failed to get parent kind: {}", e);
                         }
                     }
-                    match crate::ast::count_children_by_kind(&conn, ctx.ast_id) {
+                    match crate::ast::count_children_by_kind(conn, ctx.ast_id) {
                         Ok(children) => ctx.children_count_by_kind = Some(children),
                         Err(e) => {
                             eprintln!("Warning: Failed to count children: {}", e);
                         }
                     }
-                    match crate::ast::count_decision_points(&conn, ctx.ast_id) {
+                    match crate::ast::count_decision_points(conn, ctx.ast_id) {
                         Ok(decision_points) => ctx.decision_points = Some(decision_points),
                         Err(e) => {
                             eprintln!("Warning: Failed to count decision points: {}", e);
@@ -740,7 +787,7 @@ pub(crate) fn search_symbols_impl(
                 // Try to get AST context by symbol span if not already populated
                 // Pass ast_kinds to prefer nodes matching the filter
                 match crate::ast::get_ast_context_for_symbol_with_preference(
-                    &conn,
+                    conn,
                     &file_path,
                     symbol.byte_start,
                     symbol.byte_end,
@@ -796,7 +843,7 @@ pub(crate) fn search_symbols_impl(
         results.retain(|result| {
             // Only filter if we have AST context with ast_id
             if let Some(ref ast_ctx) = result.ast_context {
-                match crate::ast::calculate_decision_depth(&conn, ast_ctx.ast_id) {
+                match crate::ast::calculate_decision_depth(conn, ast_ctx.ast_id) {
                     Ok(Some(depth)) => {
                         // Check min/max bounds
                         let min_ok = options
