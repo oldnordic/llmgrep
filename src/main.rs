@@ -1692,12 +1692,8 @@ fn run_watch(
     }
 
     // Run the watch command
-    llmgrep::watch_cmd::run_watch(db_path.clone(), options, cli.output, shutdown)
-        .map_err(|e: anyhow::Error| LlmError::SearchFailed {
-            reason: e.to_string(),
-        })?;
-
-    Ok(())
+    eprintln!("Error: watch command is incomplete and not yet available.");
+    std::process::exit(1);
 }
 
 /// Format SCC summary for human output

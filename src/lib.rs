@@ -7,7 +7,6 @@ pub mod output_common;
 pub mod platform;
 pub mod query;
 pub mod safe_extraction;
-pub mod watch_cmd;
 
 // Re-export safe extraction functions for testing and external use
 pub use safe_extraction::*;
