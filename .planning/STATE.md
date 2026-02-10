@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 21 of 21 (Native-V2 Exclusive Features) — IN PROGRESS
-Current Plan: 21-03 (Label search mode for purpose-based semantic queries)
-Status: Phase 21 plan 3 of 6 complete
-Last activity: 2026-02-10 — Implemented label search mode using magellan KV store (7 min)
+Current Plan: 21-05 (KV store migration benchmarks)
+Status: Phase 21 plan 4 of 6 complete
+Last activity: 2026-02-10 — Implemented performance metrics instrumentation with 3-phase timing (12 min)
 
-Progress: [███████░░░░] 54% (27/27 plans complete in v3.0)
+Progress: [███████░░░░] 56% (28/27 plans complete in v3.0)
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [███████░░░░] 54% (27/27 plans complete in v3.0)
 | Phase 21-native-v2-exclusive-features P01 | 3min | 1 tasks | 4 files |
 | Phase 21-native-v2-exclusive-features P02 | 7min | 2 tasks | 5 files |
 | Phase 21-native-v2-exclusive-features P03 | 7min | 1 tasks | 4 files |
+| Phase 21-native-v2-exclusive-features P04 | 12min | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -94,16 +95,19 @@ Recent decisions affecting current work:
 - [Phase 21]: Label search using magellan::kv::keys::label_key and decode_symbol_ids for SymbolId list retrieval
 - [Phase 21]: Default label "test" when --label flag not specified
 - [Phase 21]: Empty label results return empty SearchResponse (not error)
+- [Phase 21]: Performance metrics with --show-metrics flag and 3-phase timing breakdown
+- [Phase 21]: Metrics printed to stderr for human output, included in JSON for structured output
+- [Phase 21]: std::time::Instant for high-precision timing measurements
 
 ### Pending Todos
 
-- Phase 21: Native-v2 exclusive features (performance metrics)
 - Phase 21: KV store migration benchmarks
+- Phase 21: Performance validation (verify backend detection <10ms)
 
 ## Session Continuity
 
-Last session: 2026-02-10 — Phase 21 plan 21-03
-Stopped at: Completed Phase 21 plan 21-03 (Label search mode)
+Last session: 2026-02-10 — Phase 21 plan 21-04
+Stopped at: Completed Phase 21 plan 21-04 (Performance metrics instrumentation)
 Resume file: None
 
 ### Blockers/Concerns
@@ -277,4 +281,11 @@ Resume file: None
 - [x] NativeV2Backend::search_by_label using label_key KV lookup
 - [x] Empty label results handled gracefully
 - [x] All 151 tests passing (zero regressions)
+- [x] --show-metrics global flag added to CLI
+- [x] PerformanceMetrics struct with 4 timing fields
+- [x] 3-phase timing instrumentation (backend detection, query execution, output formatting)
+- [x] Metrics printed to stderr for human output
+- [x] Metrics included in JSON output under "performance" key
+- [x] All 5 command functions instrumented (run_search, run_ast, run_find_ast, run_complete, run_lookup)
+- [x] Magellan API compatibility fixes (__backend_for_benchmarks)
 
