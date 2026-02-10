@@ -1633,8 +1633,8 @@ fn run_watch(
         });
     }
 
-    // Build SearchOptions from command args (for future watch implementation)
-    let _options = SearchOptions {
+    // Build SearchOptions from command args
+    let options = SearchOptions {
         db_path: &db_path,
         query,
         path_filter: validated_path.as_ref(),
@@ -1693,8 +1693,9 @@ fn run_watch(
     }
 
     // Run the watch command
-    eprintln!("Error: watch command is incomplete and not yet available.");
-    std::process::exit(1);
+    llmgrep::watch_cmd::run_watch(db_path.clone(), options, cli.output, shutdown)
+        .map_err(|e| LlmError::SearchFailed { reason: e.to_string() })?;
+    Ok(())
 }
 
 /// Format SCC summary for human output
