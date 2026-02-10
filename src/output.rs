@@ -24,6 +24,25 @@ impl fmt::Display for OutputFormat {
     }
 }
 
+#[derive(Serialize, Clone, Debug)]
+pub struct PerformanceMetrics {
+    pub backend_detection_ms: u64,
+    pub query_execution_ms: u64,
+    pub output_formatting_ms: u64,
+    pub total_ms: u64,
+}
+
+impl PerformanceMetrics {
+    pub fn new() -> Self {
+        Self {
+            backend_detection_ms: 0,
+            query_execution_ms: 0,
+            output_formatting_ms: 0,
+            total_ms: 0,
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct JsonResponse<T> {
     pub schema_version: &'static str,
@@ -31,6 +50,8 @@ pub struct JsonResponse<T> {
     pub tool: &'static str,
     pub timestamp: String,
     pub partial: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub performance: Option<PerformanceMetrics>,
     pub data: T,
 }
 
@@ -198,12 +219,21 @@ pub fn json_response<T>(data: T) -> JsonResponse<T> {
 }
 
 pub fn json_response_with_partial<T>(data: T, partial: bool) -> JsonResponse<T> {
+    json_response_with_partial_and_performance(data, partial, None)
+}
+
+pub fn json_response_with_partial_and_performance<T>(
+    data: T,
+    partial: bool,
+    performance: Option<PerformanceMetrics>,
+) -> JsonResponse<T> {
     JsonResponse {
         schema_version: SCHEMA_VERSION,
         execution_id: execution_id(),
         tool: "llmgrep",
         timestamp: Utc::now().to_rfc3339(),
         partial,
+        performance,
         data,
     }
 }

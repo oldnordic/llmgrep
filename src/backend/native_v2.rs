@@ -15,6 +15,7 @@ use magellan::CodeGraph;
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use sqlitegraph::SnapshotId;
+use sqlitegraph::backend::KvValue;
 
 /// Native-V2 backend implementation.
 ///
@@ -416,7 +417,7 @@ impl super::BackendTrait for NativeV2Backend {
         let snapshot = SnapshotId::current();
 
         // Perform KV prefix scan via graph backend
-        let entries = self.graph.backend().kv_prefix_scan(snapshot, &prefix_key)
+        let entries = self.graph.__backend_for_benchmarks().kv_prefix_scan(snapshot, &prefix_key)
             .map_err(|e| LlmError::SearchFailed {
                 reason: format!("KV prefix scan failed: {}", e),
             })?;
@@ -441,7 +442,7 @@ impl super::BackendTrait for NativeV2Backend {
         let partial = fqn.rsplit("::").next().unwrap_or(fqn);
 
         // O(1) lookup by FQN using KV store
-        let symbol_id = lookup_symbol_by_fqn(&*self.graph.backend(), fqn)
+        let symbol_id = lookup_symbol_by_fqn(self.graph.__backend_for_benchmarks().as_ref(), fqn)
             .ok_or_else(|| LlmError::SymbolNotFound {
                 fqn: fqn.to_string(),
                 db: db_path.to_string(),
@@ -531,13 +532,13 @@ impl super::BackendTrait for NativeV2Backend {
         let snapshot = SnapshotId::current();
 
         // Look up label value from KV store
-        let symbol_ids = match self.graph.backend().kv_get(snapshot, &key)
+        let symbol_ids = match self.graph.__backend_for_benchmarks().kv_get(snapshot, &key)
             .map_err(|e| LlmError::SearchFailed {
                 reason: format!("KV lookup failed for label '{}': {}", label, e),
             })? {
             Some(kv_value) => {
                 match kv_value {
-                    sqlitegraph::KvValue::Bytes(data) => decode_symbol_ids(&data),
+                    KvValue::Bytes(data) => decode_symbol_ids(&data),
                     _ => {
                         // Wrong value type - return empty results
                         return Ok((

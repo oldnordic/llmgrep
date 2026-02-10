@@ -27,6 +27,9 @@ pub use ast::{
 // Re-export backend types for external use
 pub use backend::Backend;
 
+// Re-export output types for external use
+pub use output::PerformanceMetrics;
+
 use clap::ValueEnum;
 
 /// Sorting mode for search results
