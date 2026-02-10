@@ -484,8 +484,8 @@ fn extract_symbol_ids_from_magellan_json(
 /// # Returns
 ///
 /// A tuple of:
-/// - Vec<String> of all symbol_ids from all SCC members
-/// - HashMap<String, String> mapping symbol_id -> supernode_id
+/// - `Vec<String>` of all symbol_ids from all SCC members
+/// - `HashMap<String, String>` mapping symbol_id -> supernode_id
 ///
 /// # Errors
 ///
@@ -574,8 +574,8 @@ pub fn parse_condense_output(json: &str) -> Result<(Vec<String>, std::collection
 /// # Returns
 ///
 /// A tuple of:
-/// - Vec<String> of all unique symbol_ids from all paths
-/// - bool indicating if bounded enumeration hit limits (bounded_hit)
+/// - `Vec<String>` of all unique symbol_ids from all paths
+/// - `bool` indicating if bounded enumeration hit limits (bounded_hit)
 ///
 /// # Errors
 ///
@@ -724,7 +724,7 @@ impl<'a> AlgorithmOptions<'a> {
 /// - One-shot algorithm execution (--reachable-from, --dead-code-in, etc.)
 /// - FQN resolution for simple names (resolves to SymbolId before shelling out)
 ///
-/// Returns: (Vec<String> of SymbolIds, HashMap<String, String> of symbol_id -> supernode_id, bool paths_bounded)
+/// Returns: (`Vec<String>` of SymbolIds, `HashMap<String, String>` of symbol_id -> supernode_id, `bool` paths_bounded)
 ///         All empty if no active filters
 pub fn apply_algorithm_filters(
     db_path: &Path,
