@@ -406,7 +406,7 @@ fn test_api_language_filtering() {
 
     let response = search_symbols(options).expect("search should succeed");
     assert_eq!(response.0.results.len(), 1);
-    assert_eq!(response.0.results[0].language.as_ref().unwrap(), "rust");
+    assert_eq!(response.0.results[0].language.as_ref().unwrap(), "Rust");
 }
 
 /// Test 6: Public API - position mode sorting

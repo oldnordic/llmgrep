@@ -233,27 +233,27 @@ struct CallNodeData {
 /// Returns None for unknown extensions.
 pub fn infer_language(file_path: &str) -> Option<&'static str> {
     match Path::new(file_path).extension().and_then(|s| s.to_str()) {
-        Some("rs") => Some("rust"),
-        Some("py") => Some("python"),
-        Some("js") => Some("javascript"),
-        Some("ts") => Some("typescript"),
-        Some("jsx") => Some("javascript"),
-        Some("tsx") => Some("typescript"),
-        Some("c") => Some("c"),
-        Some("cpp") | Some("cc") | Some("cxx") | Some("hpp") | Some("hxx") => Some("cpp"),
-        Some("h") => Some("c"), // Assume C for .h files (could also be C++)
-        Some("java") => Some("java"),
-        Some("go") => Some("go"),
-        Some("rb") => Some("ruby"),
-        Some("php") => Some("php"),
-        Some("swift") => Some("swift"),
-        Some("kt") | Some("kts") => Some("kotlin"),
-        Some("scala") => Some("scala"),
-        Some("sh") | Some("bash") => Some("shell"),
-        Some("lua") => Some("lua"),
-        Some("r") => Some("r"),
-        Some("m") => Some("matlab"), // Could also be Objective-C
-        Some("cs") => Some("csharp"),
+        Some("rs") => Some("Rust"),
+        Some("py") => Some("Python"),
+        Some("js") => Some("JavaScript"),
+        Some("ts") => Some("TypeScript"),
+        Some("jsx") => Some("JavaScript"),
+        Some("tsx") => Some("TypeScript"),
+        Some("c") => Some("C"),
+        Some("cpp") | Some("cc") | Some("cxx") | Some("hpp") | Some("hxx") => Some("C++"),
+        Some("h") => Some("C"), // Assume C for .h files (could also be C++)
+        Some("java") => Some("Java"),
+        Some("go") => Some("Go"),
+        Some("rb") => Some("Ruby"),
+        Some("php") => Some("PHP"),
+        Some("swift") => Some("Swift"),
+        Some("kt") | Some("kts") => Some("Kotlin"),
+        Some("scala") => Some("Scala"),
+        Some("sh") | Some("bash") => Some("Shell"),
+        Some("lua") => Some("Lua"),
+        Some("r") => Some("R"),
+        Some("m") => Some("Matlab"), // Could also be Objective-C
+        Some("cs") => Some("C#"),
         _ => None,
     }
 }
@@ -5898,18 +5898,18 @@ mod tests {
         #[test]
         fn test_infer_language_from_extension() {
             // Test common language extensions
-            assert_eq!(infer_language("src/main.rs"), Some("rust"));
-            assert_eq!(infer_language("lib/app.py"), Some("python"));
-            assert_eq!(infer_language("component.js"), Some("javascript"));
-            assert_eq!(infer_language("module.ts"), Some("typescript"));
-            assert_eq!(infer_language("header.h"), Some("c"));
-            assert_eq!(infer_language("impl.cpp"), Some("cpp"));
-            assert_eq!(infer_language("Main.java"), Some("java"));
-            assert_eq!(infer_language("main.go"), Some("go"));
+            assert_eq!(infer_language("src/main.rs"), Some("Rust"));
+            assert_eq!(infer_language("lib/app.py"), Some("Python"));
+            assert_eq!(infer_language("component.js"), Some("JavaScript"));
+            assert_eq!(infer_language("module.ts"), Some("TypeScript"));
+            assert_eq!(infer_language("header.h"), Some("C"));
+            assert_eq!(infer_language("impl.cpp"), Some("C++"));
+            assert_eq!(infer_language("Main.java"), Some("Java"));
+            assert_eq!(infer_language("main.go"), Some("Go"));
 
             // Test JSX/TSX variants
-            assert_eq!(infer_language("App.jsx"), Some("javascript"));
-            assert_eq!(infer_language("App.tsx"), Some("typescript"));
+            assert_eq!(infer_language("App.jsx"), Some("JavaScript"));
+            assert_eq!(infer_language("App.tsx"), Some("TypeScript"));
 
             // Test unknown extensions
             assert_eq!(infer_language("file.xyz"), None);

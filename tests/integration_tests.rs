@@ -544,7 +544,7 @@ fn test_language_filtering() {
         "Should only return Rust symbols"
     );
     assert_eq!(response.0.results[0].name, rust_fn);
-    assert_eq!(response.0.results[0].language.as_ref().unwrap(), "rust");
+    assert_eq!(response.0.results[0].language.as_ref().unwrap(), "Rust");
 }
 
 /// Test 7: Multi-kind filtering (comma-separated)
@@ -868,7 +868,7 @@ fn test_combined_metrics_and_language_filter() {
         "Should only return high-complexity Rust function"
     );
     assert_eq!(response.0.results[0].name, rust_complex);
-    assert_eq!(response.0.results[0].language.as_ref().unwrap(), "rust");
+    assert_eq!(response.0.results[0].language.as_ref().unwrap(), "Rust");
 }
 
 /// Test 11: Metrics present in search results
