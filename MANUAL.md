@@ -306,6 +306,65 @@ Schema-aligned JSON for programmatic use.
 ### Pretty
 Formatted JSON with indentation for readability.
 
+## Error Codes
+
+| Code | Description | Solution |
+|------|-------------|----------|
+| **LLM-E105** | Magellan CLI not found | Install Magellan: `cargo install magellan` |
+| **LLM-E106** | Ambiguous symbol name | Add `--path` or `--kind` filter to disambiguate |
+| **LLM-E107** | Magellan version mismatch | Update Magellan: `cargo install magellan --force` |
+| **LLM-E108** | Magellan execution failed | Check Magellan logs, verify database integrity |
+| **LLM-E111** | Requires native-v2 backend | Reindex with `--storage native-v2` |
+| **LLM-E112** | Database file not found | Verify database path, run `magellan watch` |
+| **LLM-E113** | Database table missing | Reindex database with `--scan-initial` |
+| **LLM-E114** | Invalid regex pattern | Check regex syntax, escape special characters |
+| **LLM-E115** | Invalid FQN format | Use valid FQN format: `crate::module::symbol` |
+| **LLM-E116** | Symbol not found | Verify symbol exists, check spelling, use `--ambiguous` flag |
+| **LLM-E117** | Timeout executing algorithm | Reduce search scope, use `--limit` |
+
+## Best Practices
+
+### For LLM Integration
+
+1. **Always use `--output json`** for LLM consumption
+2. **Use specific `--mode`** instead of `auto` (3x faster)
+3. **Request only needed fields** with `--fields`
+4. **Combine filters** to reduce result set early
+
+### For Interactive Use
+
+1. **Use `--output human`** for terminal display
+2. **Add `--show-metrics`** when debugging performance
+3. **Use `--limit`** to cap large result sets
+4. **Leverage `--sort-by`** for discovery (complexity, fan-in)
+
+### For Scripting
+
+1. **Use `--output json`** with `jq` for processing
+2. **Prefer exact match** over regex when possible
+3. **Cache algorithm results** (expensive Magelliand subprocess calls)
+4. **Use Native-V2 features** when available (`complete`, `lookup`)
+
+## Performance Tips
+
+| Tip | Impact |
+|-----|--------|
+| Use `--mode symbols` instead of `auto` | 3x faster |
+| Remove `--with-ast-context` unless needed | 2-3x faster |
+| Use `--limit` on wildcard queries | Prevents large outputs |
+| Use Native-V2 backend | 2-5x faster for lookups |
+| Cache algorithm filter results | Avoid subprocess overhead |
+
+See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for detailed benchmarks.
+
 ## Version history
 
 See `CHANGELOG.md` for detailed version history.
+
+## Further Documentation
+
+- **[README.md](README.md)** — Quick start and overview
+- **[CHANGELOG.md](CHANGELOG.md)** — Version history
+- **[docs/PERFORMANCE.md](docs/PERFORMANCE.md)** — Benchmarks and optimization
+- **[docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md)** — Recommended workflows
+- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — Common issues and solutions

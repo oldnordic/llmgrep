@@ -78,6 +78,29 @@ llmgrep queries Magellan's code graph database to find symbols, references, and 
 - ✅ Raw AST tree queries
 - ✅ LLM-optimized JSON output
 
+---
+
+## When NOT to Use llmgrep
+
+llmgrep excels at querying indexed code graphs, but it's not the right tool for every task:
+
+| Task | Use This Instead | Why |
+|------|----------------|-----|
+| Full-text code search | `ripgrep` (`rg`) | Faster, no indexing needed |
+| Substring search in files | `grep`/`rg` | Direct file access |
+| Live code analysis | Language Server (LSP) | Real-time semantic info |
+| Indexing codebases | [Magellan](https://github.com/oldnordic/magellan) | llmgrep is read-only |
+| Type information | Compiler/LSP | llmgrep has no type checker |
+| CFG analysis | [Mirage](https://github.com/oldnordic/mirage) | Dedicated CFG tool |
+| Edit code with spans | [splice](https://github.com/oldnordic/splice) | Precision editing |
+| Pattern replacement | `sed`/`llmgrep` + `splice` | llmgrep finds, splice edits |
+
+**Quick Decision Guide:**
+- Need **semantic symbol search**? → Use llmgrep
+- Need **text/substring search**? → Use ripgrep
+- Need **real-time IDE features**? → Use LSP
+- Need **to index code**? → Use Magellan
+
 ## Installation
 
 ```bash
@@ -320,11 +343,73 @@ llmgrep --db sqlite.db complete --prefix "test"
   magellan watch --root ./src --db code.db --storage native-v2
   ```
 
+## Performance Characteristics
+
+llmgrep is designed for fast, LLM-friendly code queries. Here's what to expect:
+
+| Operation | Typical Time | Notes |
+|-----------|--------------|-------|
+| Simple symbol search | 10-50ms | SQLite: indexed lookup |
+| Regex pattern search | 20-100ms | Depends on pattern complexity |
+| Reference search | 20-80ms | O(1) graph traversal |
+| AST filtering | 50-200ms | Tree structure queries |
+| Algorithm filters | 100-500ms | Requires Magellan subprocess |
+| Complete/lookup (Native-V2) | 5-20ms | O(1) KV store access |
+
+**Token efficiency** — llmgrep outputs are typically 95-99% smaller than raw source code:
+
+```
+Task: "Find all functions in src/lib.rs"
+- cat src/lib.rs:          ~15,000 tokens (full file)
+- llmgrep search --json:   ~150 tokens (just the facts)
+- Savings: 99%
+```
+
+## Realistic LLM Workflow
+
+llmgrep is designed for AI assistants to use. Here's how an LLM would work with llmgrep:
+
+```markdown
+# User: "Find all functions related to authentication"
+
+# LLM generates:
+llmgrep --db .codemcp/codegraph.db search --query "auth" --output json
+
+# Response: 50 tokens of structured data
+[
+  {"name":"authenticate","kind":"Function","file":"src/auth.rs","line":23},
+  {"name":"login_handler","kind":"Function","file":"src/auth.rs","line":45},
+  {"name":"is_authenticated","kind":"Function","file":"src/middleware.rs","line":12}
+]
+
+# LLM now has precise facts, not 5000 lines of code
+```
+
+**Complete refactor workflow:**
+
+```bash
+# 1. Discover symbols
+llmgrep --db .codemcp/codegraph.db search --query "process" --output json
+
+# 2. Find references
+llmgrep --db .codemcp/codegraph.db search --query "process_request" --mode references --output json
+
+# 3. Check impact (via Magellan)
+magellan reachable --db .codemcp/codegraph.db --symbol <ID>
+
+# 4. Edit with splice (using byte spans from llmgrep output)
+splice rename --symbol <ID> --file src/lib.rs --to handle_request
+```
+
 ## Documentation
 
 - `llmgrep search --help` — Built-in usage examples
 - `MANUAL.md` — Full manual with all options
 - `CHANGELOG.md` — Version history
+- **Further Documentation:**
+  - [Performance Guide](docs/PERFORMANCE.md) — Benchmarks and optimization
+  - [Best Practices](docs/BEST_PRACTICES.md) — Recommended workflows
+  - [Troubleshooting](docs/TROUBLESHOOTING.md) — Common issues and solutions
 
 ## License
 
