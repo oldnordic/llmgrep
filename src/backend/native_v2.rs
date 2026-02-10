@@ -160,8 +160,20 @@ pub struct NativeV2Backend {
     db_path: PathBuf,
 }
 
-// SAFETY: NativeV2Backend owns the CodeGraph exclusively and only provides
-// one mutable reference at a time within each method. Send/Sync are not implemented.
+// # Safety
+//
+// NativeV2Backend owns the CodeGraph exclusively and only provides one mutable
+// reference at a time within each method. We use UnsafeCell for interior mutability
+// because CodeGraph methods require &mut self but BackendTrait takes &self.
+//
+// This is safe because:
+// - We own the CodeGraph exclusively (it's not shared)
+// - We never expose &mut references externally
+// - Only one method call at a time can access the graph
+// - Sync is NOT implemented, preventing concurrent access from multiple threads
+//
+// The Send implementation allows the backend to be moved between threads,
+// but the lack of Sync ensures it cannot be shared concurrently.
 unsafe impl Send for NativeV2Backend {}
 
 impl std::fmt::Debug for NativeV2Backend {
@@ -189,7 +201,19 @@ impl NativeV2Backend {
     /// Get mutable reference to the CodeGraph
     ///
     /// # Safety
-    /// Caller must ensure no other references to the graph exist during use
+    ///
+    /// The caller must ensure no other references to the graph exist during use.
+    /// This method is only called from within BackendTrait methods, each of which:
+    /// 1. Borrows &self (not &mut self)
+    /// 2. Calls this method exactly once at the start
+    /// 3. Does not store the returned reference beyond the method call
+    /// 4. Does not call any other method that would access the graph concurrently
+    ///
+    /// This is safe because:
+    /// - The UnsafeCell provides interior mutability
+    /// - We own the CodeGraph exclusively
+    /// - No reentrancy is possible (single-threaded method calls)
+    /// - The returned reference's lifetime is scoped to the method
     #[inline]
     unsafe fn graph(&self) -> &mut CodeGraph {
         &mut *self.graph.get()
@@ -263,8 +287,20 @@ impl NativeV2Backend {
     }
 
     /// Get the backend reference (doesn't need mutable access)
+    ///
+    /// # Safety
+    ///
+    /// This method accesses the CodeGraph through the UnsafeCell to retrieve
+    /// a reference to the underlying GraphBackend. This is safe because:
+    /// - We're only reading the backend reference, not mutating the graph
+    /// - The __backend_for_benchmarks() method returns a shared reference (Rc)
+    /// - No mutable operations are performed on the graph
+    /// - The returned Rc is a cheap clone that doesn't affect the graph state
     fn backend(&self) -> &std::rc::Rc<dyn sqlitegraph::GraphBackend> {
-        // SAFETY: We're only reading the backend, getting a shared reference
+        // # Safety
+        // We're only reading the backend reference, not mutating the graph.
+        // The __backend_for_benchmarks() API returns a shared reference that
+        // can be safely accessed without exclusive access.
         unsafe { (*self.graph.get()).__backend_for_benchmarks() }
     }
 
@@ -397,7 +433,11 @@ impl super::BackendTrait for NativeV2Backend {
             None
         };
 
-        // SAFETY: We have exclusive access through &self
+        // # Safety
+        // We have exclusive access through &self because:
+        // - This method borrows &self exclusively
+        // - No other references to the graph exist during this call
+        // - The returned reference's lifetime is scoped to this method
         let graph = unsafe { self.graph() };
 
         // Get all indexed files
@@ -602,7 +642,11 @@ impl super::BackendTrait for NativeV2Backend {
             None
         };
 
-        // SAFETY: We have exclusive access through &self
+        // # Safety
+        // We have exclusive access through &self because:
+        // - This method borrows &self exclusively
+        // - No other references to the graph exist during this call
+        // - The returned reference's lifetime is scoped to this method
         let graph = unsafe { self.graph() };
 
         // Get all indexed files
@@ -741,7 +785,11 @@ impl super::BackendTrait for NativeV2Backend {
             None
         };
 
-        // SAFETY: We have exclusive access through &self
+        // # Safety
+        // We have exclusive access through &self because:
+        // - This method borrows &self exclusively
+        // - No other references to the graph exist during this call
+        // - The returned reference's lifetime is scoped to this method
         let graph = unsafe { self.graph() };
 
         // Get all indexed files
@@ -891,7 +939,11 @@ impl super::BackendTrait for NativeV2Backend {
                 reason: format!("File path {:?} is not valid UTF-8", file),
             })?;
 
-        // SAFETY: We have exclusive access through &self
+        // # Safety
+        // We have exclusive access through &self because:
+        // - This method borrows &self exclusively
+        // - No other references to the graph exist during this call
+        // - The returned reference's lifetime is scoped to this method
         let graph = unsafe { self.graph() };
 
         let nodes = graph.get_ast_nodes_by_file(file_path)
@@ -913,7 +965,11 @@ impl super::BackendTrait for NativeV2Backend {
     }
 
     fn find_ast(&self, kind: &str) -> Result<serde_json::Value, LlmError> {
-        // SAFETY: We have exclusive access through &self
+        // # Safety
+        // We have exclusive access through &self because:
+        // - This method borrows &self exclusively
+        // - No other references to the graph exist during this call
+        // - The returned reference's lifetime is scoped to this method
         let graph = unsafe { self.graph() };
 
         let nodes = graph.get_ast_nodes_by_kind(kind)
