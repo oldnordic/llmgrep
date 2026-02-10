@@ -39,7 +39,7 @@ impl fmt::Display for OutputFormat {
 ///
 /// Tracks timing breakdown for different phases of search execution.
 /// Used internally for debugging and performance analysis.
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, Default)]
 pub struct PerformanceMetrics {
     /// Time taken to detect backend format (SQLite vs Native-V2) in milliseconds
     pub backend_detection_ms: u64,
@@ -49,17 +49,6 @@ pub struct PerformanceMetrics {
     pub output_formatting_ms: u64,
     /// Total time from start to finish in milliseconds
     pub total_ms: u64,
-}
-
-impl Default for PerformanceMetrics {
-    fn default() -> Self {
-        Self {
-            backend_detection_ms: 0,
-            query_execution_ms: 0,
-            output_formatting_ms: 0,
-            total_ms: 0,
-        }
-    }
 }
 
 impl PerformanceMetrics {

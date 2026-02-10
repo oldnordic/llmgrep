@@ -1503,6 +1503,7 @@ pub fn search_calls(options: SearchOptions) -> Result<(CallSearchResponse, bool)
 }
 
 
+#[allow(clippy::too_many_arguments)] // All parameters are needed for flexible query building
 fn build_search_query(
     query: &str,
     path_filter: Option<&PathBuf>,

@@ -128,6 +128,7 @@ pub trait BackendTrait {
 /// Wraps either SqliteBackend or NativeV2Backend and delegates Backend trait methods
 /// to the appropriate implementation based on database format detection.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)] // NativeV2Backend contains CodeGraph which is large
 pub enum Backend {
     /// SQLite storage backend (traditional, always available)
     Sqlite(SqliteBackend),

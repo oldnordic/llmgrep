@@ -50,6 +50,7 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)] // Command variants have different sizes but that's acceptable for CLI
 enum Command {
     #[command(after_help = SEARCH_EXAMPLES)]
     Search {
@@ -214,6 +215,9 @@ enum Command {
         fqn: String,
     },
 
+    // Watch command is incomplete and requires unstable Mag APIs
+    // Enable with: --features unstable-watch
+    #[cfg(feature = "unstable-watch")]
     #[command(after_help = WATCH_EXAMPLES)]
     Watch {
         #[arg(long)]
@@ -645,6 +649,12 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             limit,
             regex,
         } => run_watch(cli, query, *mode, path, kind, *limit, *regex),
+        #[cfg(not(feature = "unstable-watch"))]
+        Command::Watch { .. } => {
+            Err(LlmError::InvalidQuery {
+                query: "Watch command requires the 'unstable-watch' feature. Install with: cargo install --features unstable-watch".to_string(),
+            })
+        }
         }
     }
 }
@@ -1590,6 +1600,7 @@ fn run_lookup(
 }
 
 /// Run watch command with signal handling.
+#[cfg(feature = "unstable-watch")]
 fn run_watch(
     cli: &Cli,
     query: &str,

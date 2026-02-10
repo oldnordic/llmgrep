@@ -27,7 +27,7 @@
 //! # }
 //! ```
 //!
-//! See the [`query`](query) module for search functions and options.
+//! See the [`query`] module for search functions and options.
 //!
 //! # Modules
 //!
@@ -48,6 +48,10 @@ pub mod output_common;
 pub mod platform;
 pub mod query;
 pub mod safe_extraction;
+
+// Watch command is incomplete and requires unstable Mag APIs
+// Enable with: --features unstable-watch
+#[cfg(feature = "unstable-watch")]
 pub mod watch_cmd;
 
 // Re-export safe extraction functions for testing and external use

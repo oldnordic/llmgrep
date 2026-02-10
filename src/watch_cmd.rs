@@ -1,18 +1,18 @@
 //! Watch command implementation for real-time query results
+//!
+//! This is an incomplete feature that requires unstable Magellan APIs.
+//! Enable with the `unstable-watch` feature flag.
 
 use anyhow::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use crate::backend::Backend;
+use crate::backend::{Backend, BackendTrait};
 use crate::error::LlmError;
 use crate::output::{OutputFormat, SearchResponse, SymbolMatch};
 use crate::query::SearchOptions;
-
-#[cfg(feature = "native-v2")]
-use sqlitegraph::backend::{PubSubEvent, SubscriptionFilter};
 
 /// Run the watch command with automatic backend detection.
 ///
@@ -40,7 +40,7 @@ pub fn run_watch<'a>(
     let backend = Backend::detect_and_open(&db_path)?;
 
     match backend {
-        #[cfg(feature = "native-v2")]
+        #[cfg(all(feature = "native-v2", feature = "unstable-watch"))]
         Backend::NativeV2(inner) => {
             run_watch_with_pubsub(&inner, db_path, options, output_format, shutdown)
         }
@@ -50,6 +50,14 @@ pub fn run_watch<'a>(
             eprintln!("For real-time updates, reindex with native-v2 storage:");
             eprintln!("  magellan watch --root . --db {} --storage native-v2", db_path.display());
             run_watch_with_filesystem(&inner, db_path, options, output_format, shutdown)
+        }
+        #[cfg(all(feature = "native-v2", not(feature = "unstable-watch")))]
+        Backend::NativeV2(_) => {
+            eprintln!("Warning: Watch command is incomplete and requires unstable APIs.");
+            eprintln!("For real-time updates, reindex with native-v2 storage and enable unstable-watch.");
+            Err(LlmError::SearchFailed {
+                reason: "Watch command not supported without unstable-watch feature".to_string(),
+            }.into())
         }
     }
 }
@@ -66,31 +74,33 @@ pub fn run_watch<'a>(
 /// # Returns
 /// * `Ok(())` on successful shutdown
 /// * `Err(LlmError)` on failure
-#[cfg(feature = "native-v2")]
+#[cfg(all(feature = "native-v2", feature = "unstable-watch"))]
 fn run_watch_with_pubsub<'a>(
-    backend: &crate::backend::native_v2::NativeV2Backend,
+    backend: &crate::backend::NativeV2Backend,
     db_path: PathBuf,
     options: SearchOptions<'a>,
     output_format: OutputFormat,
     shutdown: Arc<AtomicBool>,
 ) -> Result<()> {
-    use magellan::CodeGraph;
-    use std::sync::mpsc::Receiver;
+    // NOTE: This is incomplete code that requires unstable Magellan APIs
+    // The pub/sub subscription API is not yet stable
+    eprintln!("Warning: Watch with pub/sub is not yet implemented.");
+    eprintln!("The required Magellan APIs are unstable and subject to change.");
+    eprintln!("Falling back to file system polling for now.");
 
-    // Open the CodeGraph to access pub/sub
-    let mut graph = CodeGraph::open(&db_path)
-        .map_err(|e| LlmError::DatabaseCorrupted {
-            reason: e.to_string(),
-        })?;
+    // Fall back to file system polling
+    run_watch_with_filesystem_fallback(backend, db_path, options, output_format, shutdown)
+}
 
-    // Subscribe to ALL graph mutation events
-    let (_sub_id, rx): (u64, Receiver<PubSubEvent>) = graph
-        .subscribe(SubscriptionFilter::all())
-        .map_err(|e| LlmError::BackendDetectionFailed {
-            path: db_path.display().to_string(),
-            reason: format!("Failed to subscribe to pub/sub: {}", e),
-        })?;
-
+/// Fallback implementation using file system polling.
+#[cfg(all(feature = "native-v2", feature = "unstable-watch"))]
+fn run_watch_with_filesystem_fallback<'a>(
+    backend: &crate::backend::NativeV2Backend,
+    db_path: PathBuf,
+    options: SearchOptions<'a>,
+    output_format: OutputFormat,
+    shutdown: Arc<AtomicBool>,
+) -> Result<()> {
     // Run initial query and display results
     let (response, _partial, _paths_bounded) = backend
         .search_symbols(options.clone())
@@ -100,14 +110,20 @@ fn run_watch_with_pubsub<'a>(
 
     display_results(&response, &output_format);
     let mut previous_results = response.results;
+    let mut last_modified = get_file_modification_time(&db_path)?;
 
-    // Event loop with 100ms timeout for shutdown flag checking
-    const TIMEOUT_MS: u64 = 100;
+    // Polling loop with 1 second interval
+    const POLL_INTERVAL_MS: u64 = 1000;
 
     while !shutdown.load(Ordering::Relaxed) {
-        match rx.recv_timeout(Duration::from_millis(TIMEOUT_MS)) {
-            Ok(_event) => {
-                // Re-run query on each event
+        std::thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
+
+        // Check if database file was modified
+        if let Ok(current_modified) = get_file_modification_time(&db_path) {
+            if current_modified > last_modified {
+                last_modified = current_modified;
+
+                // Re-run query
                 match backend.search_symbols(options.clone()) {
                     Ok((current_response, _, _)) => {
                         // Display delta (only new/removed results)
@@ -119,14 +135,6 @@ fn run_watch_with_pubsub<'a>(
                         // Continue watching despite transient errors
                     }
                 }
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                // Timeout is expected - allows checking shutdown flag
-                continue;
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                eprintln!("Backend disconnected, stopping watch");
-                break;
             }
         }
     }
@@ -203,7 +211,7 @@ fn run_watch_with_filesystem<'a>(
 }
 
 /// Get the last modification time of a file.
-fn get_file_modification_time(path: &PathBuf) -> Result<SystemTime, LlmError> {
+fn get_file_modification_time(path: &Path) -> Result<SystemTime, LlmError> {
     path.metadata()
         .and_then(|m| m.modified())
         .map_err(LlmError::IoError)

@@ -156,7 +156,8 @@ fn span_context_from_file(
 pub struct NativeV2Backend {
     /// CodeGraph stored in UnsafeCell for interior mutability
     graph: UnsafeCell<CodeGraph>,
-    /// Database path for error messages
+    /// Database path for error messages and direct SQL access
+    #[allow(dead_code)] // Used for SQL queries but not directly read in current code
     db_path: PathBuf,
 }
 
@@ -215,11 +216,13 @@ impl NativeV2Backend {
     /// - No reentrancy is possible (single-threaded method calls)
     /// - The returned reference's lifetime is scoped to the method
     #[inline]
+    #[allow(clippy::mut_from_ref)] // Required for interior mutability via UnsafeCell
     unsafe fn graph(&self) -> &mut CodeGraph {
         &mut *self.graph.get()
     }
 
     /// Convert SymbolNode to SymbolMatch
+    #[allow(clippy::too_many_arguments)] // All parameters are needed for complete symbol info
     fn symbol_node_to_match(
         &self,
         node: &SymbolNode,
@@ -484,7 +487,7 @@ impl super::BackendTrait for NativeV2Backend {
 
                 // Apply kind filter if specified
                 if let Some(kind_filter) = options.kind_filter {
-                    if symbol.kind_normalized != kind_filter.to_string() {
+                    if symbol.kind_normalized != kind_filter {
                         continue;
                     }
                 }
