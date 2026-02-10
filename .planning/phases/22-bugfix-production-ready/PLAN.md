@@ -62,36 +62,73 @@ Deliver a production-ready llmgrep binary where:
 
 **Goal:** Implement accurate language detection from file extensions
 
-**Changes:**
-1. Add `infer_language_from_extension()` helper to `src/backend/native_v2.rs`
-   - Reuse or adapt existing `infer_language()` from `src/query.rs` if applicable
-   - Map file extensions to language strings:
-     - `.rs` → `"Rust"`
-     - `.py` → `"Python"`
-     - `.js` / `.mjs` / `.cjs` → `"JavaScript"`
-     - `.ts` → `"TypeScript"`
-     - `.tsx` / `.jsx` → `"TypeScript"` (or `"JSX"` distinct)
-     - `.c` → `"C"`
-     - `.cpp` / `.cc` / `.cxx` → `"C++"`
-     - `.h` / `.hpp` → `"C"` or `"C++"` (based on extension)
-     - `.java` → `"Java"`
-     - `.go` → `"Go"`
-     - `.rb` → `"Ruby"`
-     - `.php` → `"PHP"`
-     - Unknown → `"Unknown"` or `None`
-2. Update `symbol_node_to_match()` to use inferred language instead of hardcoded `"Rust"`
-3. Update `search_symbols()` to use inferred language
-4. Update `search_references()` to use inferred language (when file_path available)
-5. Update `search_calls()` to use inferred language (when file_path available)
-6. Update `lookup()` to use inferred language
-7. Update `search_by_label()` to use inferred language
+**Current State Analysis:**
+- `src/query.rs` has `infer_language(file_path: &str) -> Option<&'static str>` (lines 234-259)
+- This function is NOT exported from the module (private)
+- `SymbolNode` from magellan does NOT have a `file_path` field
+- File path must be extracted from `canonical_fqn` format: `"crate_name::file_path::kind symbol_name"`
+- Current extraction at line 79-92 only looks for `/` or `.rs` - misses `.py`, `.js`, `.ts`, etc.
+
+**Implementation Steps:**
+
+1. **Export `infer_language` from query module:**
+   - Add `pub use query::infer_language;` to `src/lib.rs`
+   - Or move `infer_language()` to a more appropriate module
+
+2. **Enhance file_path extraction in `symbol_node_to_match()`:**
+   - Current code (line 86): `parts.iter().find(|p| p.contains('/') || p.ends_with(".rs"))`
+   - Change to: `parts.iter().find(|p| p.contains('/') || has_known_extension(p))`
+   - Add helper to detect known extensions: `.rs`, `.py`, `.js`, `.ts`, `.tsx`, `.jsx`, `.c`, `.cpp`, `.h`, `.java`, `.go`, `.rb`, `.php`, etc.
+
+3. **Update hardcoded language at line 121:**
+   - Current: `language: Some("Rust".to_string())`
+   - Change to: `language: infer_language(&file_path).map(|s| s.to_string())`
+
+4. **Update hardcoded language in `search_symbols()` (line 228):**
+   - Current: `language: Some("Rust".to_string())`
+   - Change to: `language: infer_language(&file_path_str).map(|s| s.to_string())`
+
+5. **Verify no other hardcoded "Rust" strings exist:**
+   - Check `search_references()` - uses `SymbolMatch` from `symbol_node_to_match()` (covered)
+   - Check `search_calls()` - constructs `CallMatch` (no language field, OK)
+   - Check `lookup()` - uses `symbol_node_to_match()` (covered)
+   - Check `search_by_label()` - uses `symbol_node_to_match()` (covered)
+
+**Code Changes - Specific:**
+
+```rust
+// In src/lib.rs - add to re-exports:
+pub use query::infer_language;
+
+// In src/backend/native_v2.rs - add helper:
+fn has_known_extension(path: &str) -> bool {
+    path.ends_with(".rs") || path.ends_with(".py") || path.ends_with(".js")
+        || path.ends_with(".ts") || path.ends_with(".tsx") || path.ends_with(".jsx")
+        || path.ends_with(".c") || path.ends_with(".cpp") || path.ends_with(".cc")
+        || path.ends_with(".cxx") || path.ends_with(".h") || path.ends_with(".hpp")
+        || path.ends_with(".java") || path.ends_with(".go") || path.ends_with(".rb")
+        || path.ends_with(".php") || path.ends_with(".swift") || path.ends_with(".kt")
+        || path.ends_with(".kts") || path.ends_with(".scala") || path.ends_with(".lua")
+        || path.ends_with(".r") || path.ends_with(".m") || path.ends_with(".cs")
+}
+
+// Update line 86 in symbol_node_to_match():
+parts.iter().find(|p| p.contains('/') || has_known_extension(p))
+
+// Update line 121 in symbol_node_to_match():
+language: infer_language(&file_path).map(|s| s.to_string()),
+
+// Update line 228 in search_symbols():
+language: infer_language(&file_path_str).map(|s| s.to_string()),
+```
 
 **Files to modify:**
-- `src/backend/native_v2.rs` (add helper, update all 7 locations)
+- `src/lib.rs` (add re-export)
+- `src/backend/native_v2.rs` (add helper, update lines 86, 121, 228)
 
 **Testing:**
-- Unit test for `infer_language_from_extension()` covering all mapped extensions
-- Unit test for unknown extensions returning `"Unknown"`
+- Unit test for `has_known_extension()` covering all extensions
+- Unit test for file_path extraction with `.py`, `.js`, `.ts` files
 - Integration test: Python file returns `"Python"`
 - Integration test: JavaScript file returns `"JavaScript"`
 - Integration test: TypeScript file returns `"TypeScript"`
@@ -103,20 +140,115 @@ Deliver a production-ready llmgrep binary where:
 
 **Goal:** Remove all `eprintln!("DEBUG: ...")` statements from production code
 
-**Changes:**
-1. Remove lines 522-559 from `src/backend/native_v2.rs` (all debug output in `complete()`)
-2. Verify no other debug output exists in `src/backend/native_v2.rs`
-3. Verify no debug output exists in other backend files
-4. Consider: Should any debug output be preserved behind `#[cfg(debug_assertions)]`?
-   - Decision: NO - remove entirely for cleaner production code
+**Current State Analysis:**
+- `src/backend/native_v2.rs` lines 521-559 contain debug output in `complete()` method
+- These lines were added for KV store debugging during development
+- Total of ~40 lines to remove
+
+**Specific Lines to Remove:**
+
+```rust
+// Line 521-536: First debug block - scan 'sym:' prefix
+match backend.kv_prefix_scan(snapshot, b"sym:") {
+    Ok(all_entries) => {
+        eprintln!("DEBUG: Found {} total KV entries with 'sym:' prefix", all_entries.len());
+        if all_entries.is_empty() {
+            eprintln!("DEBUG: KV store is completely empty for 'sym:' prefix!");
+        }
+        for (k, v) in all_entries.iter().take(20) {
+            let key_str = String::from_utf8(k.clone()).unwrap_or_default();
+            eprintln!("DEBUG:   {:?} -> {:?}", key_str, v);
+        }
+    }
+    Err(e) => {
+        eprintln!("DEBUG: Error scanning 'sym:' prefix: {}", e);
+    }
+}
+
+// Line 538-552: Second debug block - scan all keys
+match backend.kv_prefix_scan(snapshot, b"") {
+    Ok(all_entries) => {
+        eprintln!("DEBUG: Found {} total KV entries (all keys)", all_entries.len());
+        for (k, v) in all_entries.iter().take(20) {
+            let key_str = String::from_utf8(k.clone()).unwrap_or_default();
+            if key_str.len() < 100 {
+                eprintln!("DEBUG:   {:?} -> {:?}", key_str, v);
+            }
+        }
+    }
+    Err(e) => {
+        eprintln!("DEBUG: Error scanning all keys: {}", e);
+    }
+}
+
+// Line 554-559: Third debug block - actual query
+eprintln!("DEBUG: Scanning KV for prefix: {:?}", String::from_utf8_lossy(&prefix_key));
+let entries = backend.kv_prefix_scan(snapshot, &prefix_key)
+    .map_err(|e| LlmError::SearchFailed {
+        reason: format!("KV prefix scan failed: {}", e),
+    })?;
+eprintln!("DEBUG: Found {} KV entries for prefix", entries.len());
+```
+
+**Implementation Steps:**
+
+1. **Remove lines 521-559 entirely:**
+   - Delete the entire debug section
+   - Keep only the actual KV query that returns results
+
+2. **Simplified `complete()` method after removal:**
+   ```rust
+   fn complete(&self, prefix: &str, limit: usize) -> Result<Vec<String>, LlmError> {
+       use magellan::kv::keys::sym_fqn_key;
+
+       let prefix_key = sym_fqn_key(prefix);
+       let snapshot = SnapshotId::current();
+       let backend = self.backend();
+
+       let entries = backend.kv_prefix_scan(snapshot, &prefix_key)
+           .map_err(|e| LlmError::SearchFailed {
+               reason: format!("KV prefix scan failed: {}", e),
+           })?;
+
+       let completions: Vec<String> = entries
+           .iter()
+           .filter_map(|(key, _value)| {
+               let key_str = String::from_utf8(key.clone()).ok()?;
+               key_str.strip_prefix("sym:fqn:").map(|s| s.to_string())
+           })
+           .take(limit)
+           .collect();
+
+       Ok(completions)
+   }
+   ```
+
+3. **Verify no other debug output exists:**
+   ```bash
+   grep -n "eprintln!" src/backend/native_v2.rs
+   grep -n "println!" src/backend/native_v2.rs
+   grep -n "DEBUG" src/backend/native_v2.rs
+   ```
+   - Should return nothing after removal
+
+4. **Verify no debug output in other backend files:**
+   ```bash
+   grep -n "DEBUG" src/backend/sqlite.rs
+   grep -n "eprintln!" src/backend/mod.rs
+   ```
 
 **Files to modify:**
-- `src/backend/native_v2.rs` (remove ~40 lines of debug code)
+- `src/backend/native_v2.rs` (remove lines 521-559, ~40 lines)
+
+**Expected file size change:**
+- Before: 679 lines
+- After: ~639 lines
 
 **Testing:**
 - Integration test: `llmgrep complete --prefix "test" 2>&1 | grep -i "debug"` returns exit code 1 (no matches)
 - Integration test: `llmgrep complete --prefix "test" > /dev/null` produces only stdout, no stderr pollution
 - Manual test: Run `complete` command and verify clean output
+- Verify total line count decreased by ~40 lines
 
 ### Plan 22-03: Cross-Backend Verification Tests
 
