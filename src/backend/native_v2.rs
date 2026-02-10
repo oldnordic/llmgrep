@@ -9,7 +9,7 @@ use crate::error::LlmError;
 use crate::infer_language;
 use crate::output::{
     CallSearchResponse, CallMatch, ReferenceSearchResponse, ReferenceMatch,
-    SearchResponse, SymbolMatch, Span,
+    SearchResponse, SymbolMatch, Span, SpanContext,
 };
 use crate::query::SearchOptions;
 use magellan::common::extract_symbol_content_safe;
@@ -23,11 +23,12 @@ use std::path::{Path, PathBuf};
 use sqlitegraph::SnapshotId;
 use sqlitegraph::backend::KvValue;
 
-/// File cache for snippet extraction
+/// File cache for context and snippet extraction
 ///
-/// Caches file bytes to avoid re-reading files when extracting multiple snippets.
+/// Caches file bytes and parsed lines to avoid re-reading files.
 struct FileCache {
     bytes: Vec<u8>,
+    lines: Vec<String>,
 }
 
 /// Load a file into cache, returning cached version if already loaded
@@ -37,7 +38,12 @@ fn load_file<'a>(path: &str, cache: &'a mut HashMap<String, FileCache>) -> Optio
             Ok(bytes) => bytes,
             Err(_) => return None,
         };
-        cache.insert(path.to_string(), FileCache { bytes });
+        // Parse lines for context extraction
+        let lines = String::from_utf8_lossy(&bytes)
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
+        cache.insert(path.to_string(), FileCache { bytes, lines });
     }
     cache.get(path)
 }
@@ -88,6 +94,50 @@ fn extract_snippet(
     };
 
     (Some(snippet), Some(truncated))
+}
+
+/// Extract context lines from file around a given line range
+///
+/// # Arguments
+/// * `file_path` - Path to source file
+/// * `start_line` - Start line number (1-based)
+/// * `end_line` - End line number (1-based)
+/// * `context_lines` - Number of context lines before and after
+/// * `capped` - Whether the result was artificially capped
+/// * `cache` - File cache for performance
+///
+/// # Returns
+/// * SpanContext with before/selected/after lines, or None on failure
+fn span_context_from_file(
+    file_path: &str,
+    start_line: u64,
+    end_line: u64,
+    context_lines: usize,
+    capped: bool,
+    cache: &mut HashMap<String, FileCache>,
+) -> Option<SpanContext> {
+    let file = load_file(file_path, cache)?;
+    let line_count = file.lines.len() as u64;
+    if line_count == 0 {
+        return None;
+    }
+    let start_line = start_line.max(1).min(line_count);
+    let end_line = end_line.max(start_line).min(line_count);
+    let before_start = start_line.saturating_sub(context_lines as u64).max(1);
+    let after_end = (end_line + context_lines as u64).min(line_count);
+
+    let before = file.lines[(before_start - 1) as usize..(start_line - 1) as usize].to_vec();
+    let selected = file.lines[(start_line - 1) as usize..end_line as usize].to_vec();
+    let after = file.lines[end_line as usize..after_end as usize].to_vec();
+    let truncated = capped
+        || (context_lines > 0 && (before.len() < context_lines || after.len() < context_lines));
+
+    Some(SpanContext {
+        before,
+        selected,
+        after,
+        truncated,
+    })
 }
 
 /// Native-V2 backend implementation.
@@ -151,6 +201,7 @@ impl NativeV2Backend {
         index: usize,
         snippet: Option<String>,
         snippet_truncated: Option<bool>,
+        context: Option<SpanContext>,
     ) -> SymbolMatch {
         // Extract file path from canonical_fqn if available
         // Format: crate_name::file_path::kind symbol_name
@@ -178,7 +229,7 @@ impl NativeV2Backend {
             start_col: node.start_col as u64,
             end_line: node.end_line as u64,
             end_col: node.end_col as u64,
-            context: None,
+            context,
         };
 
         SymbolMatch {
@@ -375,6 +426,20 @@ impl super::BackendTrait for NativeV2Backend {
                     (None, None)
                 };
 
+                // Extract context if requested
+                let context = if options.context.include {
+                    span_context_from_file(
+                        &file_path_str,
+                        symbol.start_line as u64,
+                        symbol.end_line as u64,
+                        options.context.lines,
+                        false,
+                        &mut file_cache,
+                    )
+                } else {
+                    None
+                };
+
                 // Calculate score if requested
                 let name = symbol.name.as_deref().unwrap_or("");
                 let display_fqn = symbol.display_fqn.as_deref().unwrap_or("");
@@ -402,7 +467,7 @@ impl super::BackendTrait for NativeV2Backend {
                     start_col: symbol.start_col as u64,
                     end_line: symbol.end_line as u64,
                     end_col: symbol.end_col as u64,
-                    context: None,
+                    context,
                 };
 
                 results.push(SymbolMatch {
@@ -836,7 +901,7 @@ impl super::BackendTrait for NativeV2Backend {
                 reason: format!("Failed to parse SymbolNode: {}", e),
             })?;
 
-        Ok(self.symbol_node_to_match(&symbol_node, 0, None, None))
+        Ok(self.symbol_node_to_match(&symbol_node, 0, None, None, None))
     }
 
     fn search_by_label(
@@ -896,7 +961,7 @@ impl super::BackendTrait for NativeV2Backend {
             match backend.get_node(snapshot, symbol_id) {
                 Ok(node) => {
                     if let Ok(symbol_node) = serde_json::from_value::<SymbolNode>(node.data) {
-                        results.push(self.symbol_node_to_match(&symbol_node, results.len(), None, None));
+                        results.push(self.symbol_node_to_match(&symbol_node, results.len(), None, None, None));
                     }
                 }
                 Err(_) => continue,
