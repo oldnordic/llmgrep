@@ -37,11 +37,80 @@ fn get_test_sqlite_db() -> PathBuf {
     // Remove any existing test database
     let _ = std::fs::remove_file(&temp_file);
 
-    // Write SQLite header to create a valid (but empty) SQLite database
-    use std::io::Write;
-    let mut file = std::fs::File::create(&temp_file).unwrap();
-    file.write_all(b"SQLite format 3\0").unwrap();
-    file.sync_all().unwrap();
+    // Create a valid minimal SQLite database using rusqlite
+    // Just opening and closing creates the basic structure
+    if let Ok(conn) = rusqlite::Connection::open(&temp_file) {
+        // Create tables matching Magellan's SQLite schema
+        let _ = conn.execute(
+            "CREATE TABLE IF NOT EXISTS graph_entities (
+                id INTEGER PRIMARY KEY,
+                kind TEXT NOT NULL,
+                data TEXT NOT NULL
+            )",
+            [],
+        );
+        let _ = conn.execute(
+            "CREATE TABLE IF NOT EXISTS graph_edges (
+                id INTEGER PRIMARY KEY,
+                from_id INTEGER NOT NULL,
+                to_id INTEGER NOT NULL,
+                edge_type TEXT NOT NULL
+            )",
+            [],
+        );
+        let _ = conn.execute(
+            "CREATE TABLE IF NOT EXISTS ast_nodes (
+                id INTEGER PRIMARY KEY,
+                file_id INTEGER NOT NULL,
+                kind TEXT NOT NULL,
+                byte_start INTEGER NOT NULL,
+                byte_end INTEGER NOT NULL,
+                line_number INTEGER,
+                parent_id INTEGER,
+                data TEXT
+            )",
+            [],
+        );
+        let _ = conn.execute(
+            "CREATE TABLE IF NOT EXISTS symbol_metrics (
+                symbol_id INTEGER PRIMARY KEY,
+                fan_in INTEGER DEFAULT 0,
+                fan_out INTEGER DEFAULT 0,
+                cyclomatic_complexity INTEGER DEFAULT 0
+            )",
+            [],
+        );
+        // Insert metrics for the test symbol
+        let _ = conn.execute(
+            "INSERT INTO symbol_metrics (symbol_id, fan_in, fan_out, cyclomatic_complexity) VALUES (2, 0, 0, 1)",
+            [],
+        );
+        let _ = conn.execute(
+            "CREATE TABLE IF NOT EXISTS code_chunks (
+                symbol_name TEXT,
+                file_path TEXT,
+                byte_start INTEGER,
+                byte_end INTEGER,
+                snippet TEXT
+            )",
+            [],
+        );
+        // Insert test data: a file entity
+        let _ = conn.execute(
+            "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"test.rs\"}')",
+            [],
+        );
+        // Insert test data: a symbol entity with all required fields
+        let _ = conn.execute(
+            "INSERT INTO graph_entities (id, kind, data) VALUES (2, 'Symbol', '{\"name\":\"test\",\"fqn\":\"test::function\",\"display_fqn\":\"test::function\",\"canonical_fqn\":\"test::function\",\"byte_start\":0,\"byte_end\":10,\"line_start\":1,\"line_end\":2,\"start_line\":1,\"start_col\":0,\"language\":\"Rust\",\"symbol_id\":\"2\"}')",
+            [],
+        );
+        // Insert test data: edge from file to symbol (DEFINES)
+        let _ = conn.execute(
+            "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 2, 'DEFINES')",
+            [],
+        );
+    }
 
     temp_file
 }
