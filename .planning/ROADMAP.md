@@ -497,10 +497,10 @@ Plans:
 - [x] 22-03 — Cross-backend verification tests for language detection
 - [x] 22-04 — Final verification and release
 
-#### Phase 23: Native-V2 Feature Parity 🔄
+#### Phase 23: Native-V2 Feature Parity ✅
 **Goal:** Achieve full feature parity between SQLite and Native-V2 backends
 **Depends on**: Phase 22
-**Status:** Pending
+**Status:** COMPLETE — 2026-02-10
 **Success Criteria** (what must be TRUE):
   1. `--with-context` flag works with Native-V2 backend
   2. `--with-snippet` flag works with Native-V2 backend
@@ -511,12 +511,12 @@ Plans:
 **Plans**: 6 plans
 
 Plans:
-- [ ] 23-01 — Context extraction from CodeGraph
-- [ ] 23-02 — Snippet extraction from CodeGraph
-- [ ] 23-03 — Score calculation for relevance sorting
-- [ ] 23-04 — Metrics extraction from CodeGraph
-- [ ] 23-05 — Cross-backend parity tests
-- [ ] 23-06 — Documentation and verification
+- [x] 23-01 — Context extraction from CodeGraph
+- [x] 23-02 — Snippet extraction from CodeGraph
+- [x] 23-03 — Score calculation for relevance sorting
+- [x] 23-04 — Metrics extraction from CodeGraph
+- [x] 23-05 — Cross-backend parity tests
+- [x] 23-06 — Documentation and verification
 
 #### Phase 24: Code Quality Polish ✨
 **Goal:** Address code quality issues, remove warnings, improve test code
@@ -580,7 +580,7 @@ Phases execute in numeric order: 17 → 18 → 19 → 20 → 21 → 22 → 23 �
 | 20. CLI Integration | v3.0 | 5/5 | Complete | 2026-02-10 |
 | 21. Native-V2 Features | v3.0 | 6/6 | Complete | 2026-02-10 |
 | 22. Production Bugfix | v3.0.1 | 4/4 | Complete | 2026-02-10 |
-| 23. Feature Parity | v3.1 | 0/6 | Pending | — |
+| 23. Feature Parity | v3.1 | 6/6 | Complete | 2026-02-10 |
 | 24. Code Quality Polish | v3.1 | 0/7 | Pending | — |
 
 **Recent Trend:**
@@ -588,6 +588,8 @@ Phases execute in numeric order: 17 → 18 → 19 → 20 → 21 → 22 → 23 �
 - Phase 18 (6 plans): ~2 min each
 - Phase 19 (6 plans): ~5 min each
 - Phase 20 (5 plans): ~15 min per plan (integration work)
-- **Phase 21 target**: 6 plans planned, ready for execution
+- Phase 21 (6 plans): ~7 min per plan
+- Phase 22 (4 plans): ~8 min per plan
+- Phase 23 (6 plans): ~5 min per plan
 
 *Updated after phase completion*

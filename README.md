@@ -192,6 +192,55 @@ llmgrep --db .codemcp/codegraph.db search --query "^Token" --regex --output json
 | `complete` | FQN autocomplete via KV prefix scan (v3.0) | Native-V2 only |
 | `lookup` | O(1) exact symbol lookup by FQN (v3.0) | Native-V2 only |
 
+## Feature Parity
+
+**As of v3.1**, llmgrep achieves full feature parity between SQLite and Native-V2 backends for all search operations. Both backends now support identical functionality:
+
+### Shared Features (SQLite + Native-V2)
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Context extraction** | `--with-context` flag | Full parity |
+| **Snippet extraction** | `--with-snippet` flag | Full parity |
+| **Relevance scoring** | `--sort-by relevance` | Full parity |
+| **Metrics filtering** | `--min-fan-in`, `--min-fan-out`, `--min-complexity` | Full parity |
+| **Symbol search** | `--mode symbols` | Full parity |
+| **Reference search** | `--mode references` | Full parity |
+| **Call search** | `--mode calls` | Full parity |
+| **AST queries** | `ast`, `find-ast` commands | Full parity |
+| **Regex patterns** | `--regex` flag | Full parity |
+| **Path filtering** | `--path` flag | Full parity |
+| **Kind filtering** | `--kind` flag | Full parity |
+| **Language filtering** | `--language` flag | Full parity |
+
+### Native-V2 Exclusive Features
+
+The following features are only available with the Native-V2 backend (requires `--features native-v2` at compile time and `--storage native-v2` when indexing):
+
+| Feature | Description |
+|---------|-------------|
+| **FQN autocomplete** | `complete` command with O(1) KV prefix scan |
+| **Exact lookup** | `lookup` command with O(1) FQN resolution |
+| **Label search** | `--mode label` for purpose-based queries (test functions, entry points) |
+| **Performance metrics** | `--show-metrics` flag for timing breakdown |
+
+### Backend Selection
+
+llmgrep automatically detects the backend format from the database file header:
+
+```bash
+# SQLite backend (default)
+magellan watch --root ./src --db code.db
+
+# Native-V2 backend (opt-in)
+magellan watch --root ./src --db code.db --storage native-v2
+
+# Build with native-v2 support
+cargo install llmgrep --features native-v2
+```
+
+Both backends provide identical search results for all shared features.
+
 ### Search Options
 
 **Search mode:** `--mode {symbols|references|calls|label}` (v3.0 adds `label`)
