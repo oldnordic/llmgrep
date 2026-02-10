@@ -16,7 +16,7 @@ use llmgrep::query::{
 use llmgrep::ast::{expand_shorthand_with_language, expand_shorthands};
 use llmgrep::SortMode;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 // Custom value parser for ranged usize - needed because clap doesn't provide RangedUsizeValueParser
@@ -637,7 +637,6 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             paths_to.as_ref(),
         ),
 
-        #[cfg(feature = "unstable-watch")]
         Command::Watch {
             query,
             mode,
@@ -646,13 +645,6 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             limit,
             regex,
         } => run_watch(cli, query, *mode, path, kind, *limit, *regex),
-
-        #[cfg(not(feature = "unstable-watch"))]
-        Command::Watch { .. } => {
-            eprintln!("Error: watch command is incomplete and not yet available.");
-            eprintln!("This feature is under development and will be available in a future release.");
-            std::process::exit(1);
-        }
         }
     }
 }
@@ -1598,7 +1590,6 @@ fn run_lookup(
 }
 
 /// Run watch command with signal handling.
-#[cfg(feature = "unstable-watch")]
 fn run_watch(
     cli: &Cli,
     query: &str,
@@ -1608,8 +1599,9 @@ fn run_watch(
     limit: usize,
     regex: bool,
 ) -> Result<(), LlmError> {
+    use llmgrep::algorithm::AlgorithmOptions;
     use llmgrep::query::{
-        AlgorithmOptions, AstOptions, ContextOptions, DepthOptions, FqnOptions,
+        AstOptions, ContextOptions, DepthOptions, FqnOptions,
         MetricsOptions, SearchOptions, SnippetOptions,
     };
 
@@ -1634,14 +1626,12 @@ fn run_watch(
         None
     };
 
-    // Convert SearchMode enum to query::SearchMode
-    let search_mode = match mode {
-        SearchMode::Symbols => llmgrep::query::SearchMode::Symbols,
-        SearchMode::References => llmgrep::query::SearchMode::References,
-        SearchMode::Calls => llmgrep::query::SearchMode::Calls,
-        SearchMode::Labels => llmgrep::query::SearchMode::Labels,
-        SearchMode::Auto => llmgrep::query::SearchMode::Auto,
-    };
+    // For watch command, we only support symbols mode for now
+    if !matches!(mode, SearchMode::Symbols) {
+        return Err(LlmError::InvalidQuery {
+            query: "Watch mode only supports symbols search. Use --mode symbols (default).".to_string(),
+        });
+    }
 
     // Build SearchOptions from command args
     let options = SearchOptions {
@@ -1664,8 +1654,23 @@ fn run_watch(
             with_ast_context: false,
             _phantom: std::marker::PhantomData,
         },
-        depth: DepthOptions::default(),
-        algorithm: AlgorithmOptions::default(),
+        depth: DepthOptions {
+            min_depth: None,
+            max_depth: None,
+            inside: None,
+            contains: None,
+        },
+        algorithm: AlgorithmOptions {
+            from_symbol_set: None,
+            reachable_from: None,
+            dead_code_in: None,
+            in_cycle: None,
+            slice_backward_from: None,
+            slice_forward_from: None,
+            condense: false,
+            paths_from: None,
+            paths_to: None,
+        },
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
@@ -1687,8 +1692,8 @@ fn run_watch(
     }
 
     // Run the watch command
-    llmgrep::watch_cmd::run_watch(db_path, options, cli.output, shutdown)
-        .map_err(|e| LlmError::SearchFailed {
+    llmgrep::watch_cmd::run_watch(db_path.clone(), options, cli.output, shutdown)
+        .map_err(|e: anyhow::Error| LlmError::SearchFailed {
             reason: e.to_string(),
         })?;
 

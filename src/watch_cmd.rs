@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crate::backend::Backend;
-use crate::backend::BackendTrait;
 use crate::error::LlmError;
 use crate::output::{OutputFormat, SearchResponse, SymbolMatch};
 use crate::query::SearchOptions;
