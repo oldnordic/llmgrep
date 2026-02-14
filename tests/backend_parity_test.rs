@@ -1,9 +1,9 @@
 //! Cross-backend integration tests for ast and find-ast commands.
 //!
 //! These tests verify that the Backend abstraction works correctly
-//! for both SQLite and native-v2 backends.
+//! for both SQLite and native-v3 backends.
 
-#![cfg(feature = "native-v2")]
+#![cfg(feature = "native-v3")]
 
 use llmgrep::backend::Backend;
 use std::path::Path;
@@ -57,9 +57,9 @@ fn test_backend_opens_sqlite_database() {
         Backend::Sqlite(_) => {
             // Correct - SQLite backend detected
         }
-        #[cfg(feature = "native-v2")]
-        Backend::NativeV2(_) => {
-            panic!("Should not detect simple SQLite as native-v2");
+        #[cfg(feature = "native-v3")]
+        Backend::NativeV3(_) => {
+            panic!("Should not detect simple SQLite as native-v3");
         }
     }
 }
@@ -234,47 +234,47 @@ fn test_backend_find_ast_various_kinds() {
 // Native-V2 backend specific tests
 // ============================================================================
 
-/// Test that native-v2 backend is correctly detected and opened
-#[cfg(feature = "native-v2")]
+/// Test that native-v3 backend is correctly detected and opened
+#[cfg(feature = "native-v3")]
 #[test]
-fn test_native_v2_backend_detection() {
+fn test_native_v3_backend_detection() {
     use magellan::CodeGraph;
 
     let temp_dir = TempDir::new().expect("tempdir");
     let db_path = temp_dir.path().join("test.db");
 
-    // Create a native-v2 database
+    // Create a native-v3 database
     let _graph = CodeGraph::open(&db_path)
-        .expect("Failed to create native-v2 database");
+        .expect("Failed to create native-v3 database");
 
     // Open via Backend abstraction
     let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open native-v2 database");
+        .expect("Backend should open native-v3 database");
 
-    // Verify it detected as native-v2
+    // Verify it detected as native-v3
     match backend {
-        #[cfg(feature = "native-v2")]
-        Backend::NativeV2(_) => {
-            // Correct - native-v2 backend detected
+        #[cfg(feature = "native-v3")]
+        Backend::NativeV3(_) => {
+            // Correct - native-v3 backend detected
         }
         Backend::Sqlite(_) => {
-            panic!("Should detect native-v2 database as native-v2, not SQLite");
+            panic!("Should detect native-v3 database as native-v3, not SQLite");
         }
     }
 }
 
-/// Test that native-v2 backend ast() method handles non-existent files gracefully
-#[cfg(feature = "native-v2")]
+/// Test that native-v3 backend ast() method handles non-existent files gracefully
+#[cfg(feature = "native-v3")]
 #[test]
-fn test_native_v2_ast_empty_result_for_missing_file() {
+fn test_native_v3_ast_empty_result_for_missing_file() {
     use magellan::CodeGraph;
 
     let temp_dir = TempDir::new().expect("tempdir");
     let db_path = temp_dir.path().join("test.db");
 
-    // Create a native-v2 database
+    // Create a native-v3 database
     let _graph = CodeGraph::open(&db_path)
-        .expect("Failed to create native-v2 database");
+        .expect("Failed to create native-v3 database");
 
     let backend = Backend::detect_and_open(&db_path)
         .expect("Backend should open database");
@@ -287,7 +287,7 @@ fn test_native_v2_ast_empty_result_for_missing_file() {
     );
 
     // Should return empty array, not error
-    let json = result.expect("native-v2 backend should handle missing file gracefully");
+    let json = result.expect("native-v3 backend should handle missing file gracefully");
 
     match json {
         serde_json::Value::Array(arr) => {
@@ -302,18 +302,18 @@ fn test_native_v2_ast_empty_result_for_missing_file() {
     }
 }
 
-/// Test that native-v2 backend find_ast() handles unknown kinds gracefully
-#[cfg(feature = "native-v2")]
+/// Test that native-v3 backend find_ast() handles unknown kinds gracefully
+#[cfg(feature = "native-v3")]
 #[test]
-fn test_native_v2_find_ast_empty_result_for_unknown_kind() {
+fn test_native_v3_find_ast_empty_result_for_unknown_kind() {
     use magellan::CodeGraph;
 
     let temp_dir = TempDir::new().expect("tempdir");
     let db_path = temp_dir.path().join("test.db");
 
-    // Create a native-v2 database
+    // Create a native-v3 database
     let _graph = CodeGraph::open(&db_path)
-        .expect("Failed to create native-v2 database");
+        .expect("Failed to create native-v3 database");
 
     let backend = Backend::detect_and_open(&db_path)
         .expect("Backend should open database");

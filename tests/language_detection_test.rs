@@ -220,21 +220,21 @@ fn test_language_detection_edge_cases() {
     assert_eq!(llmgrep::query::infer_language(".hidden"), None);  // Hidden file
 }
 
-// Test 15: Verify native-v2 backend doesn't output debug info (code inspection)
+// Test 15: Verify native-v3 backend doesn't output debug info (code inspection)
 #[test]
 fn test_no_debug_strings_in_code() {
-    // Verify that debug output was removed from native_v2.rs
+    // Verify that debug output was removed from native_v3.rs
     // This is a compile-time check by examining the source
     use std::fs;
     use std::path::Path;
 
-    let native_v2_path = Path::new("src/backend/native_v2.rs");
-    if native_v2_path.exists() {
-        let content = fs::read_to_string(native_v2_path).expect("failed to read test file");
+    let native_v3_path = Path::new("src/backend/native_v3.rs");
+    if native_v3_path.exists() {
+        let content = fs::read_to_string(native_v3_path).expect("failed to read test file");
 
         // Check that no DEBUG: eprintln statements exist
         assert!(!content.contains("eprintln!(\"DEBUG:"),
-                "native_v2.rs should not contain eprintln DEBUG statements");
+                "native_v3.rs should not contain eprintln DEBUG statements");
 
         // Check that no bare DEBUG comments exist (from removed code)
         let debug_lines: Vec<&str> = content
@@ -244,7 +244,7 @@ fn test_no_debug_strings_in_code() {
             .collect();
 
         assert!(debug_lines.is_empty(),
-                "native_v2.rs should not contain DEBUG comment lines: {:?}",
+                "native_v3.rs should not contain DEBUG comment lines: {:?}",
                 debug_lines);
     }
 }

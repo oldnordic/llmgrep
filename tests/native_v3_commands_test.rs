@@ -1,6 +1,6 @@
-//! Integration tests for native-v2 exclusive features.
+//! Integration tests for native-v3 exclusive features.
 //!
-//! This test suite verifies that native-v2 exclusive commands work correctly:
+//! This test suite verifies that native-v3 exclusive commands work correctly:
 //! - Complete command (KV prefix scan for autocomplete)
 //! - Lookup command (O(1) exact FQN lookup)
 //! - Label search mode (purpose-based semantic search)
@@ -71,13 +71,13 @@ fn test_complete_command_sqlite_error() {
     let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
 
     let result = backend.complete("test", 10);
-    assert!(matches!(result, Err(LlmError::RequiresNativeV2Backend { .. })));
+    assert!(matches!(result, Err(LlmError::RequiresNativeV3Backend { .. })));
 
-    if let Err(LlmError::RequiresNativeV2Backend { command, path }) = result {
+    if let Err(LlmError::RequiresNativeV3Backend { command, path }) = result {
         assert_eq!(command, "complete");
         assert!(path.contains("test.db"));
     } else {
-        panic!("Expected RequiresNativeV2Backend error");
+        panic!("Expected RequiresNativeV3Backend error");
     }
 }
 
@@ -91,13 +91,13 @@ fn test_lookup_command_sqlite_error() {
     let db_path_str = db_path.to_string_lossy().to_string();
 
     let result = backend.lookup("test::symbol", &db_path_str);
-    assert!(matches!(result, Err(LlmError::RequiresNativeV2Backend { .. })));
+    assert!(matches!(result, Err(LlmError::RequiresNativeV3Backend { .. })));
 
-    if let Err(LlmError::RequiresNativeV2Backend { command, path }) = result {
+    if let Err(LlmError::RequiresNativeV3Backend { command, path }) = result {
         assert_eq!(command, "lookup");
         assert!(path.contains("test.db"));
     } else {
-        panic!("Expected RequiresNativeV2Backend error");
+        panic!("Expected RequiresNativeV3Backend error");
     }
 }
 
@@ -111,13 +111,13 @@ fn test_label_search_sqlite_error() {
     let db_path_str = db_path.to_string_lossy().to_string();
 
     let result = backend.search_by_label("test", 10, &db_path_str);
-    assert!(matches!(result, Err(LlmError::RequiresNativeV2Backend { .. })));
+    assert!(matches!(result, Err(LlmError::RequiresNativeV3Backend { .. })));
 
-    if let Err(LlmError::RequiresNativeV2Backend { command, path }) = result {
+    if let Err(LlmError::RequiresNativeV3Backend { command, path }) = result {
         assert_eq!(command, "search --mode label");
         assert!(path.contains("test.db"));
     } else {
-        panic!("Expected RequiresNativeV2Backend error");
+        panic!("Expected RequiresNativeV3Backend error");
     }
 }
 
@@ -177,9 +177,9 @@ fn test_backend_detection_sqlite_format() {
         llmgrep::backend::Backend::Sqlite(_) => {
             // Expected: SQLite backend detected
         }
-        #[cfg(feature = "native-v2")]
-        llmgrep::backend::Backend::NativeV2(_) => {
-            panic!("Unexpected: NativeV2 backend detected for SQLite format");
+        #[cfg(feature = "native-v3")]
+        llmgrep::backend::Backend::NativeV3(_) => {
+            panic!("Unexpected: NativeV3 backend detected for SQLite format");
         }
     }
 }
@@ -194,29 +194,29 @@ fn test_backend_open_success() {
     assert!(result.is_ok(), "Should successfully open SQLite backend");
 }
 
-// Test 9: Verify RequiresNativeV2Backend error contains helpful information
+// Test 9: Verify RequiresNativeV3Backend error contains helpful information
 #[test]
-fn test_requires_native_v2_backend_error_message() {
+fn test_requires_native_v3_backend_error_message() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
     let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let result = backend.complete("test", 10);
 
-    if let Err(LlmError::RequiresNativeV2Backend { command, path }) = result {
+    if let Err(LlmError::RequiresNativeV3Backend { command, path }) = result {
         // Verify error message contains expected parts
-        let error_msg = format!("{}", LlmError::RequiresNativeV2Backend {
+        let error_msg = format!("{}", LlmError::RequiresNativeV3Backend {
             command: command.clone(),
             path: path.clone(),
         });
 
         assert!(error_msg.contains("complete"), "Error should mention the command");
-        assert!(error_msg.contains("native-v2"), "Error should mention native-v2 requirement");
+        assert!(error_msg.contains("native-v3"), "Error should mention native-v3 requirement");
         assert!(error_msg.contains("O(1)"), "Error should explain performance benefit");
         // The actual error message mentions "complete" and "prefix" but not "autocomplete" specifically
         assert!(error_msg.contains("complete") || error_msg.contains("prefix"), "Error should mention complete or prefix");
     } else {
-        panic!("Expected RequiresNativeV2Backend error");
+        panic!("Expected RequiresNativeV3Backend error");
     }
 }
 
@@ -307,7 +307,7 @@ fn test_complete_command_various_prefixes() {
 
     for prefix in prefixes {
         let result = backend.complete(prefix, 10);
-        assert!(matches!(result, Err(LlmError::RequiresNativeV2Backend { .. })));
+        assert!(matches!(result, Err(LlmError::RequiresNativeV3Backend { .. })));
     }
 }
 
@@ -323,13 +323,13 @@ fn test_lookup_command_various_fqns() {
     let fqns = vec![
         "std::collections::HashMap::new",
         "test::module::function",
-        "crate::backend::NativeV2Backend",
+        "crate::backend::NativeV3Backend",
         "llmgrep::main",
     ];
 
     for fqn in fqns {
         let result = backend.lookup(fqn, &db_path_str);
-        assert!(matches!(result, Err(LlmError::RequiresNativeV2Backend { .. })));
+        assert!(matches!(result, Err(LlmError::RequiresNativeV3Backend { .. })));
     }
 }
 
@@ -346,7 +346,7 @@ fn test_label_search_various_labels() {
 
     for label in labels {
         let result = backend.search_by_label(label, 10, &db_path_str);
-        assert!(matches!(result, Err(LlmError::RequiresNativeV2Backend { .. })));
+        assert!(matches!(result, Err(LlmError::RequiresNativeV3Backend { .. })));
     }
 }
 
@@ -385,9 +385,9 @@ fn test_performance_metrics_in_json_response() {
     assert!(json_str.contains("\"total_ms\":18"));
 }
 
-// Test 18: Verify remediation hints for RequiresNativeV2Backend
+// Test 18: Verify remediation hints for RequiresNativeV3Backend
 #[test]
-fn test_requires_native_v2_backend_remediation() {
+fn test_requires_native_v3_backend_remediation() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
@@ -399,7 +399,7 @@ fn test_requires_native_v2_backend_remediation() {
         assert!(remediation.is_some(), "Should have remediation hint");
         let hint = remediation.expect("test database operation failed");
         assert!(hint.contains("magellan watch"), "Should suggest reindexing with magellan");
-        assert!(hint.contains("native-v2"), "Should mention native-v2 storage");
+        assert!(hint.contains("native-v3"), "Should mention native-v3 storage");
     } else {
         panic!("Expected error for complete command on SQLite backend");
     }
@@ -459,7 +459,7 @@ fn test_complete_command_limit_parameter() {
     // Test with various limit values
     for limit in [1, 10, 50, 100, 1000] {
         let result = backend.complete("test", limit);
-        assert!(matches!(result, Err(LlmError::RequiresNativeV2Backend { .. })));
+        assert!(matches!(result, Err(LlmError::RequiresNativeV3Backend { .. })));
     }
 }
 
@@ -475,10 +475,10 @@ fn test_lookup_command_preserves_fqn() {
     let test_fqn = "test::module::function";
     let result = backend.lookup(test_fqn, &db_path_str);
 
-    if let Err(LlmError::RequiresNativeV2Backend { command, .. }) = result {
+    if let Err(LlmError::RequiresNativeV3Backend { command, .. }) = result {
         assert_eq!(command, "lookup");
     } else {
-        panic!("Expected RequiresNativeV2Backend error");
+        panic!("Expected RequiresNativeV3Backend error");
     }
 }
 
@@ -494,10 +494,10 @@ fn test_label_search_preserves_label() {
     let test_label = "test_functions";
     let result = backend.search_by_label(test_label, 10, &db_path_str);
 
-    if let Err(LlmError::RequiresNativeV2Backend { command, .. }) = result {
+    if let Err(LlmError::RequiresNativeV3Backend { command, .. }) = result {
         assert_eq!(command, "search --mode label");
     } else {
-        panic!("Expected RequiresNativeV2Backend error");
+        panic!("Expected RequiresNativeV3Backend error");
     }
 }
 
@@ -524,7 +524,7 @@ fn test_backend_standard_search_operations() {
     let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
 
     // Standard search may fail due to incomplete schema, but that's okay
-    // The important thing is that it returns a different error than native-v2 requirements
+    // The important thing is that it returns a different error than native-v3 requirements
     use llmgrep::query::SearchOptions;
 
     let options = SearchOptions {
@@ -551,9 +551,9 @@ fn test_backend_standard_search_operations() {
     };
 
     let result = backend.search_symbols(options);
-    // The result may be ok or may fail due to schema, but should NOT be RequiresNativeV2Backend
-    if let Err(LlmError::RequiresNativeV2Backend { .. }) = result {
-        panic!("Standard search should not require native-v2 backend");
+    // The result may be ok or may fail due to schema, but should NOT be RequiresNativeV3Backend
+    if let Err(LlmError::RequiresNativeV3Backend { .. }) = result {
+        panic!("Standard search should not require native-v3 backend");
     }
     // Other outcomes are acceptable (success or other errors)
 }
@@ -561,7 +561,7 @@ fn test_backend_standard_search_operations() {
 // Test 26: Verify error severity levels
 #[test]
 fn test_error_severity_levels() {
-    let backend_error = LlmError::RequiresNativeV2Backend {
+    let backend_error = LlmError::RequiresNativeV3Backend {
         command: "complete".to_string(),
         path: "/tmp/test.db".to_string(),
     };
@@ -583,13 +583,13 @@ fn test_multiple_backend_operations() {
 
     let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
 
-    // All native-v2 operations should fail gracefully
+    // All native-v3 operations should fail gracefully
     assert!(backend.complete("test", 10).is_err());
     assert!(backend.lookup("test::symbol", &db_path.to_string_lossy()).is_err());
     assert!(backend.search_by_label("test", 10, &db_path.to_string_lossy()).is_err());
 
     // Standard operations may succeed or fail depending on schema
-    // but should NOT fail with RequiresNativeV2Backend
+    // but should NOT fail with RequiresNativeV3Backend
     use llmgrep::query::SearchOptions;
 
     let options = SearchOptions {
@@ -616,8 +616,8 @@ fn test_multiple_backend_operations() {
     };
 
     let result = backend.search_symbols(options);
-    if let Err(LlmError::RequiresNativeV2Backend { .. }) = result {
-        panic!("Standard search should not require native-v2 backend");
+    if let Err(LlmError::RequiresNativeV3Backend { .. }) = result {
+        panic!("Standard search should not require native-v3 backend");
     }
     // Other outcomes are acceptable
 }
@@ -648,7 +648,7 @@ fn test_backend_error_consistency() {
     let backend = llmgrep::backend::Backend::detect_and_open(&db_path).expect("failed to detect and open backend");
     let db_path_str = db_path.to_string_lossy().to_string();
 
-    // All native-v2 errors should have the same error code
+    // All native-v3 errors should have the same error code
     let complete_err = backend.complete("test", 10);
     let lookup_err = backend.lookup("test", &db_path_str);
     let label_err = backend.search_by_label("test", 10, &db_path_str);
@@ -672,9 +672,9 @@ fn test_backend_error_consistency() {
     assert_eq!(label_code, "LLM-E111");
 }
 
-// Test 30: Search operations with standard options don't require native-v2
+// Test 30: Search operations with standard options don't require native-v3
 #[test]
-fn test_search_operations_dont_require_native_v2() {
+fn test_search_operations_dont_require_native_v3() {
     let _dir = create_sqlite_test_db();
     let db_path = _dir.path().join("test.db");
 
@@ -705,20 +705,20 @@ fn test_search_operations_dont_require_native_v2() {
         exact_fqn: None,
     };
 
-    // All standard search modes should NOT require native-v2 backend
+    // All standard search modes should NOT require native-v3 backend
     // They may succeed or fail for other reasons (schema, etc.)
     let symbols_result = backend.search_symbols(options.clone());
     let refs_result = backend.search_references(options.clone());
     let calls_result = backend.search_calls(options);
 
-    // Verify none of them fail with RequiresNativeV2Backend
-    if let Err(LlmError::RequiresNativeV2Backend { .. }) = symbols_result {
-        panic!("search_symbols should not require native-v2 backend");
+    // Verify none of them fail with RequiresNativeV3Backend
+    if let Err(LlmError::RequiresNativeV3Backend { .. }) = symbols_result {
+        panic!("search_symbols should not require native-v3 backend");
     }
-    if let Err(LlmError::RequiresNativeV2Backend { .. }) = refs_result {
-        panic!("search_references should not require native-v2 backend");
+    if let Err(LlmError::RequiresNativeV3Backend { .. }) = refs_result {
+        panic!("search_references should not require native-v3 backend");
     }
-    if let Err(LlmError::RequiresNativeV2Backend { .. }) = calls_result {
-        panic!("search_calls should not require native-v2 backend");
+    if let Err(LlmError::RequiresNativeV3Backend { .. }) = calls_result {
+        panic!("search_calls should not require native-v3 backend");
     }
 }

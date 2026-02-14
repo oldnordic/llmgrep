@@ -22,7 +22,7 @@ fn test_detect_sqlite_backend() {
     let result = Backend::detect_and_open(path);
 
     // We expect DatabaseCorrupted or similar since it's not a real DB
-    // But NOT NativeV2BackendNotSupported or BackendDetectionFailed
+    // But NOT NativeV3BackendNotSupported or BackendDetectionFailed
     match result {
         Ok(_) => {}
         Err(e) => {
@@ -30,8 +30,8 @@ fn test_detect_sqlite_backend() {
             let error_msg = e.to_string();
             assert!(!error_msg.contains("Backend detection failed"),
                 "Should not fail detection for SQLite header: {}", error_msg);
-            assert!(!error_msg.contains("native-v2 support"),
-                "Should not think SQLite is native-v2: {}", error_msg);
+            assert!(!error_msg.contains("native-v3 support"),
+                "Should not think SQLite is native-v3: {}", error_msg);
         }
     }
 }
@@ -66,18 +66,20 @@ fn test_detect_empty_file() {
             "Expected format error for empty file, got: {}", error_msg);
 }
 
-#[cfg(feature = "native-v2")]
+#[cfg(feature = "native-v3")]
 #[test]
-fn test_detect_native_v2_backend() {
+fn test_detect_native_v3_backend() {
     use std::io::Write;
 
     // Create a temporary file with Native-V2 header
     let temp = NamedTempFile::new().expect("failed to create temp file");
     let path = temp.path();
 
-    // Write Native-V2 magic bytes: "SQLTGF"
+    // Write Native-V3 magic bytes: "SQLTGF" padded to 16 bytes
     let mut file = std::fs::File::create(path).expect("failed to create file");
-    file.write_all(b"SQLTGF").expect("failed to write test data");
+    let mut header = b"SQLTGF".to_vec();
+    header.resize(16, 0); // Pad to 16 bytes for header detection
+    file.write_all(&header).expect("failed to write test data");
     file.sync_all().expect("failed to sync file");
 
     let result = Backend::detect_and_open(path);
@@ -95,28 +97,30 @@ fn test_detect_native_v2_backend() {
     }
 }
 
-#[cfg(not(feature = "native-v2"))]
+#[cfg(not(feature = "native-v3"))]
 #[test]
-fn test_native_v2_not_supported_error() {
+fn test_native_v3_not_supported_error() {
     use std::io::Write;
 
-    // Create a temporary file with Native-V2 header
+    // Create a temporary file with Native-V3 header
     let temp = NamedTempFile::new().expect("failed to create temp file");
     let path = temp.path();
 
-    // Write Native-V2 magic bytes: "SQLTGF"
+    // Write Native-V3 magic bytes: "SQLTGF" padded to 16 bytes
     let mut file = std::fs::File::create(path).expect("failed to create file");
-    file.write_all(b"SQLTGF").expect("failed to write test data");
+    let mut header = b"SQLTGF".to_vec();
+    header.resize(16, 0); // Pad to 16 bytes for header detection
+    file.write_all(&header).expect("failed to write test data");
     file.sync_all().expect("failed to sync file");
 
     let result = Backend::detect_and_open(path);
 
     assert!(result.is_err());
     let error_msg = result.unwrap_err().to_string();
-    assert!(error_msg.contains("native-v2 support") ||
+    assert!(error_msg.contains("native-v3 support") ||
             error_msg.contains("LLM-E109"),
-            "Expected native-v2 not supported error, got: {}", error_msg);
-    assert!(error_msg.contains("cargo install llmgrep --features native-v2") ||
-            error_msg.contains("--features native-v2"),
-            "Error should suggest rebuilding with native-v2 feature");
+            "Expected native-v3 not supported error, got: {}", error_msg);
+    assert!(error_msg.contains("cargo install llmgrep --features native-v3") ||
+            error_msg.contains("--features native-v3"),
+            "Error should suggest rebuilding with native-v3 feature");
 }

@@ -5,7 +5,7 @@
 //!
 //! Purpose: Ensure users can switch between backends without changing their workflow or getting different results.
 
-#![cfg(feature = "native-v2")]
+#![cfg(feature = "native-v3")]
 
 use llmgrep::backend::Backend;
 use llmgrep::query::{ContextOptions, FqnOptions, MetricsOptions, SearchOptions, SnippetOptions};
@@ -123,35 +123,35 @@ fn test_backend_detection_sqlite() {
         Backend::Sqlite(_) => {
             // Correct - SQLite backend detected
         }
-        #[cfg(feature = "native-v2")]
-        Backend::NativeV2(_) => {
-            panic!("Should not detect SQLite as native-v2");
+        #[cfg(feature = "native-v3")]
+        Backend::NativeV3(_) => {
+            panic!("Should not detect SQLite as native-v3");
         }
     }
 }
 
-/// Test that native-v2 databases are correctly detected when feature is enabled
-#[cfg(feature = "native-v2")]
+/// Test that native-v3 databases are correctly detected when feature is enabled
+#[cfg(feature = "native-v3")]
 #[test]
-fn test_backend_detection_native_v2() {
+fn test_backend_detection_native_v3() {
     use magellan::CodeGraph;
 
     let dir = tempfile::tempdir().expect("failed to create temp dir");
     let db_path = dir.path().join("test.mag2");
 
-    // Create a native-v2 database (empty, but valid format)
+    // Create a native-v3 database (empty, but valid format)
     let _graph = CodeGraph::open(&db_path)
-        .expect("Failed to create native-v2 database");
+        .expect("Failed to create native-v3 database");
 
     let backend = Backend::detect_and_open(&db_path)
-        .expect("Should detect native-v2 backend");
+        .expect("Should detect native-v3 backend");
 
     match backend {
-        Backend::NativeV2(_) => {
-            // Correct - native-v2 backend detected
+        Backend::NativeV3(_) => {
+            // Correct - native-v3 backend detected
         }
         Backend::Sqlite(_) => {
-            panic!("Should detect native-v2 as native-v2, not SQLite");
+            panic!("Should detect native-v3 as native-v3, not SQLite");
         }
     }
 }
