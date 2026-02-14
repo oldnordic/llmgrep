@@ -1,6 +1,6 @@
 [package]
 name = "llmgrep"
-version = "3.0.2"
+version = "3.0.3"
 edition = "2021"
 description = "Smart grep over Magellan code maps with schema-aligned JSON output"
 license = "GPL-3.0-only"

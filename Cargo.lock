@@ -670,7 +670,7 @@ checksum = "df1d3c3b53da64cf5760482273a98e575c651a67eec7f77df96b5b642de8f039"
 
 [[package]]
 name = "llmgrep"
-version = "3.0.2"
+version = "3.0.3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -705,9 +705,9 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "magellan"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b560128bb7ee0e2a23d15cce0c511be552ef66f19730d1ffc55dcb6c2a75f003"
+checksum = "6e5687a1cc65975e2fcb9bdc35cb8217378e09f807634e2f5a3c9bc382e08348"
 dependencies = [
  "ahash",
  "anyhow",
