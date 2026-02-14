@@ -139,6 +139,10 @@ pub enum Backend {
 impl Backend {
     /// Detect backend format from database file and open appropriate backend.
     ///
+    /// Checks file header magic bytes to distinguish between:
+    /// - V3 backend: "SQLTGF" header (SQLiteGraph native format)
+    /// - SQLite backend: "SQLite format 3\0" header
+    ///
     /// # Arguments
     /// * `db_path` - Path to the database file
     ///
@@ -147,16 +151,48 @@ impl Backend {
     /// * `Err(LlmError::NativeV3BackendNotSupported)` - Native-V3 detected but feature not enabled
     /// * `Err(LlmError::BackendDetectionFailed)` - Detection failed
     pub fn detect_and_open(db_path: &Path) -> Result<Self, LlmError> {
-        // Check file extension to determine backend type
-        let path_str = db_path.to_string_lossy();
+        use std::fs::File;
+        use std::io::Read;
         
-        #[cfg(feature = "native-v3")]
-        if path_str.ends_with(".v3") {
-            return NativeV3Backend::open(db_path).map(Backend::NativeV3);
+        // Check if file exists
+        if !db_path.exists() {
+            return Err(LlmError::DatabaseNotFound {
+                path: db_path.display().to_string(),
+            });
         }
         
-        // Default to SQLite backend for .db files or unknown extensions
-        SqliteBackend::open(db_path).map(Backend::Sqlite)
+        // Read first 16 bytes to detect format
+        let mut file = File::open(db_path).map_err(|e| LlmError::BackendDetectionFailed {
+            path: db_path.display().to_string(),
+            reason: format!("Cannot open file: {}", e),
+        })?;
+        
+        let mut header = [0u8; 16];
+        file.read_exact(&mut header).map_err(|e| LlmError::BackendDetectionFailed {
+            path: db_path.display().to_string(),
+            reason: format!("Cannot read file header: {}", e),
+        })?;
+        
+        // Check for V3 format magic: "SQLTGF" (SQLiteGraph Native)
+        let is_v3 = &header[0..6] == b"SQLTGF";
+        
+        // Check for SQLite format: "SQLite format 3\0"
+        let is_sqlite = &header[0..16] == b"SQLite format 3\0";
+        
+        if is_v3 {
+            #[cfg(feature = "native-v3")]
+            return NativeV3Backend::open(db_path).map(Backend::NativeV3);
+            
+            #[cfg(not(feature = "native-v3"))]
+            return Err(LlmError::NativeV3BackendNotSupported {
+                path: db_path.display().to_string(),
+            });
+        } else if is_sqlite {
+            SqliteBackend::open(db_path).map(Backend::Sqlite)
+        } else {
+            // Unknown format, try SQLite as fallback (may fail with better error)
+            SqliteBackend::open(db_path).map(Backend::Sqlite)
+        }
     }
 
     /// Delegate search_symbols to inner backend.
