@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.7] - 2026-02-14
+
+### Changed
+- **Dependencies:**
+  - magellan: 2.4.2 → 2.4.3 (`get_symbol_by_entity_id()` for full symbol details)
+
+### Fixed
+- **V3 Backend:** Completed V3 backend implementations
+  - `lookup()` - Properly extracts file path from `canonical_fqn`, returns complete `SymbolMatch`
+  - `search_by_label()` - Properly extracts file path from `canonical_fqn`, returns complete `SymbolMatch`
+  - Both methods now use `get_symbol_by_entity_id()` to fetch full symbol details from entity IDs
+
+### Improved
+- **Documentation:** Updated README with accurate Native-V3 feature descriptions
+- **Repository:** Removed `.planning/` folder from git tracking (development docs only)
+
 ## [3.0.6] - 2026-02-14
 
 ### Changed

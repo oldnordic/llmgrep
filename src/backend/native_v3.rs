@@ -14,15 +14,15 @@ use crate::output::{
 use crate::query::SearchOptions;
 use magellan::common::extract_symbol_content_safe;
 use magellan::graph::{query, SymbolNode};
-use magellan::graph::metrics::schema::SymbolMetrics;
+// use magellan::graph::metrics::schema::SymbolMetrics;
 use magellan::CodeGraph;
 use regex::Regex;
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use sqlitegraph::SnapshotId;
-use sqlitegraph::backend::native::v3::KvValue;
+// use sqlitegraph::SnapshotId;
+// use sqlitegraph::backend::native::v3::KvValue;
 
 /// File cache for context and snippet extraction
 ///
@@ -972,49 +972,66 @@ impl super::BackendTrait for NativeV3Backend {
     }
 
     fn lookup(&self, fqn: &str, db_path: &str) -> Result<crate::output::SymbolMatch, LlmError> {
-        // Use magellan's V3 FQN lookup API
+        // Use magellan's V3 FQN lookup API to get symbol ID
         let graph = unsafe { self.graph() };
         
-        let symbol_id = graph.lookup_symbol_by_fqn(fqn);
+        let entity_id = graph.lookup_symbol_by_fqn(fqn);
         
-        if let Some(_id) = symbol_id {
-            // TODO: Get full symbol details from graph using symbol_id
-            // For now, return a placeholder match
-            let partial = fqn.rsplit("::").next().unwrap_or(fqn);
-            Ok(crate::output::SymbolMatch {
-                match_id: format!("sym-{}", fqn),
-                span: crate::output::Span {
-                    span_id: format!("{}:0:0", db_path),
-                    file_path: db_path.to_string(),
-                    byte_start: 0,
-                    byte_end: 0,
-                    start_line: 0,
-                    start_col: 0,
-                    end_line: 0,
-                    end_col: 0,
-                    context: None,
-                },
-                name: partial.to_string(),
-                kind: "Unknown".to_string(),
-                parent: None,
-                symbol_id: Some(fqn.to_string()),
-                score: None,
-                fqn: Some(fqn.to_string()),
-                canonical_fqn: Some(fqn.to_string()),
-                display_fqn: Some(fqn.to_string()),
-                content_hash: None,
-                symbol_kind_from_chunk: None,
-                snippet: None,
-                snippet_truncated: None,
-                language: None,
-                kind_normalized: None,
-                complexity_score: None,
-                fan_in: None,
-                fan_out: None,
-                cyclomatic_complexity: None,
-                ast_context: None,
-                supernode_id: None,
-            })
+        if let Some(id) = entity_id {
+            // Get full symbol details from graph
+            if let Some(symbol) = graph.get_symbol_by_entity_id(id) {
+                // Extract file path from canonical_fqn or use empty string
+                let file_path = symbol.canonical_fqn.as_ref()
+                    .and_then(|fqn| {
+                        // Try to extract file path from "crate::src/lib.rs::Function name"
+                        let parts: Vec<&str> = fqn.split("::").collect();
+                        parts.iter().find(|p| p.contains('/')).map(|s| s.to_string())
+                    })
+                    .unwrap_or_else(|| "<unknown>".to_string());
+                let name = symbol.name.clone().unwrap_or_else(|| "<unknown>".to_string());
+                
+                Ok(crate::output::SymbolMatch {
+                    match_id: format!("sym-{}", id),
+                    span: crate::output::Span {
+                        span_id: format!("{}:{}:{}", file_path, symbol.byte_start, symbol.byte_end),
+                        file_path: file_path.clone(),
+                        byte_start: symbol.byte_start as u64,
+                        byte_end: symbol.byte_end as u64,
+                        start_line: symbol.start_line as u64,
+                        start_col: symbol.start_col as u64,
+                        end_line: symbol.end_line as u64,
+                        end_col: symbol.end_col as u64,
+                        context: None,
+                    },
+                    name: name.clone(),
+                    kind: symbol.kind.clone(),
+                    parent: None,
+                    symbol_id: symbol.symbol_id.clone(),
+                    score: None,
+                    fqn: symbol.fqn.clone(),
+                    canonical_fqn: symbol.canonical_fqn.clone(),
+                    display_fqn: symbol.display_fqn.clone(),
+                    content_hash: None,
+                    symbol_kind_from_chunk: None,
+                    snippet: None,
+                    snippet_truncated: None,
+                    language: infer_language(&file_path).map(|s| s.to_string()),
+                    kind_normalized: symbol.kind_normalized.clone(),
+                    complexity_score: None,
+                    fan_in: None,
+                    fan_out: None,
+                    cyclomatic_complexity: None,
+                    ast_context: None,
+                    supernode_id: None,
+                })
+            } else {
+                let partial = fqn.rsplit("::").next().unwrap_or(fqn);
+                Err(LlmError::SymbolNotFound {
+                    fqn: fqn.to_string(),
+                    db: db_path.to_string(),
+                    partial: partial.to_string(),
+                })
+            }
         } else {
             let partial = fqn.rsplit("::").next().unwrap_or(fqn);
             Err(LlmError::SymbolNotFound {
@@ -1033,52 +1050,63 @@ impl super::BackendTrait for NativeV3Backend {
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
         // Use magellan's V3 label search API
         let graph = unsafe { self.graph() };
-        let symbol_ids = graph.get_symbols_by_label_kv(label);
+        let entity_ids = graph.get_symbols_by_label_kv(label);
         
         let mut results = Vec::new();
         
-        // Convert symbol IDs to SymbolMatch objects
-        for (idx, symbol_id) in symbol_ids.iter().take(limit).enumerate() {
-            // TODO: Get symbol details from graph using symbol_id
-            // For now, create placeholder matches
-            results.push(crate::output::SymbolMatch {
-                match_id: format!("label-{}-{}", label, idx),
-                span: crate::output::Span {
-                    span_id: format!("label:{}:{}", label, symbol_id),
-                    file_path: "<unknown>".to_string(),
-                    byte_start: 0,
-                    byte_end: 0,
-                    start_line: 0,
-                    start_col: 0,
-                    end_line: 0,
-                    end_col: 0,
-                    context: None,
-                },
-                name: format!("symbol_{}", symbol_id),
-                kind: "Unknown".to_string(),
-                parent: None,
-                symbol_id: Some(symbol_id.to_string()),
-                score: None,
-                fqn: None,
-                canonical_fqn: None,
-                display_fqn: None,
-                content_hash: None,
-                symbol_kind_from_chunk: None,
-                snippet: None,
-                snippet_truncated: None,
-                language: None,
-                kind_normalized: None,
-                complexity_score: None,
-                fan_in: None,
-                fan_out: None,
-                cyclomatic_complexity: None,
-                ast_context: None,
-                supernode_id: None,
-            });
+        // Convert entity IDs to SymbolMatch objects with full details
+        for (idx, entity_id) in entity_ids.iter().take(limit).enumerate() {
+            // Get full symbol details from graph
+            if let Some(symbol) = graph.get_symbol_by_entity_id(*entity_id) {
+                // Extract file path from canonical_fqn or use empty string
+                let file_path = symbol.canonical_fqn.as_ref()
+                    .and_then(|fqn| {
+                        // Try to extract file path from "crate::src/lib.rs::Function name"
+                        let parts: Vec<&str> = fqn.split("::").collect();
+                        parts.iter().find(|p| p.contains('/')).map(|s| s.to_string())
+                    })
+                    .unwrap_or_else(|| "<unknown>".to_string());
+                let name = symbol.name.clone().unwrap_or_else(|| "<unknown>".to_string());
+                
+                results.push(crate::output::SymbolMatch {
+                    match_id: format!("label-{}-{}", label, idx),
+                    span: crate::output::Span {
+                        span_id: format!("{}:{}:{}", file_path, symbol.byte_start, symbol.byte_end),
+                        file_path: file_path.clone(),
+                        byte_start: symbol.byte_start as u64,
+                        byte_end: symbol.byte_end as u64,
+                        start_line: symbol.start_line as u64,
+                        start_col: symbol.start_col as u64,
+                        end_line: symbol.end_line as u64,
+                        end_col: symbol.end_col as u64,
+                        context: None,
+                    },
+                    name: name.clone(),
+                    kind: symbol.kind.clone(),
+                    parent: None,
+                    symbol_id: symbol.symbol_id.clone(),
+                    score: None,
+                    fqn: symbol.fqn.clone(),
+                    canonical_fqn: symbol.canonical_fqn.clone(),
+                    display_fqn: symbol.display_fqn.clone(),
+                    content_hash: None,
+                    symbol_kind_from_chunk: None,
+                    snippet: None,
+                    snippet_truncated: None,
+                    language: infer_language(&file_path).map(|s| s.to_string()),
+                    kind_normalized: symbol.kind_normalized.clone(),
+                    complexity_score: None,
+                    fan_in: None,
+                    fan_out: None,
+                    cyclomatic_complexity: None,
+                    ast_context: None,
+                    supernode_id: None,
+                });
+            }
         }
         
         let total_count = results.len() as u64;
-        let partial = symbol_ids.len() > limit;
+        let partial = entity_ids.len() > limit;
         
         Ok((
             SearchResponse {

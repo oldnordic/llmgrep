@@ -705,9 +705,9 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
 name = "magellan"
-version = "2.4.2"
+version = "2.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51012cc0b204fc3146e7a7d6b1e5dda5676c29afc8a92b624fa8765514185ecd"
+checksum = "fae4de2bbf22157a1be140ac94eb4c9160306873fb9c1d6f36f476484c23280a"
 dependencies = [
  "ahash",
  "anyhow",
