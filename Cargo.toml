@@ -1,6 +1,6 @@
 [package]
 name = "llmgrep"
-version = "3.0.5"
+version = "3.0.6"
 edition = "2021"
 description = "Smart grep over Magellan code maps with schema-aligned JSON output"
 license = "GPL-3.0-only"
@@ -26,7 +26,7 @@ anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 hex = "0.4"
-magellan = "2.4.1"
+magellan = "2.4.2"
 regex = "1.10"
 rusqlite = "0.31"
 serde = { version = "1.0", features = ["derive"] }

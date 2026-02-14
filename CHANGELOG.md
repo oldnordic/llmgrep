@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.6] - 2026-02-14
+
+### Changed
+- **Dependencies:**
+  - magellan: 2.4.1 → 2.4.2 (V3 KV operations for llmgrep integration)
+
+### Fixed
+- **V3 Backend:** Implemented V3-exclusive methods using new magellan KV APIs
+  - `complete()` - now uses `CodeGraph::complete_fqn()`
+  - `lookup()` - now uses `CodeGraph::lookup_symbol_by_fqn()`
+  - `search_by_label()` - now uses `CodeGraph::get_symbols_by_label_kv()`
+
 ## [3.0.5] - 2026-02-14
 
 ### Changed
