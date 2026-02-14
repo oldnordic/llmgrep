@@ -1,10 +1,8 @@
-//! Backend abstraction for SQLite and Native-V2 storage.
+//! Backend abstraction for SQLite and Native-V3 storage.
 //!
 //! The Backend trait provides a unified interface for code graph queries
 //! across different storage backends. This enables runtime backend detection
 //! and zero breaking changes to existing functionality.
-
-use magellan::migrate_backend_cmd::{detect_backend_format, BackendFormat as MagellanBackendFormat};
 
 use crate::error::LlmError;
 use crate::output::{
@@ -15,13 +13,14 @@ use std::path::Path;
 
 // Backend implementation modules
 pub mod sqlite;
-mod native_v2;
+#[cfg(feature = "native-v3")]
+mod native_v3;
 
 pub use sqlite::SqliteBackend;
-#[cfg(feature = "native-v2")]
-pub use native_v2::NativeV2Backend;
+#[cfg(feature = "native-v3")]
+pub use native_v3::NativeV3Backend;
 
-/// Backend trait for abstracting over SQLite and Native-V2 storage.
+/// Backend trait for abstracting over SQLite and Native-V3 storage.
 ///
 /// All backend implementations must provide these core operations:
 /// - Symbol search with filtering and scoring
@@ -32,7 +31,7 @@ pub use native_v2::NativeV2Backend;
 ///
 /// Note: This trait does not require Send or Sync because:
 /// - rusqlite::Connection is not Sync
-/// - magellan::CodeGraph (native-v2) is not Send
+/// - magellan::CodeGraph (native-v3) is not Send
 ///
 /// Each backend instance should be used from a single thread or externally synchronized.
 pub trait BackendTrait {
@@ -80,7 +79,7 @@ pub trait BackendTrait {
     /// Get FQN completions for a prefix.
     ///
     /// This method provides prefix-based autocomplete for fully qualified names.
-    /// Only available with native-v2 backend (KV prefix scan).
+    /// Only available with native-v3 backend (KV prefix scan).
     ///
     /// # Arguments
     /// * `prefix` - Prefix string to match (e.g., "std::collections")
@@ -90,7 +89,7 @@ pub trait BackendTrait {
     /// Lookup symbol by exact fully-qualified name.
     ///
     /// This method provides O(1) symbol resolution by FQN using KV store.
-    /// Only available with native-v2 backend.
+    /// Only available with native-v3 backend.
     ///
     /// # Arguments
     /// * `fqn` - Fully-qualified name to lookup (e.g., "std::collections::HashMap::new")
@@ -105,7 +104,7 @@ pub trait BackendTrait {
     ///
     /// This method provides purpose-based semantic search using Magellan's label system.
     /// Labels group symbols by semantic category (e.g., "test", "entry_point", "public_api").
-    /// Only available with native-v2 backend.
+    /// Only available with native-v3 backend.
     ///
     /// # Arguments
     /// * `label` - Label name to search for (e.g., "test", "entry_point")
@@ -114,7 +113,7 @@ pub trait BackendTrait {
     ///
     /// # Returns
     /// * `Ok((SearchResponse, partial, paths_bounded))` - Search results and metadata
-    /// * `Err(LlmError::RequiresNativeV2Backend)` - If SQLite backend detected
+    /// * `Err(LlmError::RequiresNativeV3Backend)` - If SQLite backend detected
     fn search_by_label(
         &self,
         label: &str,
@@ -125,16 +124,16 @@ pub trait BackendTrait {
 
 /// Runtime backend dispatcher.
 ///
-/// Wraps either SqliteBackend or NativeV2Backend and delegates Backend trait methods
+/// Wraps either SqliteBackend or NativeV3Backend and delegates Backend trait methods
 /// to the appropriate implementation based on database format detection.
 #[derive(Debug)]
-#[allow(clippy::large_enum_variant)] // NativeV2Backend contains CodeGraph which is large
+#[allow(clippy::large_enum_variant)] // NativeV3Backend contains CodeGraph which is large
 pub enum Backend {
     /// SQLite storage backend (traditional, always available)
     Sqlite(SqliteBackend),
-    /// Native-V2 storage backend (high-performance, requires native-v2 feature)
-    #[cfg(feature = "native-v2")]
-    NativeV2(NativeV2Backend),
+    /// Native-V3 storage backend (high-performance, requires native-v3 feature)
+    #[cfg(feature = "native-v3")]
+    NativeV3(NativeV3Backend),
 }
 
 impl Backend {
@@ -145,29 +144,19 @@ impl Backend {
     ///
     /// # Returns
     /// * `Ok(Backend)` - Appropriate backend variant based on file header detection
-    /// * `Err(LlmError::NativeV2BackendNotSupported)` - Native-V2 detected but feature not enabled
+    /// * `Err(LlmError::NativeV3BackendNotSupported)` - Native-V3 detected but feature not enabled
     /// * `Err(LlmError::BackendDetectionFailed)` - Detection failed
     pub fn detect_and_open(db_path: &Path) -> Result<Self, LlmError> {
-        detect_backend_format(db_path)
-            .map_err(|e| LlmError::BackendDetectionFailed {
-                path: db_path.display().to_string(),
-                reason: e.to_string(),
-            })
-            .and_then(|format| match format {
-                MagellanBackendFormat::Sqlite => {
-                    SqliteBackend::open(db_path).map(Backend::Sqlite)
-                }
-                #[cfg(feature = "native-v2")]
-                MagellanBackendFormat::NativeV2 => {
-                    NativeV2Backend::open(db_path).map(Backend::NativeV2)
-                }
-                #[cfg(not(feature = "native-v2"))]
-                MagellanBackendFormat::NativeV2 => {
-                    Err(LlmError::NativeV2BackendNotSupported {
-                        path: db_path.display().to_string(),
-                    })
-                }
-            })
+        // Check file extension to determine backend type
+        let path_str = db_path.to_string_lossy();
+        
+        #[cfg(feature = "native-v3")]
+        if path_str.ends_with(".v3") {
+            return NativeV3Backend::open(db_path).map(Backend::NativeV3);
+        }
+        
+        // Default to SQLite backend for .db files or unknown extensions
+        SqliteBackend::open(db_path).map(Backend::Sqlite)
     }
 
     /// Delegate search_symbols to inner backend.
@@ -177,8 +166,8 @@ impl Backend {
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_symbols(options),
-            #[cfg(feature = "native-v2")]
-            Backend::NativeV2(b) => b.search_symbols(options),
+            #[cfg(feature = "native-v3")]
+            Backend::NativeV3(b) => b.search_symbols(options),
         }
     }
 
@@ -189,8 +178,8 @@ impl Backend {
     ) -> Result<(ReferenceSearchResponse, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_references(options),
-            #[cfg(feature = "native-v2")]
-            Backend::NativeV2(b) => b.search_references(options),
+            #[cfg(feature = "native-v3")]
+            Backend::NativeV3(b) => b.search_references(options),
         }
     }
 
@@ -201,8 +190,8 @@ impl Backend {
     ) -> Result<(CallSearchResponse, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_calls(options),
-            #[cfg(feature = "native-v2")]
-            Backend::NativeV2(b) => b.search_calls(options),
+            #[cfg(feature = "native-v3")]
+            Backend::NativeV3(b) => b.search_calls(options),
         }
     }
 
@@ -215,8 +204,8 @@ impl Backend {
     ) -> Result<serde_json::Value, LlmError> {
         match self {
             Backend::Sqlite(b) => b.ast(file, position, limit),
-            #[cfg(feature = "native-v2")]
-            Backend::NativeV2(b) => b.ast(file, position, limit),
+            #[cfg(feature = "native-v3")]
+            Backend::NativeV3(b) => b.ast(file, position, limit),
         }
     }
 
@@ -224,39 +213,39 @@ impl Backend {
     pub fn find_ast(&self, kind: &str) -> Result<serde_json::Value, LlmError> {
         match self {
             Backend::Sqlite(b) => b.find_ast(kind),
-            #[cfg(feature = "native-v2")]
-            Backend::NativeV2(b) => b.find_ast(kind),
+            #[cfg(feature = "native-v3")]
+            Backend::NativeV3(b) => b.find_ast(kind),
         }
     }
 
     /// Get FQN completions for a prefix.
     ///
-    /// This method is only available with native-v2 backend.
-    /// SQLite backend returns RequiresNativeV2Backend error.
+    /// This method is only available with native-v3 backend.
+    /// SQLite backend returns RequiresNativeV3Backend error.
     pub fn complete(&self, prefix: &str, limit: usize) -> Result<Vec<String>, LlmError> {
         match self {
             Backend::Sqlite(b) => b.complete(prefix, limit),
-            #[cfg(feature = "native-v2")]
-            Backend::NativeV2(b) => b.complete(prefix, limit),
+            #[cfg(feature = "native-v3")]
+            Backend::NativeV3(b) => b.complete(prefix, limit),
         }
     }
 
     /// Lookup symbol by exact FQN.
     ///
-    /// This method is only available with native-v2 backend.
-    /// SQLite backend returns RequiresNativeV2Backend error.
+    /// This method is only available with native-v3 backend.
+    /// SQLite backend returns RequiresNativeV3Backend error.
     pub fn lookup(&self, fqn: &str, db_path: &str) -> Result<crate::output::SymbolMatch, LlmError> {
         match self {
             Backend::Sqlite(b) => b.lookup(fqn, db_path),
-            #[cfg(feature = "native-v2")]
-            Backend::NativeV2(b) => b.lookup(fqn, db_path),
+            #[cfg(feature = "native-v3")]
+            Backend::NativeV3(b) => b.lookup(fqn, db_path),
         }
     }
 
     /// Search for symbols by label.
     ///
-    /// This method is only available with native-v2 backend.
-    /// SQLite backend returns RequiresNativeV2Backend error.
+    /// This method is only available with native-v3 backend.
+    /// SQLite backend returns RequiresNativeV3Backend error.
     pub fn search_by_label(
         &self,
         label: &str,
@@ -265,8 +254,8 @@ impl Backend {
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_by_label(label, limit, db_path),
-            #[cfg(feature = "native-v2")]
-            Backend::NativeV2(b) => b.search_by_label(label, limit, db_path),
+            #[cfg(feature = "native-v3")]
+            Backend::NativeV3(b) => b.search_by_label(label, limit, db_path),
         }
     }
 }

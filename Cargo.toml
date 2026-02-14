@@ -14,9 +14,9 @@ default = ["unix"]
 unix = []
 windows = []
 
-# Native-V2 backend support (disabled by default)
-# Forward feature flag to magellan and sqlitegraph for conditional compilation
-native-v2 = ["magellan/native-v2", "sqlitegraph/native-v2"]
+# Native-V3 backend support (recommended for production)
+# High-performance binary backend with KV store side tables
+native-v3 = ["magellan/native-v3", "sqlitegraph/native-v3"]
 
 # Unstable watch command (incomplete, requires unstable Mag APIs)
 unstable-watch = []
@@ -26,14 +26,14 @@ anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 hex = "0.4"
-magellan = "2.2.1"
+magellan = "2.3.0"
 regex = "1.10"
 rusqlite = "0.31"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
 signal-hook = "0.3"
-sqlitegraph = "1.5.7"
+sqlitegraph = "2.0.1"
 tempfile = "3.10"
 thiserror = "1.0"
 

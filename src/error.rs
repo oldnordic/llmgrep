@@ -11,9 +11,9 @@
 //!   - LLM-E106: Ambiguous symbol name
 //!   - LLM-E107: Magellan version mismatch
 //!   - LLM-E108: Magellan execution failed
-//!   - LLM-E109: Native-V2 backend detected but feature not enabled
+//!   - LLM-E109: Native-V3 backend detected but feature not enabled
 //!   - LLM-E110: Backend detection failed
-//!   - LLM-E111: Command requires native-v2 backend
+//!   - LLM-E111: Command requires native-v3 backend
 //!   - LLM-E112: Symbol not found in exact FQN lookup
 //! - **LLM-E200 to LLM-E299**: Search execution errors
 //! - **LLM-E300 to LLM-E399**: Path and argument validation errors
@@ -108,36 +108,36 @@ pub enum LlmError {
     #[error("Magellan {algorithm} execution failed: {stderr}")]
     MagellanExecutionFailed { algorithm: String, stderr: String },
 
-    /// Native-V2 backend detected but llmgrep was built without native-v2 support.
+    /// Native-V3 backend detected but llmgrep was built without native-v3 support.
     #[error(
-        "LLM-E109: Native-V2 backend detected but llmgrep was built without native-v2 support.\n\n\
+        "LLM-E109: Native-V3 backend detected but llmgrep was built without native-v3 support.\n\n\
          Database: {path}\n\n\
-         To enable Native-V2 support, rebuild llmgrep with:\n\
-         \x20  cargo install llmgrep --features native-v2\n\
-         \x20  or: cargo build --release --features native-v2\n\n\
+         To enable Native-V3 support, rebuild llmgrep with:\n\
+         \x20  cargo install llmgrep --features native-v3\n\
+         \x20  or: cargo build --release --features native-v3\n\n\
          For more information, see: https://docs.rs/llmgrep/latest/llmgrep/"
     )]
-    NativeV2BackendNotSupported { path: String },
+    NativeV3BackendNotSupported { path: String },
 
     /// Backend detection failed for the database.
     #[error("LLM-E110: Backend detection failed for database: {path}\nReason: {reason}")]
     BackendDetectionFailed { path: String, reason: String },
 
-    /// Command requires native-v2 backend but database is SQLite.
+    /// Command requires native-v3 backend but database is SQLite.
     #[error(
-        "LLM-E111: The '{command}' command requires native-v2 backend.\n\n\
+        "LLM-E111: The '{command}' command requires native-v3 backend.\n\n\
          Current database: {path}\n\
          Detected backend: SQLite\n\n\
-         This command is only available with native-v2 storage which provides:\n\
+         This command is only available with native-v3 storage which provides:\n\
          \x20  - O(1) KV store lookups\n\
          \x20  - Prefix-based autocomplete\n\
          \x20  - Smaller database sizes\n\n\
          To use this command:\n\
-         \x20  1. Reindex your codebase with native-v2: magellan watch --root . --db code.db --storage native-v2\n\
-         \x20  2. Ensure llmgrep is built with native-v2 feature: cargo install llmgrep --features native-v2\n\n\
+         \x20  1. Reindex your codebase with native-v3: magellan watch --root . --db code.v3\n\
+         \x20  2. Ensure llmgrep is built with native-v3 feature: cargo install llmgrep --features native-v3\n\n\
          For more information, see: https://docs.rs/llmgrep/latest/llmgrep/"
     )]
-    RequiresNativeV2Backend { command: String, path: String },
+    RequiresNativeV3Backend { command: String, path: String },
 
     /// Symbol not found by exact FQN lookup.
     #[error(
@@ -174,9 +174,9 @@ impl LlmError {
             LlmError::AmbiguousSymbolName { .. } => "LLM-E106",
             LlmError::MagellanVersionMismatch { .. } => "LLM-E107",
             LlmError::MagellanExecutionFailed { .. } => "LLM-E108",
-            LlmError::NativeV2BackendNotSupported { .. } => "LLM-E109",
+            LlmError::NativeV3BackendNotSupported { .. } => "LLM-E109",
             LlmError::BackendDetectionFailed { .. } => "LLM-E110",
-            LlmError::RequiresNativeV2Backend { .. } => "LLM-E111",
+            LlmError::RequiresNativeV3Backend { .. } => "LLM-E111",
             LlmError::SymbolNotFound { .. } => "LLM-E112",
         }
     }
@@ -193,9 +193,9 @@ impl LlmError {
             LlmError::AmbiguousSymbolName { .. } => "error",
             LlmError::MagellanVersionMismatch { .. } => "error",
             LlmError::MagellanExecutionFailed { .. } => "error",
-            LlmError::NativeV2BackendNotSupported { .. } => "error",
+            LlmError::NativeV3BackendNotSupported { .. } => "error",
             LlmError::BackendDetectionFailed { .. } => "error",
-            LlmError::RequiresNativeV2Backend { .. } => "error",
+            LlmError::RequiresNativeV3Backend { .. } => "error",
             LlmError::SymbolNotFound { .. } => "error",
             _ => "error",
         }
@@ -250,14 +250,14 @@ impl LlmError {
             LlmError::MagellanExecutionFailed { .. } => {
                 Some("Check magellan --version and database compatibility.")
             }
-            LlmError::NativeV2BackendNotSupported { .. } => {
-                Some("Rebuild llmgrep with: cargo install llmgrep --features native-v2")
+            LlmError::NativeV3BackendNotSupported { .. } => {
+                Some("Rebuild llmgrep with: cargo install llmgrep --features native-v3")
             }
             LlmError::BackendDetectionFailed { .. } => {
                 Some("Check that the database file exists and is a valid Magellan database.")
             }
-            LlmError::RequiresNativeV2Backend { .. } => {
-                Some("Reindex with native-v2 storage: magellan watch --root . --db code.db --storage native-v2")
+            LlmError::RequiresNativeV3Backend { .. } => {
+                Some("Reindex with native-v3 storage: magellan watch --root . --db code.v3")
             }
             LlmError::SymbolNotFound { .. } => {
                 Some("Use 'complete' command with --partial flag to find similar symbols by partial name match.")

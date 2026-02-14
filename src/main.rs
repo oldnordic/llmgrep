@@ -417,7 +417,7 @@ EXAMPLES:
   llmgrep --db code.db lookup --fqn "std::collections::HashMap::new"
 
   # JSON output for programmatic use
-  llmgrep --db code.db lookup --fqn "crate::backend::NativeV2Backend" --output json
+  llmgrep --db code.v3 lookup --fqn "crate::backend::NativeV3Backend" --output json
 
   # Get all symbol metadata in one query
   llmgrep --db code.db lookup --fqn "parse" --output pretty
@@ -518,9 +518,13 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             }
         })?;
 
+        // Check file extension for V3 backend detection
+        let path_str = validated_db.to_string_lossy();
+        let is_v3 = path_str.ends_with(".v3");
+        
         let backend_str = match format {
+            BackendFormat::Sqlite if is_v3 => "native-v3",
             BackendFormat::Sqlite => "sqlite",
-            BackendFormat::NativeV2 => "native-v2",
         };
 
         if matches!(cli.output, OutputFormat::Json | OutputFormat::Pretty) {
@@ -641,6 +645,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             paths_to.as_ref(),
         ),
 
+        #[cfg(feature = "unstable-watch")]
         Command::Watch {
             query,
             mode,
@@ -649,12 +654,6 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             limit,
             regex,
         } => run_watch(cli, query, *mode, path, kind, *limit, *regex),
-        #[cfg(not(feature = "unstable-watch"))]
-        Command::Watch { .. } => {
-            Err(LlmError::InvalidQuery {
-                query: "Watch command requires the 'unstable-watch' feature. Install with: cargo install --features unstable-watch".to_string(),
-            })
-        }
         }
     }
 }
@@ -1466,8 +1465,8 @@ fn run_complete(
     let backend = Backend::detect_and_open(&db_path)?;
     let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
 
-    // Check if backend supports complete command (native-v2 only)
-    require_native_v2(&backend, "complete", &db_path)?;
+    // Check if backend supports complete command (native-v3 only)
+    require_native_v3(&backend, "complete", &db_path)?;
 
     // Get completions via backend
     let query_start = std::time::Instant::now();
@@ -1540,8 +1539,8 @@ fn run_lookup(
     let backend = Backend::detect_and_open(&db_path)?;
     let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
 
-    // Check if backend supports lookup command (native-v2 only)
-    require_native_v2(&backend, "lookup", &db_path)?;
+    // Check if backend supports lookup command (native-v3 only)
+    require_native_v3(&backend, "lookup", &db_path)?;
 
     // Lookup symbol by FQN via backend
     let query_start = std::time::Instant::now();
@@ -1989,27 +1988,27 @@ fn emit_error(cli: &Cli, err: &LlmError) {
     }
 }
 
-/// Check if backend is native-v2, return error if SQLite
+/// Check if backend is native-v3, return error if SQLite
 ///
-/// This helper function is used by commands that require native-v2 storage.
-/// When native-v2 feature is disabled, SQLite backend is the only variant,
-/// so this function always returns RequiresNativeV2Backend error.
-fn require_native_v2(backend: &Backend, command: &str, db_path: &Path) -> Result<(), LlmError> {
-    #[cfg(feature = "native-v2")]
+/// This helper function is used by commands that require native-v3 storage.
+/// When native-v3 feature is disabled, SQLite backend is the only variant,
+/// so this function always returns RequiresNativeV3Backend error.
+fn require_native_v3(backend: &Backend, command: &str, db_path: &Path) -> Result<(), LlmError> {
+    #[cfg(feature = "native-v3")]
     {
         match backend {
-            Backend::NativeV2(_) => Ok(()),
-            Backend::Sqlite(_) => Err(LlmError::RequiresNativeV2Backend {
+            Backend::NativeV3(_) => Ok(()),
+            Backend::Sqlite(_) => Err(LlmError::RequiresNativeV3Backend {
                 command: command.to_string(),
                 path: db_path.display().to_string(),
             }),
         }
     }
-    #[cfg(not(feature = "native-v2"))]
+    #[cfg(not(feature = "native-v3"))]
     {
-        // When native-v2 feature is disabled, all backends are SQLite
+        // When native-v3 feature is disabled, all backends are SQLite
         let _ = (backend, command);
-        Err(LlmError::RequiresNativeV2Backend {
+        Err(LlmError::RequiresNativeV3Backend {
             command: command.to_string(),
             path: db_path.display().to_string(),
         })

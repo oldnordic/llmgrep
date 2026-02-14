@@ -142,7 +142,7 @@ impl super::BackendTrait for SqliteBackend {
 
     fn complete(&self, _prefix: &str, _limit: usize) -> Result<Vec<String>, LlmError> {
         // SQLite backend cannot efficiently do prefix scans on FQNs
-        Err(LlmError::RequiresNativeV2Backend {
+        Err(LlmError::RequiresNativeV3Backend {
             command: "complete".to_string(),
             path: self.db_path.display().to_string(),
         })
@@ -152,7 +152,7 @@ impl super::BackendTrait for SqliteBackend {
         // SQLite backend cannot efficiently do exact FQN lookups
         // Extract partial name from FQN for error message
         let _partial = fqn.rsplit("::").next().unwrap_or(fqn);
-        Err(LlmError::RequiresNativeV2Backend {
+        Err(LlmError::RequiresNativeV3Backend {
             command: "lookup".to_string(),
             path: db_path.to_string(),
         })
@@ -165,7 +165,7 @@ impl super::BackendTrait for SqliteBackend {
         db_path: &str,
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
         // SQLite backend does not have label index
-        Err(LlmError::RequiresNativeV2Backend {
+        Err(LlmError::RequiresNativeV3Backend {
             command: "search --mode label".to_string(),
             path: db_path.to_string(),
         })

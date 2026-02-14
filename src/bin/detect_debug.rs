@@ -14,7 +14,7 @@ fn main() {
     }
 
     // Try magellan detection
-    #[cfg(feature = "native-v2")]
+    #[cfg(feature = "native-v3")]
     {
         match magellan::migrate_backend_cmd::detect_backend_format(db_path) {
             Ok(format) => println!("Magellan detected: {:?}", format),

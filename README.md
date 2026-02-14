@@ -215,7 +215,7 @@ llmgrep --db .codemcp/codegraph.db search --query "^Token" --regex --output json
 
 ### Native-V2 Exclusive Features
 
-The following features are only available with the Native-V2 backend (requires `--features native-v2` at compile time and `--storage native-v2` when indexing):
+The following features are only available with the Native-V3 backend (requires `--features native-v3` at compile time and `.v3` database file):
 
 | Feature | Description |
 |---------|-------------|
@@ -233,10 +233,10 @@ llmgrep automatically detects the backend format from the database file header:
 magellan watch --root ./src --db code.db
 
 # Native-V2 backend (opt-in)
-magellan watch --root ./src --db code.db --storage native-v2
+magellan watch --root ./src --db code.v3
 
-# Build with native-v2 support
-cargo install llmgrep --features native-v2
+# Build with native-v3 support
+cargo install llmgrep --features native-v3
 ```
 
 Both backends provide identical search results for all shared features.
@@ -331,16 +331,16 @@ llmgrep --db code.db find-ast --kind function_item
 llmgrep --db code.db find-ast --kind for_expression
 ```
 
-### Native-V2 Features (v3.0)
+### Native-V3 Features (v3.0.2+)
 
-> **Requires:** `--features native-v2` at compile time and native-v2 database format
+> **Requires:** `--features native-v3` at compile time and `.v3` database file
 
 ```bash
-# Build with native-v2 support
-cargo install llmgrep --features native-v2
+# Build with native-v3 support
+cargo install llmgrep --features native-v3
 
-# Index with native-v2 storage (smaller, faster)
-magellan watch --root ./src --db code.db --storage native-v2
+# Index with native-v3 storage (smaller, faster)
+magellan watch --root ./src --db code.v3
 
 # FQN autocomplete
 llmgrep --db code.db complete --prefix "my_crate::"
@@ -374,8 +374,8 @@ Native-v2 exclusive commands gracefully fallback with helpful errors on SQLite d
 ```bash
 # On SQLite database, returns LLM-E111
 llmgrep --db sqlite.db complete --prefix "test"
-# ERROR LLM-E111: The 'complete' command requires native-v2 backend.
-# Reindex with: magellan watch --root . --db code.db --storage native-v2
+# ERROR LLM-E111: The 'complete' command requires native-v3 backend.
+# Reindex with: magellan watch --root . --db code.v3
 ```
 
 ## Requirements
@@ -385,11 +385,11 @@ llmgrep --db sqlite.db complete --prefix "test"
   cargo install magellan
   magellan watch --root ./src --db .codemcp/codegraph.db
   ```
-- **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 1.5.7+ — Included automatically
-- **Optional:** Native-v2 features require `--features native-v2` at compile time
+- **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 2.0.1+ — Included automatically
+- **Optional:** Native-v3 features require `--features native-v3` at compile time
   ```bash
-  cargo install llmgrep --features native-v2
-  magellan watch --root ./src --db code.db --storage native-v2
+  cargo install llmgrep --features native-v3
+  magellan watch --root ./src --db code.v3
   ```
 
 ## Performance Characteristics
