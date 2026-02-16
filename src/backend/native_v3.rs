@@ -296,10 +296,10 @@ impl NativeV3Backend {
     /// This method accesses the CodeGraph through the UnsafeCell to retrieve
     /// a reference to the underlying GraphBackend. This is safe because:
     /// - We're only reading the backend reference, not mutating the graph
-    /// - The __backend_for_benchmarks() method returns a shared reference (Rc)
+    /// - The __backend_for_benchmarks() method returns a shared reference (Arc)
     /// - No mutable operations are performed on the graph
-    /// - The returned Rc is a cheap clone that doesn't affect the graph state
-    fn backend(&self) -> &std::rc::Rc<dyn sqlitegraph::GraphBackend> {
+    /// - The returned Arc is a cheap clone that doesn't affect the graph state
+    fn backend(&self) -> &std::sync::Arc<dyn sqlitegraph::GraphBackend> {
         // # Safety
         // We're only reading the backend reference, not mutating the graph.
         // The __backend_for_benchmarks() API returns a shared reference that
