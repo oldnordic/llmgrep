@@ -1,6 +1,6 @@
 [package]
 name = "llmgrep"
-version = "3.0.8"
+version = "3.0.9"
 edition = "2021"
 description = "Smart grep over Magellan code maps with schema-aligned JSON output"
 license = "GPL-3.0-only"
@@ -16,7 +16,8 @@ windows = []
 
 # Native-V3 backend support (recommended for production)
 # High-performance binary backend with KV store side tables
-native-v3 = ["magellan/native-v3", "sqlitegraph/native-v3"]
+# native-v3 disabled - use only sqlite-backend to avoid format conflicts
+# native-v3 = ["magellan/native-v3", "sqlitegraph/native-v3"]
 
 # Unstable watch command (incomplete, requires unstable Mag APIs)
 unstable-watch = []
@@ -33,7 +34,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
 signal-hook = "0.3"
-sqlitegraph = "2.0.5"
+sqlitegraph = "2.0.7"
 tempfile = "3.10"
 thiserror = "1.0"
 
