@@ -124,8 +124,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Returns `SymbolNotFound` error (LLM-E112) with helpful hints
 
 **New search features:**
-- `--mode label` flag — Purpose-based semantic search
-  - Search by semantic role: `test`, `entry_point`, `public_api`
+- `--mode label` flag — Purpose-based label search
+  - Search by purpose label: `test`, `entry_point`, `public_api`
   - Uses `magellan::kv::label_key()` for O(1) label lookups
   - Default label: `test` when `--label` not specified
 

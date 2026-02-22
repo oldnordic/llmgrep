@@ -1,4 +1,4 @@
-# llmgrep - Semantic Code Search
+# llmgrep - Pattern-Based Code Search
 
 **Project:** llmgrep
 **Last Updated:** 2026-02-04
@@ -7,7 +7,7 @@
 
 ## What is llmgrep?
 
-llmgrep is a semantic code search tool that queries Magellan's database using fuzzy matching and scoring. It's faster and more accurate than text-based grep.
+llmgrep is a pattern-based code search tool that queries Magellan's database using fuzzy matching and scoring. It's faster and more accurate than text-based grep.
 
 ---
 

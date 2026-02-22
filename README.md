@@ -5,7 +5,7 @@
 
 **Version:** 3.0.7
 
-Semantic code search for Magellan databases. Fast, deterministic symbol search with LLM-optimized JSON output.
+Pattern-based code search for Magellan databases. Fast, deterministic symbol search with LLM-optimized JSON output.
 
 **Positioning:** Read-only query tool for codebases indexed by Magellan. Use to find symbols, references, and call relationships. Emits structured JSON for AI-assisted code understanding.
 

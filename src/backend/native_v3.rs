@@ -17,6 +17,7 @@ use magellan::graph::{query, SymbolNode};
 // use magellan::graph::metrics::schema::SymbolMetrics;
 use magellan::CodeGraph;
 use regex::Regex;
+use rusqlite::Connection;
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::fs;
@@ -307,19 +308,42 @@ impl NativeV3Backend {
         unsafe { (*self.graph.get()).__backend_for_benchmarks() }
     }
 
-    /// Get metrics for a symbol from the KV store
+    /// Get metrics for a symbol from the symbol_metrics table
     ///
     /// # Arguments
     /// * `entity_id` - The symbol's entity ID
     ///
     /// # Returns
     /// * Some((fan_in, fan_out, cyclomatic_complexity)) if metrics are available
-    /// * None if metrics are not populated (graceful degradation for native-v3 databases)
-    fn get_metrics(&self, _entity_id: u64) -> Option<(u64, u64, u64)> {
-        // TODO: Implement using V3 KV store APIs
-        // The magellan::kv module has been removed in 2.3.0
-        // For now, return None to disable metrics-based filtering
-        None
+    /// * None if metrics are not populated or table doesn't exist
+    fn get_metrics(&self, entity_id: u64) -> Option<(u64, u64, u64)> {
+        // Open a direct SQLite connection to query symbol_metrics
+        let conn = Connection::open(&self.db_path).ok()?;
+        
+        // Check if symbol_metrics table exists
+        let table_exists: bool = conn.query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='symbol_metrics'",
+            [],
+            |_| Ok(true),
+        ).unwrap_or(false);
+        
+        if !table_exists {
+            return None;
+        }
+        
+        // Query metrics for the entity
+        conn.query_row(
+            "SELECT fan_in, fan_out, cyclomatic_complexity 
+             FROM symbol_metrics 
+             WHERE symbol_id = ?1",
+            [entity_id],
+            |row| {
+                let fan_in: u64 = row.get::<_, i64>(0).unwrap_or(0) as u64;
+                let fan_out: u64 = row.get::<_, i64>(1).unwrap_or(0) as u64;
+                let complexity: u64 = row.get::<_, i64>(2).unwrap_or(0) as u64;
+                Ok((fan_in, fan_out, complexity))
+            },
+        ).ok()
     }
 
     /// Check if a path has a known source file extension

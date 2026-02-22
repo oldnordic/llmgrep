@@ -102,8 +102,8 @@ pub trait BackendTrait {
 
     /// Search for symbols by label.
     ///
-    /// This method provides purpose-based semantic search using Magellan's label system.
-    /// Labels group symbols by semantic category (e.g., "test", "entry_point", "public_api").
+    /// This method provides purpose-based label search using Magellan's label system.
+    /// Labels group symbols by purpose category (e.g., "test", "entry_point", "public_api").
     /// Only available with native-v3 backend.
     ///
     /// # Arguments

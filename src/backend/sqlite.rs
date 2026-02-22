@@ -13,15 +13,13 @@ use crate::query::{
     search_references_impl,
     search_calls_impl,
 };
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// SQLite backend implementation.
 ///
 /// Wraps a rusqlite Connection and implements the Backend trait.
-/// Stores db_path for magellan shell-out in ast/find_ast commands.
-/// The actual SQL queries will be moved from query.rs in Phase 18.
+/// All operations now use direct SQL queries instead of shelling out to magellan CLI.
 #[derive(Debug)]
 pub struct SqliteBackend {
     pub conn: Connection,
@@ -70,74 +68,120 @@ impl super::BackendTrait for SqliteBackend {
         position: Option<usize>,
         limit: usize,
     ) -> Result<serde_json::Value, LlmError> {
-        let db_path = self.db_path.to_str()
-            .ok_or_else(|| LlmError::SearchFailed {
-                reason: format!("Database path {:?} is not valid UTF-8", self.db_path),
-            })?;
         let file_path = file.to_str()
             .ok_or_else(|| LlmError::SearchFailed {
                 reason: format!("File path {:?} is not valid UTF-8", file),
             })?;
 
-        let mut cmd = Command::new("magellan");
-        cmd.args(["ast", "--db", db_path, "--file", file_path]);
-        cmd.args(["--output", "json"]);  // Explicitly request JSON output
+        // Check if ast_nodes table exists
+        let table_exists: bool = self.conn.query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ast_nodes'",
+            [],
+            |_| Ok(true),
+        ).unwrap_or(false);
 
-        if let Some(pos) = position {
-            cmd.args(["--position", &pos.to_string()]);
+        if !table_exists {
+            return Ok(serde_json::json!({
+                "file_path": file_path,
+                "count": 0,
+                "nodes": [],
+            }));
         }
 
-        // Note: magellan ast command doesn't support --limit flag
-        // We'll apply limit on the JSON result instead
-
-        let output = cmd.output()
-            .map_err(|e| LlmError::SearchFailed {
-                reason: format!("Failed to execute magellan ast command: {}", e),
+        let nodes = if let Some(pos) = position {
+            // Query for node at specific position
+            let mut stmt = self.conn.prepare(
+                "SELECT id, parent_id, kind, byte_start, byte_end 
+                 FROM ast_nodes 
+                 WHERE byte_start <= ?1 AND byte_end > ?1
+                 ORDER BY byte_start DESC
+                 LIMIT ?2"
+            )?;
+            
+            let rows = stmt.query_map(params![pos as i64, limit as i64], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "parent_id": row.get::<_, Option<i64>>(1)?,
+                    "kind": row.get::<_, String>(2)?,
+                    "byte_start": row.get::<_, i64>(3)?,
+                    "byte_end": row.get::<_, i64>(4)?,
+                }))
             })?;
+            
+            rows.collect::<Result<Vec<_>, _>>()?
+        } else {
+            // Query all nodes for the file (need to join with files table)
+            let mut stmt = self.conn.prepare(
+                "SELECT an.id, an.parent_id, an.kind, an.byte_start, an.byte_end 
+                 FROM ast_nodes an
+                 JOIN files f ON an.file_id = f.id
+                 WHERE f.file_path = ?1
+                 ORDER BY an.byte_start
+                 LIMIT ?2"
+            )?;
+            
+            let rows = stmt.query_map(params![file_path, limit as i64], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "parent_id": row.get::<_, Option<i64>>(1)?,
+                    "kind": row.get::<_, String>(2)?,
+                    "byte_start": row.get::<_, i64>(3)?,
+                    "byte_end": row.get::<_, i64>(4)?,
+                }))
+            })?;
+            
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(LlmError::SearchFailed {
-                reason: format!("magellan ast command failed: {}", stderr),
-            });
-        }
-
-        // Parse JSON and apply limit if needed
-        let mut value: serde_json::Value = serde_json::from_slice(&output.stdout)
-            .map_err(LlmError::JsonError)?;
-
-        // Apply limit to array results
-        if let Some(arr) = value.as_array_mut() {
-            if arr.len() > limit {
-                arr.truncate(limit);
-            }
-        }
-
-        Ok(value)
+        Ok(serde_json::json!({
+            "file_path": file_path,
+            "count": nodes.len(),
+            "nodes": nodes,
+        }))
     }
 
     fn find_ast(&self, kind: &str) -> Result<serde_json::Value, LlmError> {
-        let db_path = self.db_path.to_str()
-            .ok_or_else(|| LlmError::SearchFailed {
-                reason: format!("Database path {:?} is not valid UTF-8", self.db_path),
-            })?;
+        // Check if ast_nodes table exists
+        let table_exists: bool = self.conn.query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ast_nodes'",
+            [],
+            |_| Ok(true),
+        ).unwrap_or(false);
 
-        let output = Command::new("magellan")
-            .args(["find-ast", "--db", db_path, "--kind", kind, "--output", "json"])
-            .output()
-            .map_err(|e| LlmError::SearchFailed {
-                reason: format!("Failed to execute magellan find-ast command: {}", e),
-            })?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(LlmError::SearchFailed {
-                reason: format!("magellan find-ast command failed: {}", stderr),
-            });
+        if !table_exists {
+            return Ok(serde_json::json!({
+                "kind": kind,
+                "count": 0,
+                "nodes": [],
+            }));
         }
 
-        serde_json::from_slice(&output.stdout)
-            .map_err(LlmError::JsonError)
+        let mut stmt = self.conn.prepare(
+            "SELECT an.id, an.parent_id, an.kind, an.byte_start, an.byte_end, f.file_path
+             FROM ast_nodes an
+             JOIN files f ON an.file_id = f.id
+             WHERE an.kind = ?1
+             ORDER BY f.file_path, an.byte_start"
+        )?;
+        
+        let rows = stmt.query_map(params![kind], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "parent_id": row.get::<_, Option<i64>>(1)?,
+                "kind": row.get::<_, String>(2)?,
+                "byte_start": row.get::<_, i64>(3)?,
+                "byte_end": row.get::<_, i64>(4)?,
+                "file_path": row.get::<_, String>(5)?,
+            }))
+        })?;
+        
+        let nodes: Vec<_> = rows.collect::<Result<Vec<_>, _>>()?;
+
+        Ok(serde_json::json!({
+            "kind": kind,
+            "count": nodes.len(),
+            "nodes": nodes,
+        }))
     }
 
     fn complete(&self, _prefix: &str, _limit: usize) -> Result<Vec<String>, LlmError> {

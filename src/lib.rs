@@ -1,6 +1,6 @@
-//! llmgrep - Semantic code search powered by Magellan.
+//! llmgrep - Pattern-based code search powered by Magellan.
 //!
-//! This library provides semantic code search capabilities using Magellan's
+//! This library provides pattern-based code search capabilities using Magellan's
 //! code graph database. It supports symbol search, reference search, call search,
 //! AST-based filtering, and algorithm-based analysis.
 //!

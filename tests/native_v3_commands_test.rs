@@ -3,7 +3,7 @@
 //! This test suite verifies that native-v3 exclusive commands work correctly:
 //! - Complete command (KV prefix scan for autocomplete)
 //! - Lookup command (O(1) exact FQN lookup)
-//! - Label search mode (purpose-based semantic search)
+//! - Label search mode (purpose-based label search)
 //! - Performance metrics tracking
 //!
 //! Tests also verify graceful fallback to SQLite backend with appropriate errors.
