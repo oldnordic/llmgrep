@@ -565,6 +565,7 @@ EXAMPLES:
   llmgrep --db code.db lookup --fqn "parse" --output pretty
 "#;
 
+#[cfg(feature = "unstable-watch")]
 const WATCH_EXAMPLES: &str = r#"
 EXAMPLES:
   # Watch for symbols matching "Widget"
@@ -1830,9 +1831,9 @@ fn output_symbols(
         OutputFormat::Human => {
             if scc_count > 0 {
                 println!("{}", format_scc_summary(response.total_count as usize, scc_count));
-            } else if response.notice.is_some() {
+            } else if let Some(notice) = &response.notice {
                 // Empty SCCs case - print warning from notice field
-                eprintln!("Warning: {}", response.notice.as_ref().unwrap());
+                eprintln!("Warning: {}", notice);
                 println!("No symbols found - codebase contains no strongly connected components");
             }
             println!("{}", format_total_header(response.total_count));
