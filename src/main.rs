@@ -13,6 +13,148 @@ use llmgrep::query::{
     AstOptions, ContextOptions, DepthOptions, FqnOptions, MetricsOptions, SearchOptions,
     SnippetOptions,
 };
+
+/// Search parameters bundled into a single struct.
+/// 
+/// This eliminates the 42-parameter explosion in run_search() and makes
+/// the code easier to maintain, test, and call.
+#[derive(Debug)]
+struct SearchParams {
+    query: String,
+    mode: SearchMode,
+    path: Option<PathBuf>,
+    kind: Option<String>,
+    language: Option<String>,
+    label: Option<String>,
+    limit: usize,
+    regex: bool,
+    candidates: usize,
+    with_context: bool,
+    context_lines: usize,
+    max_context_lines: usize,
+    with_snippet: bool,
+    with_fqn: bool,
+    max_snippet_bytes: usize,
+    fields: Option<String>,
+    sort_by: SortMode,
+    auto_limit: AutoLimitMode,
+    min_complexity: Option<usize>,
+    max_complexity: Option<usize>,
+    min_fan_in: Option<usize>,
+    min_fan_out: Option<usize>,
+    symbol_id: Option<String>,
+    fqn: Option<String>,
+    exact_fqn: Option<String>,
+    ast_kind: Option<String>,
+    with_ast_context: bool,
+    min_depth: Option<usize>,
+    max_depth: Option<usize>,
+    inside: Option<String>,
+    contains: Option<String>,
+    from_symbol_set: Option<String>,
+    reachable_from: Option<String>,
+    dead_code_in: Option<String>,
+    in_cycle: Option<String>,
+    slice_backward_from: Option<String>,
+    slice_forward_from: Option<String>,
+    condense: bool,
+    paths_from: Option<String>,
+    paths_to: Option<String>,
+}
+
+impl SearchParams {
+    /// Extract search parameters from the Command::Search variant.
+    /// 
+    /// Returns None if the command is not a Search variant.
+    fn from_command(cmd: &Command) -> Option<Self> {
+        match cmd {
+            Command::Search {
+                query,
+                mode,
+                path,
+                kind,
+                language,
+                label,
+                limit,
+                regex,
+                candidates,
+                with_context,
+                context_lines,
+                max_context_lines,
+                with_snippet,
+                with_fqn,
+                max_snippet_bytes,
+                fields,
+                sort_by,
+                auto_limit,
+                min_complexity,
+                max_complexity,
+                min_fan_in,
+                min_fan_out,
+                symbol_id,
+                fqn,
+                exact_fqn,
+                ast_kind,
+                with_ast_context,
+                min_depth,
+                max_depth,
+                inside,
+                contains,
+                from_symbol_set,
+                reachable_from,
+                dead_code_in,
+                in_cycle,
+                slice_backward_from,
+                slice_forward_from,
+                condense,
+                paths_from,
+                paths_to,
+            } => Some(Self {
+                query: query.clone(),
+                mode: *mode,
+                path: path.clone(),
+                kind: kind.clone(),
+                language: language.clone(),
+                label: label.clone(),
+                limit: *limit,
+                regex: *regex,
+                candidates: *candidates,
+                with_context: *with_context,
+                context_lines: *context_lines,
+                max_context_lines: *max_context_lines,
+                with_snippet: *with_snippet,
+                with_fqn: *with_fqn,
+                max_snippet_bytes: *max_snippet_bytes,
+                fields: fields.clone(),
+                sort_by: *sort_by,
+                auto_limit: *auto_limit,
+                min_complexity: *min_complexity,
+                max_complexity: *max_complexity,
+                min_fan_in: *min_fan_in,
+                min_fan_out: *min_fan_out,
+                symbol_id: symbol_id.clone(),
+                fqn: fqn.clone(),
+                exact_fqn: exact_fqn.clone(),
+                ast_kind: ast_kind.clone(),
+                with_ast_context: *with_ast_context,
+                min_depth: *min_depth,
+                max_depth: *max_depth,
+                inside: inside.clone(),
+                contains: contains.clone(),
+                from_symbol_set: from_symbol_set.clone(),
+                reachable_from: reachable_from.clone(),
+                dead_code_in: dead_code_in.clone(),
+                in_cycle: in_cycle.clone(),
+                slice_backward_from: slice_backward_from.clone(),
+                slice_forward_from: slice_forward_from.clone(),
+                condense: *condense,
+                paths_from: paths_from.clone(),
+                paths_to: paths_to.clone(),
+            }),
+            _ => None,
+        }
+    }
+}
 use llmgrep::ast::{expand_shorthand_with_language, expand_shorthands};
 use llmgrep::SortMode;
 use std::path::{Path, PathBuf};
@@ -601,49 +743,51 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             condense,
             paths_from,
             paths_to,
-        } => run_search(
-            cli,
-            query,
-            *mode,
-            path,
-            kind,
-            language,
-            label.as_ref(),
-            *limit,
-            *regex,
-            *candidates,
-            *with_context,
-            *context_lines,
-            *max_context_lines,
-            *with_snippet,
-            *with_fqn,
-            *max_snippet_bytes,
-            fields.as_ref(),
-            *sort_by,
-            *auto_limit,
-            *min_complexity,
-            *max_complexity,
-            *min_fan_in,
-            *min_fan_out,
-            symbol_id.as_ref(),
-            fqn.as_ref(),
-            exact_fqn.as_ref(),
-            ast_kind.as_ref(),
-            *with_ast_context,
-            *min_depth,
-            *max_depth,
-            inside.as_ref().map(|s| s.as_str()),
-            contains.as_ref().map(|s| s.as_str()),
-            from_symbol_set.as_ref(),
-            reachable_from.as_ref(),
-            dead_code_in.as_ref(),
-            in_cycle.as_ref(),
-            slice_backward_from.as_ref(),
-            slice_forward_from.as_ref(),
-            *condense,
-            paths_from.as_ref(),
-            paths_to.as_ref(),
-        ),
+        } => {
+            let params = SearchParams {
+                query: query.clone(),
+                mode: *mode,
+                path: path.clone(),
+                kind: kind.clone(),
+                language: language.clone(),
+                label: label.clone(),
+                limit: *limit,
+                regex: *regex,
+                candidates: *candidates,
+                with_context: *with_context,
+                context_lines: *context_lines,
+                max_context_lines: *max_context_lines,
+                with_snippet: *with_snippet,
+                with_fqn: *with_fqn,
+                max_snippet_bytes: *max_snippet_bytes,
+                fields: fields.clone(),
+                sort_by: *sort_by,
+                auto_limit: *auto_limit,
+                min_complexity: *min_complexity,
+                max_complexity: *max_complexity,
+                min_fan_in: *min_fan_in,
+                min_fan_out: *min_fan_out,
+                symbol_id: symbol_id.clone(),
+                fqn: fqn.clone(),
+                exact_fqn: exact_fqn.clone(),
+                ast_kind: ast_kind.clone(),
+                with_ast_context: *with_ast_context,
+                min_depth: *min_depth,
+                max_depth: *max_depth,
+                inside: inside.clone(),
+                contains: contains.clone(),
+                from_symbol_set: from_symbol_set.clone(),
+                reachable_from: reachable_from.clone(),
+                dead_code_in: dead_code_in.clone(),
+                in_cycle: in_cycle.clone(),
+                slice_backward_from: slice_backward_from.clone(),
+                slice_forward_from: slice_forward_from.clone(),
+                condense: *condense,
+                paths_from: paths_from.clone(),
+                paths_to: paths_to.clone(),
+            };
+            run_search(cli, &params)
+        }
 
         #[cfg(feature = "unstable-watch")]
         Command::Watch {
@@ -659,56 +803,14 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_search(
-    cli: &Cli,
-    query: &str,
-    mode: SearchMode,
-    path: &Option<PathBuf>,
-    kind: &Option<String>,
-    language: &Option<String>,
-    label: Option<&String>,
-    limit: usize,
-    regex: bool,
-    candidates: usize,
-    with_context: bool,
-    context_lines: usize,
-    max_context_lines: usize,
-    with_snippet: bool,
-    with_fqn: bool,
-    max_snippet_bytes: usize,
-    fields: Option<&String>,
-    sort_by: SortMode,
-    auto_limit: AutoLimitMode,
-    min_complexity: Option<usize>,
-    max_complexity: Option<usize>,
-    min_fan_in: Option<usize>,
-    min_fan_out: Option<usize>,
-    symbol_id: Option<&String>,
-    fqn: Option<&String>,
-    exact_fqn: Option<&String>,
-    ast_kind: Option<&String>,
-    with_ast_context: bool,
-    min_depth: Option<usize>,
-    max_depth: Option<usize>,
-    inside: Option<&str>,
-    contains: Option<&str>,
-    from_symbol_set: Option<&String>,
-    reachable_from: Option<&String>,
-    dead_code_in: Option<&String>,
-    in_cycle: Option<&String>,
-    slice_backward_from: Option<&String>,
-    slice_forward_from: Option<&String>,
-    condense: bool,
-    paths_from: Option<&String>,
-    paths_to: Option<&String>,
-) -> Result<(), LlmError> {
+fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
     // Validate SymbolId format (32 hex characters)
-    if let Some(sid) = symbol_id {
+    if let Some(sid) = &params.symbol_id {
         let hex_regex =
             regex::Regex::new(r"^[0-9a-f]{32}$").map_err(|_| LlmError::InvalidQuery {
                 query: "Failed to compile symbol_id validation regex".to_string(),
             })?;
-        if !hex_regex.is_match(sid) {
+        if !hex_regex.is_match(&sid) {
             return Err(LlmError::InvalidQuery {
                 query: format!(
                     "Invalid symbol_id format: '{}'. Expected 32 hex characters (0-9, a-f).",
@@ -719,19 +821,19 @@ fn run_search(
     }
 
     // Normalize and validate language filter
-    let normalized_language = language.as_ref().map(|lang| normalize_language(lang));
+    let normalized_language = params.language.as_ref().map(|lang| normalize_language(lang));
 
     // Expand AST shorthands with language-aware expansion
-    let expanded_ast_kind = if let Some(kind_input) = ast_kind {
+    let expanded_ast_kind = if let Some(kind_input) = &params.ast_kind {
         // Use language-aware expansion if language is specified
         let kinds = if normalized_language.is_some() {
             expand_shorthand_with_language(
-                kind_input,
+                &kind_input,
                 normalized_language.as_deref(),
             )
         } else {
             // Use Rust shorthands by default
-            expand_shorthands(kind_input)
+            expand_shorthands(&kind_input)
         };
         if !kinds.is_empty() {
             Some(kinds.join(","))
@@ -744,7 +846,7 @@ fn run_search(
 
     // Normalize kind value (handles comma-separated values for future use)
     // For now, we still pass single kind to SearchOptions but normalize it
-    let normalized_kind = kind.as_ref().map(|k| {
+    let normalized_kind = params.kind.as_ref().map(|k| {
         let kinds = parse_kinds(k);
         // For backward compatibility with current implementation,
         // use the first kind. Future enhancement: support multiple kinds.
@@ -756,21 +858,21 @@ fn run_search(
     });
 
     // Validate mutual exclusivity of --fqn and --exact-fqn
-    if fqn.is_some() && exact_fqn.is_some() {
+    if params.fqn.is_some() && params.exact_fqn.is_some() {
         return Err(LlmError::InvalidQuery {
             query: "--fqn and --exact-fqn are mutually exclusive. Use only one.".to_string(),
         });
     }
 
     // Warn if both --query and --symbol-id are provided (symbol_id takes precedence)
-    if symbol_id.is_some() {
+    if params.symbol_id.is_some() {
         eprintln!(
             "Note: --symbol-id provided, using direct lookup. Query '{}' will be used as secondary filter if needed.",
-            query
+            params.query
         );
     }
 
-    if query.trim().is_empty() && symbol_id.is_none() && !condense && paths_from.is_none() {
+    if params.query.trim().is_empty() && params.symbol_id.is_none() && !params.condense && params.paths_from.is_none() {
         return Err(LlmError::EmptyQuery);
     }
 
@@ -794,57 +896,57 @@ fn run_search(
     let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
 
     // Validate path filter if provided
-    let validated_path = if let Some(p) = path {
+    let validated_path = if let Some(p) = &params.path {
         Some(validate_path(p, false)?)
     } else {
         None
     };
     let wants_json = matches!(cli.output, OutputFormat::Json | OutputFormat::Pretty);
-    let candidates = candidates.max(limit);
+    let candidates = params.candidates.max(params.limit);
     let fields = if wants_json {
-        fields.map(|value| parse_fields(value)).transpose()?
+        params.fields.as_ref().map(|value| parse_fields(value)).transpose()?
     } else {
         None
     };
 
-    let include_context = wants_json && fields.as_ref().map_or(with_context, |f| f.context);
-    let include_snippet = wants_json && fields.as_ref().map_or(with_snippet, |f| f.snippet);
+    let include_context = wants_json && fields.as_ref().map_or(params.with_context, |f| f.context);
+    let include_snippet = wants_json && fields.as_ref().map_or(params.with_snippet, |f| f.snippet);
     let include_score = if wants_json {
         fields.as_ref().is_none_or(|f| f.score)
     } else {
         true
     };
 
-    let include_fqn = wants_json && fields.as_ref().map_or(with_fqn, |f| f.fqn);
-    let include_canonical_fqn = wants_json && fields.as_ref().map_or(with_fqn, |f| f.canonical_fqn);
-    let include_display_fqn = wants_json && fields.as_ref().map_or(with_fqn, |f| f.display_fqn);
+    let include_fqn = wants_json && fields.as_ref().map_or(params.with_fqn, |f| f.fqn);
+    let include_canonical_fqn = wants_json && fields.as_ref().map_or(params.with_fqn, |f| f.canonical_fqn);
+    let include_display_fqn = wants_json && fields.as_ref().map_or(params.with_fqn, |f| f.display_fqn);
 
     let metrics = MetricsOptions {
-        min_complexity,
-        max_complexity,
-        min_fan_in,
-        min_fan_out,
+        min_complexity: params.min_complexity,
+        max_complexity: params.max_complexity,
+        min_fan_in: params.min_fan_in,
+        min_fan_out: params.min_fan_out,
     };
 
-    match mode {
+    match params.mode {
         SearchMode::Symbols => {
             let options = SearchOptions {
                 db_path,
-                query,
+                query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: normalized_kind.as_deref(),
                 language_filter: normalized_language.as_deref(),
-                limit,
-                use_regex: regex,
+                limit: params.limit,
+                use_regex: params.regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
-                    lines: context_lines,
-                    max_lines: max_context_lines,
+                    lines: params.context_lines,
+                    max_lines: params.max_context_lines,
                 },
                 snippet: SnippetOptions {
                     include: include_snippet,
-                    max_bytes: max_snippet_bytes,
+                    max_bytes: params.max_snippet_bytes,
                 },
                 fqn: FqnOptions {
                     fqn: include_fqn,
@@ -852,36 +954,36 @@ fn run_search(
                     display_fqn: include_display_fqn,
                 },
                 include_score,
-                sort_by,
+                sort_by: params.sort_by,
                 metrics,
                 ast: AstOptions {
                     ast_kinds: expanded_ast_kind
                         .as_ref()
                         .map(|k| k.split(',').map(|s| s.trim().to_string()).collect())
                         .unwrap_or_default(),
-                    with_ast_context,
+                    with_ast_context: params.with_ast_context,
                     _phantom: std::marker::PhantomData,
                 },
                 depth: DepthOptions {
-                    min_depth,
-                    max_depth,
-                    inside,
-                    contains,
+                    min_depth: params.min_depth,
+                    max_depth: params.max_depth,
+                    inside: params.inside.as_deref(),
+                    contains: params.contains.as_deref(),
                 },
                 algorithm: AlgorithmOptions {
-                    from_symbol_set: from_symbol_set.map(|s| s.as_str()),
-                    reachable_from: reachable_from.map(|s| s.as_str()),
-                    dead_code_in: dead_code_in.map(|s| s.as_str()),
-                    in_cycle: in_cycle.map(|s| s.as_str()),
-                    slice_backward_from: slice_backward_from.map(|s| s.as_str()),
-                    slice_forward_from: slice_forward_from.map(|s| s.as_str()),
-                    condense,
-                    paths_from: paths_from.as_ref().map(|s| s.as_str()),
-                    paths_to: paths_to.as_ref().map(|s| s.as_str()),
+                    from_symbol_set: params.from_symbol_set.as_ref().map(|s| s.as_str()),
+                    reachable_from: params.reachable_from.as_ref().map(|s| s.as_str()),
+                    dead_code_in: params.dead_code_in.as_ref().map(|s| s.as_str()),
+                    in_cycle: params.in_cycle.as_ref().map(|s| s.as_str()),
+                    slice_backward_from: params.slice_backward_from.as_ref().map(|s| s.as_str()),
+                    slice_forward_from: params.slice_forward_from.as_ref().map(|s| s.as_str()),
+                    condense: params.condense,
+                    paths_from: params.paths_from.as_ref().map(|s| s.as_str()),
+                    paths_to: params.paths_to.as_ref().map(|s| s.as_str()),
                 },
-                symbol_id: symbol_id.map(|s| s.as_str()),
-                fqn_pattern: fqn.map(|s| s.as_str()),
-                exact_fqn: exact_fqn.map(|s| s.as_str()),
+                symbol_id: params.symbol_id.as_ref().map(|s| s.as_str()),
+                fqn_pattern: params.fqn.as_ref().map(|s| s.as_str()),
+                exact_fqn: params.exact_fqn.as_ref().map(|s| s.as_str()),
             };
 
             // Time query execution
@@ -898,7 +1000,7 @@ fn run_search(
                 .len();
 
             // Populate notice when condense finds no SCCs
-            if condense && scc_count == 0 {
+            if params.condense && scc_count == 0 {
                 response.notice = Some(
                     "No SCCs found - codebase is acyclic (no cycles detected)".to_string(),
                 );
@@ -912,9 +1014,9 @@ fn run_search(
 
             // Note: Empty paths case
             if response.total_count == 0 {
-                if let Some(from) = &paths_from {
+                if let Some(from) = &params.paths_from {
                     eprintln!("Note: No execution paths found from '{from}'");
-                    if let Some(to) = &paths_to {
+                    if let Some(to) = &params.paths_to {
                         eprintln!("      to '{to}'. Symbols may be unreachable.");
                     }
                 }
@@ -950,25 +1052,25 @@ fn run_search(
         SearchMode::References => {
             let options = SearchOptions {
                 db_path,
-                query,
+                query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
                 language_filter: None,
-                limit,
-                use_regex: regex,
+                limit: params.limit,
+                use_regex: params.regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
-                    lines: context_lines,
-                    max_lines: max_context_lines,
+                    lines: params.context_lines,
+                    max_lines: params.max_context_lines,
                 },
                 snippet: SnippetOptions {
                     include: include_snippet,
-                    max_bytes: max_snippet_bytes,
+                    max_bytes: params.max_snippet_bytes,
                 },
                 fqn: FqnOptions::default(),
                 include_score,
-                sort_by,
+                sort_by: params.sort_by,
                 metrics,
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
@@ -1013,25 +1115,25 @@ fn run_search(
         SearchMode::Calls => {
             let options = SearchOptions {
                 db_path,
-                query,
+                query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
                 language_filter: None,
-                limit,
-                use_regex: regex,
+                limit: params.limit,
+                use_regex: params.regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
-                    lines: context_lines,
-                    max_lines: max_context_lines,
+                    lines: params.context_lines,
+                    max_lines: params.max_context_lines,
                 },
                 snippet: SnippetOptions {
                     include: include_snippet,
-                    max_bytes: max_snippet_bytes,
+                    max_bytes: params.max_snippet_bytes,
                 },
                 fqn: FqnOptions::default(),
                 include_score,
-                sort_by,
+                sort_by: params.sort_by,
                 metrics,
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
@@ -1079,28 +1181,28 @@ fn run_search(
                     query: "auto mode requires JSON output".to_string(),
                 });
             }
-            let (symbols_limit, references_limit, calls_limit) = match auto_limit {
-                AutoLimitMode::PerMode => (limit, limit, limit),
-                AutoLimitMode::Global => split_auto_limit(limit),
+            let (symbols_limit, references_limit, calls_limit) = match params.auto_limit {
+                AutoLimitMode::PerMode => (params.limit, params.limit, params.limit),
+                AutoLimitMode::Global => split_auto_limit(params.limit),
             };
 
             let (symbols, symbols_partial, _) = backend.search_symbols(SearchOptions {
                 db_path,
-                query,
+                query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: normalized_kind.as_deref(),
                 language_filter: normalized_language.as_deref(),
                 limit: symbols_limit,
-                use_regex: regex,
+                use_regex: params.regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
-                    lines: context_lines,
-                    max_lines: max_context_lines,
+                    lines: params.context_lines,
+                    max_lines: params.max_context_lines,
                 },
                 snippet: SnippetOptions {
                     include: include_snippet,
-                    max_bytes: max_snippet_bytes,
+                    max_bytes: params.max_snippet_bytes,
                 },
                 fqn: FqnOptions {
                     fqn: include_fqn,
@@ -1108,48 +1210,48 @@ fn run_search(
                     display_fqn: include_display_fqn,
                 },
                 include_score,
-                sort_by,
+                sort_by: params.sort_by,
                 metrics,
                 ast: AstOptions {
                     ast_kinds: expanded_ast_kind
                         .as_ref()
                         .map(|k| k.split(',').map(|s| s.trim().to_string()).collect())
                         .unwrap_or_default(),
-                    with_ast_context,
+                    with_ast_context: params.with_ast_context,
                     _phantom: std::marker::PhantomData,
                 },
                 depth: DepthOptions {
-                    min_depth,
-                    max_depth,
-                    inside,
-                    contains,
+                    min_depth: params.min_depth,
+                    max_depth: params.max_depth,
+                    inside: params.inside.as_deref(),
+                    contains: params.contains.as_deref(),
                 },
                 algorithm: AlgorithmOptions::default(),
-                symbol_id: symbol_id.map(|s| s.as_str()),
-                fqn_pattern: fqn.map(|s| s.as_str()),
-                exact_fqn: exact_fqn.map(|s| s.as_str()),
+                symbol_id: params.symbol_id.as_ref().map(|s| s.as_str()),
+                fqn_pattern: params.fqn.as_ref().map(|s| s.as_str()),
+                exact_fqn: params.exact_fqn.as_ref().map(|s| s.as_str()),
             })?;
             let (references, refs_partial) = backend.search_references(SearchOptions {
                 db_path,
-                query,
+                query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
                 language_filter: None,
                 limit: references_limit,
-                use_regex: regex,
+                use_regex: params.regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
-                    lines: context_lines,
-                    max_lines: max_context_lines,
+                    lines: params.context_lines,
+                    max_lines: params.max_context_lines,
                 },
                 snippet: SnippetOptions {
                     include: include_snippet,
-                    max_bytes: max_snippet_bytes,
+                    max_bytes: params.max_snippet_bytes,
                 },
                 fqn: FqnOptions::default(),
                 include_score,
-                sort_by,
+                sort_by: params.sort_by,
                 metrics,
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
@@ -1160,25 +1262,25 @@ fn run_search(
             })?;
             let (calls, calls_partial) = backend.search_calls(SearchOptions {
                 db_path,
-                query,
+                query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
                 language_filter: None,
                 limit: calls_limit,
-                use_regex: regex,
+                use_regex: params.regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
-                    lines: context_lines,
-                    max_lines: max_context_lines,
+                    lines: params.context_lines,
+                    max_lines: params.max_context_lines,
                 },
                 snippet: SnippetOptions {
                     include: include_snippet,
-                    max_bytes: max_snippet_bytes,
+                    max_bytes: params.max_snippet_bytes,
                 },
                 fqn: FqnOptions::default(),
                 include_score,
-                sort_by,
+                sort_by: params.sort_by,
                 metrics,
                 ast: AstOptions::default(),
                 depth: DepthOptions::default(),
@@ -1189,7 +1291,7 @@ fn run_search(
             })?;
             let total_count = symbols.total_count + references.total_count + calls.total_count;
             let combined = CombinedSearchResponse {
-                query: query.to_string(),
+                query: params.query.to_string(),
                 path_filter: validated_path
                     .as_ref()
                     .map(|p| p.to_string_lossy().to_string()),
@@ -1197,7 +1299,7 @@ fn run_search(
                 references,
                 calls,
                 total_count,
-                limit_mode: match auto_limit {
+                limit_mode: match params.auto_limit {
                     AutoLimitMode::PerMode => "per-mode".to_string(),
                     AutoLimitMode::Global => "global".to_string(),
                 },
@@ -1240,7 +1342,7 @@ fn run_search(
             }
         }
         SearchMode::Labels => {
-            let label_name = label.unwrap_or(&"test".to_string()).clone();
+            let label_name = params.label.clone().unwrap_or("test".to_string());
 
             // Time query execution
             let query_start = std::time::Instant::now();
@@ -1248,7 +1350,7 @@ fn run_search(
                 .ok_or_else(|| LlmError::SearchFailed {
                     reason: format!("Database path {:?} is not valid UTF-8", db_path),
                 })?;
-            let (response, partial, _paths_bounded) = backend.search_by_label(&label_name, limit, db_path_str)?;
+            let (response, partial, _paths_bounded) = backend.search_by_label(&label_name, params.limit, db_path_str)?;
             let query_execution_ms = query_start.elapsed().as_millis() as u64;
 
             // Time output formatting
