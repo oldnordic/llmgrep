@@ -165,3 +165,47 @@ llmgrep reads directly from Magellan's SQLite database:
 | **splice** | Refactoring with span safety |
 
 All tools share the same database schema and are compatible with Magellan v3.0.0.
+
+---
+
+## Magellan v3.0.0 Features (Reference)
+
+### Async I/O with Progress Bars
+
+```bash
+$ magellan watch --root . --db project.db --scan-initial
+
+Scanning: src/main.rs [=====> ] 23/143 (16%) ETA: 2s
+```
+
+### LLM Context API
+
+```bash
+# Project overview
+magellan context summary --db project.db --json
+
+# Symbol detail
+magellan context symbol --db project.db --name main --callers --callees --json
+```
+
+### Self-Diagnostics
+
+```bash
+magellan doctor --db project.db
+magellan doctor --db project.db --fix
+```
+
+### LSP Enrichment
+
+```bash
+magellan enrich --db project.db
+```
+
+### Cross-Repo (LSIF)
+
+```bash
+magellan export --db project.db --format lsif --output project.lsif
+magellan import-lsif --db project.db --input dependency.lsif
+```
+
+**Published:** https://crates.io/crates/magellan
