@@ -1,7 +1,8 @@
 # llmgrep - Pattern-Based Code Search
 
 **Project:** llmgrep
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-03-02
+**Magellan Version:** 3.0.0+
 
 ---
 
@@ -9,16 +10,22 @@
 
 llmgrep is a pattern-based code search tool that queries Magellan's database using fuzzy matching and scoring. It's faster and more accurate than text-based grep.
 
+**Note:** llmgrep 3.0.11+ is compatible with Magellan v3.0.0 databases.
+
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Ensure Magellan has indexed your code
-magellan watch --root . --db .codemcp/codegraph.db
+# 1. Ensure Magellan has indexed your code (v3.0.0+)
+magellan watch --root . --db .codemcp/codegraph.db --scan-initial
 
 # 2. Search for symbols
 llmgrep --db .codemcp/codegraph.db search --query "function_name" --output human
+
+# 3. (Optional) Build LLM context for AI queries
+magellan context build --db .codemcp/codegraph.db
+magellan context summary --db .codemcp/codegraph.db
 ```
 
 ---
@@ -50,13 +57,47 @@ llmgrep --db .codemcp/codegraph.db search --query "main" --output json
 
 ---
 
-## Search Modes
+## Magellan v3.0.0 Integration
 
-| Mode | Description |
-|------|-------------|
-| `symbols` | Search symbol definitions |
-| `references` | Search references to symbols |
-| `calls` | Search function calls |
+llmgrep works seamlessly with Magellan v3.0.0's new features:
+
+### LLM Context Queries (Recommended for AI)
+
+```bash
+# Get project overview (~50 tokens - perfect for LLM context)
+magellan context summary --db code.db
+
+# List symbols with pagination
+magellan context list --db code.db --kind fn --page 1 --page-size 50
+
+# Get symbol details with call graph
+magellan context symbol --db code.db --name main --callers --callees
+
+# Get file context
+magellan context file --db code.db --path src/main.rs
+```
+
+### Cross-Repository Search
+
+```bash
+# Export current project to LSIF
+magellan export --db code.db --format lsif --output project.lsif
+
+# Import external dependencies
+magellan import-lsif --db code.db --input serde.lsif
+
+# Now llmgrep can find symbols across imported packages
+llmgrep --db code.db search --query "Deserialize" --output human
+```
+
+### LSP Enrichment
+
+```bash
+# Enrich symbols with type signatures from rust-analyzer
+magellan enrich --db code.db
+
+# Now llmgrep results include enriched type information
+```
 
 ---
 
@@ -78,106 +119,49 @@ Common kinds for filtering:
 
 **IMPORTANT:** Always specify `--output` flag for readable results:
 
-```bash
---output human   # Readable text with scores
---output json    # Compact JSON
---output pretty  # Formatted JSON
-```
+| Format | Use Case |
+|--------|----------|
+| `--output human` | Terminal output (default) |
+| `--output json` | Programmatic access, LLM input |
 
 ---
 
-## Example Workflow
+## Database Schema Compatibility
 
-```bash
-# 1. Find all functions related to "config"
-llmgrep --db .codemcp/codegraph.db search --query "config" --kind Function --output human
+llmgrep reads directly from Magellan's SQLite database:
 
-# 2. Find what references a specific symbol
-llmgrep --db .codemcp/codegraph.db search --query "MyStruct" --mode references --output human
+| Table | Purpose | llmgrep Usage |
+|-------|---------|---------------|
+| `ast_nodes` | AST hierarchy | Structural search |
+| `graph_entities` | All symbols | Symbol lookup |
+| `graph_edges` | Relationships | Call graph traversal |
 
-# 3. Find all function calls from main
-llmgrep --db .codemcp/codegraph.db search --query "main" --mode calls --output human
-
-# 4. Get JSON for parsing
-llmgrep --db .codemcp/codegraph.db search --query "parse" --output json
-```
-
----
-
-## Scoring
-
-Results are ranked by relevance score:
-- `100` = Exact name match
-- Lower scores = Fuzzy matches
-
----
-
-## Installation
-
-```bash
-cargo install llmgrep
-```
+**Schema Version:** Magellan v8 (compatible with llmgrep 3.0.11+)
 
 ---
 
 ## Troubleshooting
 
-**No results returned**
-- Database may be outdated - re-index (see below)
-- Check Magellan status: `magellan status --db .codemcp/codegraph.db`
-- Try broader search query
-- Use `--mode symbols` for definitions only
+### "No symbols found"
+1. Ensure Magellan has indexed the code: `magellan watch --root . --db code.db`
+2. Check database exists: `ls -la .codemcp/codegraph.db`
+3. Verify symbol exists: `magellan find --db code.db --name symbol_name`
 
-**"Database not found"**
-- Ensure Magellan has indexed: `magellan watch --root . --db .codemcp/codegraph.db`
-- Check database path is correct
+### "Database locked"
+- Magellan watch may be running. Stop it or use a different database file.
 
----
-
-## Re-Indexing When Database is Outdated
-
-```bash
-# 1. Stop any running watcher
-pkill -f "magellan watch"
-
-# 2. Delete old database
-rm -rf .codemcp/*.db*
-
-# 3. Re-index (respects .gitignore)
-magellan watch --root . --db .codemcp/codegraph.db
-
-# 4. WAIT for "Scanned N files" message
-
-# 5. Verify completion
-magellan status --db .codemcp/codegraph.db
-```
+### Schema mismatch
+- Update llmgrep: `cargo build --release`
+- Rebuild Magellan database: `magellan watch --root . --db code.db --scan-initial`
 
 ---
 
-## Editing Code with Splice
+## Related Tools
 
-After finding symbols with llmgrep, use splice for precise code editing:
+| Tool | Purpose |
+|------|---------|
+| **magellan** | Code indexing and graph database |
+| **mirage** | CFG-based path analysis |
+| **splice** | Refactoring with span safety |
 
-```bash
-# Single edit (patch function body)
-cat > new_func.rs << 'EOF'
-pub fn process(data: &str) -> Result<String> {
-    Ok(data.to_uppercase())
-}
-EOF
-
-# Preview first
-splice patch --file src/lib.rs --symbol process --with new_func.rs --preview
-
-# Apply the change
-splice patch --file src/lib.rs --symbol process --with new_func.rs
-
-# Multi-file pattern replacement
-splice apply-files --glob "src/**/*.rs" --find "old_func" --replace "new_func"
-
-# Cross-file rename
-splice find --name "my_function" --path "src/lib.rs"
-splice rename --symbol <id> --file src/lib.rs --to new_name
-```
-
----
+All tools share the same database schema and are compatible with Magellan v3.0.0.
