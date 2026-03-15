@@ -213,6 +213,7 @@ impl super::BackendTrait for SqliteBackend {
         })
     }
 
+    #[cfg(feature = "geometric-backend")]
     fn get_chunks_for_symbol(
         &self,
         _file_path: &str,

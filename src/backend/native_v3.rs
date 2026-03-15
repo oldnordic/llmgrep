@@ -1205,6 +1205,7 @@ impl super::BackendTrait for NativeV3Backend {
         ))
     }
 
+    #[cfg(feature = "geometric-backend")]
     fn get_chunks_for_symbol(
         &self,
         _file_path: &str,
