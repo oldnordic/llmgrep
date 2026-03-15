@@ -24,6 +24,11 @@ native-v3 = []
 # Unstable watch command (incomplete, requires unstable Mag APIs)
 unstable-watch = []
 
+# Geometric backend support for .geo files (requires unpublished geographdb-core)
+# This feature is disabled for crates.io publishing
+# geometric-backend = ["magellan/geometric-backend"]
+geometric-backend = []
+
 [dependencies]
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
