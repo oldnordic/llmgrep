@@ -4,6 +4,8 @@
 //! which stores code graphs in a specialized format optimized for
 //! spatial queries and CFG analysis.
 
+#![cfg(feature = "geometric-backend")]
+
 use crate::backend::magellan_adapter::normalize_path_for_query;
 use crate::error::LlmError;
 use crate::output::{

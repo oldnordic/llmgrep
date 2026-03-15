@@ -10,13 +10,17 @@ use crate::query::SearchOptions;
 use std::path::Path;
 
 // Backend implementation modules
+#[cfg(feature = "geometric-backend")]
 pub mod geometric;
+#[cfg(feature = "geometric-backend")]
 pub mod magellan_adapter; // Contract-aware Magellan adapter layer
 #[cfg(feature = "native-v3")]
 mod native_v3;
 pub mod sqlite;
 
+#[cfg(feature = "geometric-backend")]
 pub use geometric::GeometricBackend;
+#[cfg(feature = "geometric-backend")]
 pub use magellan_adapter::{
     apply_path_filter, lookup_symbol_by_path_and_name, normalize_path_for_query, paths_equivalent,
     SymbolLookupResult,
@@ -154,7 +158,8 @@ pub enum Backend {
     /// Native-V3 storage backend (high-performance, requires native-v3 feature)
     #[cfg(feature = "native-v3")]
     NativeV3(NativeV3Backend),
-    /// Geometric storage backend (spatial/CGF optimized, always available)
+    /// Geometric storage backend (spatial/CGF optimized, requires geometric-backend feature)
+    #[cfg(feature = "geometric-backend")]
     Geometric(GeometricBackend),
 }
 
@@ -185,14 +190,33 @@ impl Backend {
         }
 
         // First check file extension for geometric backend
-        let is_geometric = db_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e == "geo")
-            .unwrap_or(false);
+        #[cfg(feature = "geometric-backend")]
+        {
+            let is_geometric = db_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e == "geo")
+                .unwrap_or(false);
 
-        if is_geometric {
-            return GeometricBackend::open(db_path).map(Backend::Geometric);
+            if is_geometric {
+                return GeometricBackend::open(db_path).map(Backend::Geometric);
+            }
+        }
+
+        #[cfg(not(feature = "geometric-backend"))]
+        {
+            let is_geometric = db_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e == "geo")
+                .unwrap_or(false);
+
+            if is_geometric {
+                return Err(LlmError::BackendDetectionFailed {
+                    path: db_path.display().to_string(),
+                    reason: "Geometric backend (.geo files) requires 'geometric-backend' feature".to_string(),
+                });
+            }
         }
 
         // Read first 16 bytes to detect format for other backends
@@ -239,6 +263,7 @@ impl Backend {
             Backend::Sqlite(b) => b.search_symbols(options),
             #[cfg(feature = "native-v3")]
             Backend::NativeV3(b) => b.search_symbols(options),
+            #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.search_symbols(options),
         }
     }
@@ -252,6 +277,7 @@ impl Backend {
             Backend::Sqlite(b) => b.search_references(options),
             #[cfg(feature = "native-v3")]
             Backend::NativeV3(b) => b.search_references(options),
+            #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.search_references(options),
         }
     }
@@ -265,6 +291,7 @@ impl Backend {
             Backend::Sqlite(b) => b.search_calls(options),
             #[cfg(feature = "native-v3")]
             Backend::NativeV3(b) => b.search_calls(options),
+            #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.search_calls(options),
         }
     }
@@ -280,6 +307,7 @@ impl Backend {
             Backend::Sqlite(b) => b.ast(file, position, limit),
             #[cfg(feature = "native-v3")]
             Backend::NativeV3(b) => b.ast(file, position, limit),
+            #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.ast(file, position, limit),
         }
     }
@@ -290,6 +318,7 @@ impl Backend {
             Backend::Sqlite(b) => b.find_ast(kind),
             #[cfg(feature = "native-v3")]
             Backend::NativeV3(b) => b.find_ast(kind),
+            #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.find_ast(kind),
         }
     }
@@ -303,6 +332,7 @@ impl Backend {
             Backend::Sqlite(b) => b.complete(prefix, limit),
             #[cfg(feature = "native-v3")]
             Backend::NativeV3(b) => b.complete(prefix, limit),
+            #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.complete(prefix, limit),
         }
     }
@@ -316,6 +346,7 @@ impl Backend {
             Backend::Sqlite(b) => b.lookup(fqn, db_path),
             #[cfg(feature = "native-v3")]
             Backend::NativeV3(b) => b.lookup(fqn, db_path),
+            #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.lookup(fqn, db_path),
         }
     }
@@ -334,6 +365,7 @@ impl Backend {
             Backend::Sqlite(b) => b.search_by_label(label, limit, db_path),
             #[cfg(feature = "native-v3")]
             Backend::NativeV3(b) => b.search_by_label(label, limit, db_path),
+            #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.search_by_label(label, limit, db_path),
         }
     }
@@ -358,6 +390,7 @@ impl Backend {
                 backend: "NativeV3".to_string(),
                 message: "NativeV3 backend does not support chunk retrieval. Use Geometric (.geo) backend.".to_string(),
             }),
+            #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.get_chunks_for_symbol(file_path, symbol_name),
         }
     }
@@ -369,6 +402,7 @@ mod tests {
     use std::io::Write;
     use tempfile::{NamedTempFile, TempDir};
 
+    #[cfg(feature = "geometric-backend")]
     fn create_test_geo_db() -> (TempDir, std::path::PathBuf) {
         let temp_dir = TempDir::new().unwrap();
         let geo_path = temp_dir.path().join("test.geo");
@@ -382,6 +416,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "geometric-backend")]
     fn test_detect_and_open_geometric_backend() {
         // Layer 1: Test geometric backend detection by extension
         let (_temp_dir, geo_path) = create_test_geo_db();

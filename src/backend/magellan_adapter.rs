@@ -7,6 +7,8 @@
 //! - Code chunk retrieval
 //! - Backend-neutral operations
 
+#![cfg(feature = "geometric-backend")]
+
 use magellan::validation::normalize_path;
 use std::path::Path;
 
