@@ -1996,12 +1996,18 @@ fn require_native_v3(backend: &Backend, command: &str, db_path: &Path) -> Result
     match backend {
         #[cfg(feature = "native-v3")]
         Backend::NativeV3(_) => Ok(()),
+        #[cfg(feature = "geometric-backend")]
         Backend::Geometric(_) => {
             // Geometric backend now supports most commands
             // If a specific command isn't supported, the backend will return
             // an appropriate error
             Ok(())
         }
+        #[cfg(not(feature = "geometric-backend"))]
+        _ => Err(LlmError::BackendDetectionFailed {
+            path: db_path.display().to_string(),
+            reason: "Geometric backend not available".to_string(),
+        }),
         Backend::Sqlite(_) => Err(LlmError::RequiresNativeV3Backend {
             command: command.to_string(),
             path: db_path.display().to_string(),
