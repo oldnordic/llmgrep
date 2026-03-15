@@ -139,6 +139,7 @@ pub trait BackendTrait {
     /// # Returns
     /// * `Ok(Vec<CodeChunk>)` - List of chunks for the symbol
     /// * `Err(LlmError::ChunksNotAvailable)` - If chunking was not performed
+    #[cfg(feature = "geometric-backend")]
     fn get_chunks_for_symbol(
         &self,
         file_path: &str,
@@ -375,6 +376,7 @@ impl Backend {
     /// This method provides pre-extracted code snippets for a symbol.
     /// Geometric backend supports chunks from .geo files.
     /// Other backends return RequiresGeometricBackend error.
+    #[cfg(feature = "geometric-backend")]
     pub fn get_chunks_for_symbol(
         &self,
         file_path: &str,
