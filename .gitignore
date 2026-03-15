@@ -5,3 +5,8 @@
 /scripts/
 test_db/
 .cargo/
+
+# Database files
+*.db
+*.db-*
+*.context.json
