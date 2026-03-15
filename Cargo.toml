@@ -1,6 +1,6 @@
 [package]
 name = "llmgrep"
-version = "3.0.11"
+version = "3.1.1"
 edition = "2021"
 description = "Smart grep over Magellan code maps with schema-aligned JSON output"
 license = "GPL-3.0-only"
@@ -14,9 +14,11 @@ default = ["unix"]
 unix = []
 windows = []
 
-# Native-V3 backend support (recommended for production)
+# Native-V3 backend support (reserved, currently disabled)
 # High-performance binary backend with KV store side tables
-# native-v3 disabled - use only sqlite-backend to avoid format conflicts
+# NOTE: Feature defined to silence cfg warnings, but intentionally disabled
+# Dependencies are commented out to avoid format conflicts
+native-v3 = []
 # native-v3 = ["magellan/native-v3", "sqlitegraph/native-v3"]
 
 # Unstable watch command (incomplete, requires unstable Mag APIs)
@@ -27,7 +29,7 @@ anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 hex = "0.4"
-magellan = "2.4.8"
+magellan = { path = "../magellan", features = ["geometric-backend"] }
 regex = "1.10"
 rusqlite = "0.31"
 serde = { version = "1.0", features = ["derive"] }

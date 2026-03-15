@@ -48,16 +48,22 @@ pub fn run_watch<'a>(
             // SQLite backend: warn and use file watching
             eprintln!("Warning: SQLite backend detected, file watching is not fully supported.");
             eprintln!("For real-time updates, reindex with native-v2 storage:");
-            eprintln!("  magellan watch --root . --db {} --storage native-v2", db_path.display());
+            eprintln!(
+                "  magellan watch --root . --db {} --storage native-v2",
+                db_path.display()
+            );
             run_watch_with_filesystem(&inner, db_path, options, output_format, shutdown)
         }
         #[cfg(all(feature = "native-v2", not(feature = "unstable-watch")))]
         Backend::NativeV2(_) => {
             eprintln!("Warning: Watch command is incomplete and requires unstable APIs.");
-            eprintln!("For real-time updates, reindex with native-v2 storage and enable unstable-watch.");
+            eprintln!(
+                "For real-time updates, reindex with native-v2 storage and enable unstable-watch."
+            );
             Err(LlmError::SearchFailed {
                 reason: "Watch command not supported without unstable-watch feature".to_string(),
-            }.into())
+            }
+            .into())
         }
     }
 }
@@ -102,11 +108,12 @@ fn run_watch_with_filesystem_fallback<'a>(
     shutdown: Arc<AtomicBool>,
 ) -> Result<()> {
     // Run initial query and display results
-    let (response, _partial, _paths_bounded) = backend
-        .search_symbols(options.clone())
-        .map_err(|e| LlmError::SearchFailed {
-            reason: e.to_string(),
-        })?;
+    let (response, _partial, _paths_bounded) =
+        backend
+            .search_symbols(options.clone())
+            .map_err(|e| LlmError::SearchFailed {
+                reason: e.to_string(),
+            })?;
 
     display_results(&response, &output_format);
     let mut previous_results = response.results;
@@ -169,11 +176,12 @@ fn run_watch_with_filesystem<'a>(
     use crate::backend::BackendTrait;
 
     // Run initial query and display results
-    let (response, _partial, _paths_bounded) = backend
-        .search_symbols(options.clone())
-        .map_err(|e| LlmError::SearchFailed {
-            reason: e.to_string(),
-        })?;
+    let (response, _partial, _paths_bounded) =
+        backend
+            .search_symbols(options.clone())
+            .map_err(|e| LlmError::SearchFailed {
+                reason: e.to_string(),
+            })?;
 
     display_results(&response, &output_format);
     let mut previous_results = response.results;
@@ -243,11 +251,7 @@ fn display_results(response: &SearchResponse, output_format: &OutputFormat) {
 /// * `previous` - Previous results
 /// * `current` - Current results
 /// * `output_format` - Output format for results
-fn format_delta(
-    previous: &[SymbolMatch],
-    current: &[SymbolMatch],
-    output_format: &OutputFormat,
-) {
+fn format_delta(previous: &[SymbolMatch], current: &[SymbolMatch], output_format: &OutputFormat) {
     // Compute added: items in current but not previous
     let added: Vec<&SymbolMatch> = current
         .iter()
@@ -266,7 +270,11 @@ fn format_delta(
 
     match output_format {
         OutputFormat::Human => {
-            println!("\n--- Changes: Added: {}, Removed: {} ---", added.len(), removed.len());
+            println!(
+                "\n--- Changes: Added: {}, Removed: {} ---",
+                added.len(),
+                removed.len()
+            );
 
             for result in &added {
                 println!("+ {}", format_symbol_match(result));

@@ -146,9 +146,14 @@ fn test_language_consistency() {
 
     for (file, expected) in test_cases {
         let result = llmgrep::query::infer_language(file);
-        assert_eq!(result, Some(expected),
-                   "Language mismatch for {}: got {:?}, expected {}",
-                   file, result, expected);
+        assert_eq!(
+            result,
+            Some(expected),
+            "Language mismatch for {}: got {:?}, expected {}",
+            file,
+            result,
+            expected
+        );
     }
 }
 
@@ -165,9 +170,14 @@ fn test_language_detection_with_paths() {
 
     for (path, expected) in test_cases {
         let result = llmgrep::query::infer_language(path);
-        assert_eq!(result, Some(expected),
-                   "Language mismatch for {}: got {:?}, expected {}",
-                   path, result, expected);
+        assert_eq!(
+            result,
+            Some(expected),
+            "Language mismatch for {}: got {:?}, expected {}",
+            path,
+            result,
+            expected
+        );
     }
 }
 
@@ -176,18 +186,20 @@ fn test_language_detection_with_paths() {
 fn test_language_detection_case_sensitivity() {
     // Extensions are case-sensitive in most systems
     let test_cases: Vec<(&str, Option<&str>)> = vec![
-        ("test.PY", None),      // Uppercase extension not recognized
-        ("test.Py", None),      // Mixed case not recognized
-        ("test.py", Some("Python")),  // Lowercase recognized
+        ("test.PY", None),           // Uppercase extension not recognized
+        ("test.Py", None),           // Mixed case not recognized
+        ("test.py", Some("Python")), // Lowercase recognized
         ("test.RS", None),
         ("test.rs", Some("Rust")),
     ];
 
     for (file, expected) in test_cases {
         let result = llmgrep::query::infer_language(file);
-        assert_eq!(result, expected,
-                   "Language mismatch for {}: got {:?}, expected {:?}",
-                   file, result, expected);
+        assert_eq!(
+            result, expected,
+            "Language mismatch for {}: got {:?}, expected {:?}",
+            file, result, expected
+        );
     }
 }
 
@@ -198,15 +210,17 @@ fn test_language_detection_with_multiple_dots() {
     let test_cases: Vec<(&str, Option<&str>)> = vec![
         ("test.min.js", Some("JavaScript")),
         ("component.dev.tsx", Some("TypeScript")),
-        ("lib.so.1.0.0", None),  // No extension matches
-        ("archive.tar.gz", None),  // gz is not in the list
+        ("lib.so.1.0.0", None),   // No extension matches
+        ("archive.tar.gz", None), // gz is not in the list
     ];
 
     for (file, expected) in test_cases {
         let result = llmgrep::query::infer_language(file);
-        assert_eq!(result, expected,
-                   "Language mismatch for {}: got {:?}, expected {:?}",
-                   file, result, expected);
+        assert_eq!(
+            result, expected,
+            "Language mismatch for {}: got {:?}, expected {:?}",
+            file, result, expected
+        );
     }
 }
 
@@ -216,8 +230,8 @@ fn test_language_detection_edge_cases() {
     assert_eq!(llmgrep::query::infer_language(""), None);
     assert_eq!(llmgrep::query::infer_language("."), None);
     assert_eq!(llmgrep::query::infer_language(".."), None);
-    assert_eq!(llmgrep::query::infer_language("file."), None);  // Empty extension
-    assert_eq!(llmgrep::query::infer_language(".hidden"), None);  // Hidden file
+    assert_eq!(llmgrep::query::infer_language("file."), None); // Empty extension
+    assert_eq!(llmgrep::query::infer_language(".hidden"), None); // Hidden file
 }
 
 // Test 15: Verify native-v3 backend doesn't output debug info (code inspection)
@@ -233,18 +247,23 @@ fn test_no_debug_strings_in_code() {
         let content = fs::read_to_string(native_v3_path).expect("failed to read test file");
 
         // Check that no DEBUG: eprintln statements exist
-        assert!(!content.contains("eprintln!(\"DEBUG:"),
-                "native_v3.rs should not contain eprintln DEBUG statements");
+        assert!(
+            !content.contains("eprintln!(\"DEBUG:"),
+            "native_v3.rs should not contain eprintln DEBUG statements"
+        );
 
         // Check that no bare DEBUG comments exist (from removed code)
         let debug_lines: Vec<&str> = content
             .lines()
-            .filter(|line| line.trim().starts_with("// DEBUG:") ||
-                        line.trim().starts_with("/* DEBUG:"))
+            .filter(|line| {
+                line.trim().starts_with("// DEBUG:") || line.trim().starts_with("/* DEBUG:")
+            })
             .collect();
 
-        assert!(debug_lines.is_empty(),
-                "native_v3.rs should not contain DEBUG comment lines: {:?}",
-                debug_lines);
+        assert!(
+            debug_lines.is_empty(),
+            "native_v3.rs should not contain DEBUG comment lines: {:?}",
+            debug_lines
+        );
     }
 }

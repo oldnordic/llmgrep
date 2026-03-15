@@ -2,7 +2,7 @@
 //!
 //! Tests for AST filtering and backward compatibility.
 
-use llmgrep::ast::{check_ast_table_exists, AstContext, ast_nodes_table_schema};
+use llmgrep::ast::{ast_nodes_table_schema, check_ast_table_exists, AstContext};
 use llmgrep::query::{
     search_symbols, AstOptions, ContextOptions, DepthOptions, FqnOptions, MetricsOptions,
     SearchOptions, SnippetOptions,
@@ -44,7 +44,15 @@ fn setup_db_with_ast(path: &std::path::Path) -> Connection {
     conn
 }
 
-fn insert_symbol(conn: &Connection, id: i64, name: &str, kind: &str, _file_id: i64, byte_start: u64, byte_end: u64) {
+fn insert_symbol(
+    conn: &Connection,
+    id: i64,
+    name: &str,
+    kind: &str,
+    _file_id: i64,
+    byte_start: u64,
+    byte_end: u64,
+) {
     conn.execute(
         "INSERT INTO graph_entities (id, kind, name, data) VALUES (?1, 'Symbol', ?2, ?3)",
         params![
@@ -198,7 +206,7 @@ fn test_ast_kind_filter() {
         metrics: MetricsOptions::default(),
         ast: AstOptions {
             ast_kinds: vec!["function_item".to_string()],
-            with_ast_context: true,  // Enable to use overlap matching
+            with_ast_context: true, // Enable to use overlap matching
             _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions::default(),
@@ -212,7 +220,11 @@ fn test_ast_kind_filter() {
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
     // Debug: print results
     for result in &response.results {
-        eprintln!("Result: {} -> ast_context: {:?}", result.name, result.ast_context.as_ref().map(|c| &c.kind));
+        eprintln!(
+            "Result: {} -> ast_context: {:?}",
+            result.name,
+            result.ast_context.as_ref().map(|c| &c.kind)
+        );
     }
     // Overlap semantics: all 3 symbols overlap with function_item (0-100)
     // This is correct behavior for real Magellan DBs where spans don't align exactly
@@ -224,7 +236,11 @@ fn test_ast_kind_filter() {
     // All results should have function_item in their ast_context
     for result in &response.results {
         assert_eq!(
-            result.ast_context.as_ref().expect("ast_context should be Some").kind,
+            result
+                .ast_context
+                .as_ref()
+                .expect("ast_context should be Some")
+                .kind,
             "function_item"
         );
     }
@@ -471,7 +487,8 @@ fn test_calculate_ast_depth() {
     let conn = Connection::open(&db_path).expect("open db");
 
     // Create ast_nodes table
-    conn.execute(ast_nodes_table_schema(), []).expect("create ast_nodes");
+    conn.execute(ast_nodes_table_schema(), [])
+        .expect("create ast_nodes");
 
     // Create a tree structure:
     //   id=1: root (parent_id=NULL) -> depth 0
@@ -487,9 +504,27 @@ fn test_calculate_ast_depth() {
     .expect("insert nodes");
 
     // Test depth calculation
-    assert_eq!(calculate_ast_depth(&conn, 1).expect("failed to calculate AST depth").expect("AST depth should be Some"), 0, "Root should have depth 0");
-    assert_eq!(calculate_ast_depth(&conn, 2).expect("failed to calculate AST depth").expect("AST depth should be Some"), 1, "Child should have depth 1");
-    assert_eq!(calculate_ast_depth(&conn, 3).expect("failed to calculate AST depth").expect("AST depth should be Some"), 2, "Grandchild should have depth 2");
+    assert_eq!(
+        calculate_ast_depth(&conn, 1)
+            .expect("failed to calculate AST depth")
+            .expect("AST depth should be Some"),
+        0,
+        "Root should have depth 0"
+    );
+    assert_eq!(
+        calculate_ast_depth(&conn, 2)
+            .expect("failed to calculate AST depth")
+            .expect("AST depth should be Some"),
+        1,
+        "Child should have depth 1"
+    );
+    assert_eq!(
+        calculate_ast_depth(&conn, 3)
+            .expect("failed to calculate AST depth")
+            .expect("AST depth should be Some"),
+        2,
+        "Grandchild should have depth 2"
+    );
 }
 
 // Test: Get parent kind for AST nodes
@@ -501,7 +536,8 @@ fn test_get_parent_kind() {
     let db_path = temp_dir.path().join("test.db");
     let conn = Connection::open(&db_path).expect("open db");
 
-    conn.execute(ast_nodes_table_schema(), []).expect("create ast_nodes");
+    conn.execute(ast_nodes_table_schema(), [])
+        .expect("create ast_nodes");
 
     conn.execute(
         "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
@@ -513,7 +549,9 @@ fn test_get_parent_kind() {
 
     // Test parent kind lookup
     assert_eq!(
-        get_parent_kind(&conn, Some(1)).expect("failed to get parent kind").expect("parent kind should be Some"),
+        get_parent_kind(&conn, Some(1))
+            .expect("failed to get parent kind")
+            .expect("parent kind should be Some"),
         "mod_item",
         "Parent kind should be mod_item"
     );
@@ -538,7 +576,8 @@ fn test_count_children_by_kind() {
     let db_path = temp_dir.path().join("test.db");
     let conn = Connection::open(&db_path).expect("open db");
 
-    conn.execute(ast_nodes_table_schema(), []).expect("create ast_nodes");
+    conn.execute(ast_nodes_table_schema(), [])
+        .expect("create ast_nodes");
 
     // Create a node with multiple child types
     conn.execute(
@@ -555,9 +594,21 @@ fn test_count_children_by_kind() {
     .expect("insert nodes");
 
     let counts = count_children_by_kind(&conn, 1).expect("failed to count children");
-    assert_eq!(counts.get("let_declaration"), Some(&3), "Should have 3 let_declaration");
-    assert_eq!(counts.get("if_expression"), Some(&1), "Should have 1 if_expression");
-    assert_eq!(counts.get("call_expression"), Some(&2), "Should have 2 call_expression");
+    assert_eq!(
+        counts.get("let_declaration"),
+        Some(&3),
+        "Should have 3 let_declaration"
+    );
+    assert_eq!(
+        counts.get("if_expression"),
+        Some(&1),
+        "Should have 1 if_expression"
+    );
+    assert_eq!(
+        counts.get("call_expression"),
+        Some(&2),
+        "Should have 2 call_expression"
+    );
 }
 
 // Test: Count decision points
@@ -569,7 +620,8 @@ fn test_count_decision_points() {
     let db_path = temp_dir.path().join("test.db");
     let conn = Connection::open(&db_path).expect("open db");
 
-    conn.execute(ast_nodes_table_schema(), []).expect("create ast_nodes");
+    conn.execute(ast_nodes_table_schema(), [])
+        .expect("create ast_nodes");
 
     // Create a node with decision points (2-7 are decision points, 8-9 are not)
     conn.execute(
@@ -783,7 +835,10 @@ fn test_ast_context_without_flag() {
 
     // Enriched fields should NOT be populated without flag
     assert_eq!(ast_ctx.depth, None, "Depth should not be populated");
-    assert_eq!(ast_ctx.parent_kind, None, "Parent kind should not be populated");
+    assert_eq!(
+        ast_ctx.parent_kind, None,
+        "Parent kind should not be populated"
+    );
     assert_eq!(
         ast_ctx.children_count_by_kind, None,
         "Children count should not be populated"
@@ -874,13 +929,11 @@ fn test_sort_by_ast_complexity() {
 
     // Should be sorted by complexity descending (complex_func first)
     assert_eq!(
-        response.results[0].name,
-        "complex_func",
+        response.results[0].name, "complex_func",
         "Highest complexity should come first"
     );
     assert_eq!(
-        response.results[1].name,
-        "simple_func",
+        response.results[1].name, "simple_func",
         "Lower complexity should come second"
     );
 }
@@ -934,7 +987,15 @@ fn test_min_depth_filter() {
         (107, 472, 478),
     ];
     for &(ast_id, byte_start, byte_end) in ast_node_spans {
-        insert_symbol(&conn, ast_id, &format!("symbol_{}", ast_id), "Function", file_id, byte_start, byte_end);
+        insert_symbol(
+            &conn,
+            ast_id,
+            &format!("symbol_{}", ast_id),
+            "Function",
+            file_id,
+            byte_start,
+            byte_end,
+        );
         insert_define_edge(&conn, file_id, ast_id);
     }
 
@@ -971,7 +1032,7 @@ fn test_min_depth_filter() {
 
     // Should find symbols at depth >= 2
     // symbol_103 (loop inside if) = depth 2
-    // symbol_107 (if inside match) = depth 2  
+    // symbol_107 (if inside match) = depth 2
     // symbol_108 (loop inside if inside match) = depth 3
     assert!(
         response.results.len() >= 2,
@@ -1049,8 +1110,14 @@ fn test_max_depth_filter() {
         "Should find at least 2 symbols with depth <= 1"
     );
     let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
-    assert!(names.contains(&"test_func_depth0"), "Should include depth 0 symbol");
-    assert!(names.contains(&"test_if_depth1"), "Should include depth 1 symbol");
+    assert!(
+        names.contains(&"test_func_depth0"),
+        "Should include depth 0 symbol"
+    );
+    assert!(
+        names.contains(&"test_if_depth1"),
+        "Should include depth 1 symbol"
+    );
 }
 
 // Test 4: test_min_max_depth_range
@@ -1086,7 +1153,15 @@ fn test_min_max_depth_range() {
         (104, 180, 220), // if_expression
     ];
     for &(ast_id, byte_start, byte_end) in ast_node_spans {
-        insert_symbol(&conn, ast_id, &format!("depth{}", ast_id - 100), "Function", file_id, byte_start, byte_end);
+        insert_symbol(
+            &conn,
+            ast_id,
+            &format!("depth{}", ast_id - 100),
+            "Function",
+            file_id,
+            byte_start,
+            byte_end,
+        );
         insert_define_edge(&conn, file_id, ast_id);
     }
 
@@ -1155,7 +1230,15 @@ fn test_inside_function_item() {
     .expect("insert ast nodes");
 
     // Insert symbols (byte ranges must match AST nodes)
-    insert_symbol(&conn, 102, "closure_inside_func", "Function", file_id, 20, 30);
+    insert_symbol(
+        &conn,
+        102,
+        "closure_inside_func",
+        "Function",
+        file_id,
+        20,
+        30,
+    );
     insert_define_edge(&conn, file_id, 102);
     insert_symbol(&conn, 103, "let_inside_func", "Function", file_id, 35, 45);
     insert_define_edge(&conn, file_id, 103);
@@ -1206,8 +1289,14 @@ fn test_inside_function_item() {
     );
 
     let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
-    assert!(names.contains(&"closure_inside_func"), "Should find closure in first function");
-    assert!(names.contains(&"closure_other"), "Should find closure in other function");
+    assert!(
+        names.contains(&"closure_inside_func"),
+        "Should find closure in first function"
+    );
+    assert!(
+        names.contains(&"closure_other"),
+        "Should find closure in other function"
+    );
 }
 
 // Test 6: test_inside_block
@@ -1282,7 +1371,10 @@ fn test_inside_block() {
     );
 
     let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
-    assert!(names.contains(&"let_in_block"), "Should include let_in_block");
+    assert!(
+        names.contains(&"let_in_block"),
+        "Should include let_in_block"
+    );
 }
 
 // Test 7: test_contains_if_expression
@@ -1316,7 +1408,15 @@ fn test_contains_if_expression() {
     insert_define_edge(&conn, file_id, 100);
     insert_symbol(&conn, 200, "func_plain", "Function", file_id, 0, 100);
     insert_define_edge(&conn, file_id, 200);
-    insert_symbol(&conn, 300, "func_with_multiple_ifs", "Function", file_id, 0, 100);
+    insert_symbol(
+        &conn,
+        300,
+        "func_with_multiple_ifs",
+        "Function",
+        file_id,
+        0,
+        100,
+    );
     insert_define_edge(&conn, file_id, 300);
 
     // Search for functions containing if_expression
@@ -1362,8 +1462,14 @@ fn test_contains_if_expression() {
     );
 
     let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
-    assert!(names.contains(&"func_with_if"), "Should include func_with_if");
-    assert!(names.contains(&"func_with_multiple_ifs"), "Should include func_with_multiple_ifs");
+    assert!(
+        names.contains(&"func_with_if"),
+        "Should include func_with_if"
+    );
+    assert!(
+        names.contains(&"func_with_multiple_ifs"),
+        "Should include func_with_multiple_ifs"
+    );
 }
 
 // Test 8: test_contains_multiple_children
@@ -1378,8 +1484,9 @@ fn test_contains_multiple_children() {
     insert_file(&_conn, file_id, "src/test.rs");
 
     // Create AST: function with multiple call_expression children (compact ranges)
-    _conn.execute(
-        "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
+    _conn
+        .execute(
+            "INSERT INTO ast_nodes (id, parent_id, kind, byte_start, byte_end) VALUES
         (100, NULL, 'function_item', 0, 100),
         (101, 100, 'call_expression', 10, 20),
         (102, 100, 'call_expression', 30, 40),
@@ -1389,9 +1496,9 @@ fn test_contains_multiple_children() {
         (201, 200, 'call_expression', 110, 120),
         (300, NULL, 'function_item', 200, 300), -- Function with no calls
         (301, 300, 'let_declaration', 210, 220)",
-        [],
-    )
-    .expect("insert ast nodes");
+            [],
+        )
+        .expect("insert ast nodes");
 
     // Insert symbols (byte ranges must match AST nodes)
     insert_symbol(&_conn, 100, "func_many_calls", "Function", file_id, 0, 100);
@@ -1444,8 +1551,14 @@ fn test_contains_multiple_children() {
     );
 
     let names: Vec<&str> = response.results.iter().map(|r| r.name.as_str()).collect();
-    assert!(names.contains(&"func_many_calls"), "Should include func_many_calls");
-    assert!(names.contains(&"func_one_call"), "Should include func_one_call");
+    assert!(
+        names.contains(&"func_many_calls"),
+        "Should include func_many_calls"
+    );
+    assert!(
+        names.contains(&"func_one_call"),
+        "Should include func_one_call"
+    );
 }
 
 // Test 9: test_combined_depth_and_inside
@@ -1485,9 +1598,22 @@ fn test_combined_depth_and_inside() {
     .expect("insert ast nodes");
 
     // Insert symbols for closures (byte ranges must match AST nodes)
-    let closure_ranges: [(i64, u64, u64); 4] = [(103, 30, 40), (111, 240, 250), (114, 290, 300), (116, 410, 460)];
+    let closure_ranges: [(i64, u64, u64); 4] = [
+        (103, 30, 40),
+        (111, 240, 250),
+        (114, 290, 300),
+        (116, 410, 460),
+    ];
     for (ast_id, byte_start, byte_end) in closure_ranges {
-        insert_symbol(&conn, ast_id, &format!("closure_{}", ast_id), "Function", file_id, byte_start, byte_end);
+        insert_symbol(
+            &conn,
+            ast_id,
+            &format!("closure_{}", ast_id),
+            "Function",
+            file_id,
+            byte_start,
+            byte_end,
+        );
         insert_define_edge(&conn, file_id, ast_id);
     }
 
@@ -1512,7 +1638,7 @@ fn test_combined_depth_and_inside() {
             _phantom: std::marker::PhantomData,
         },
         depth: DepthOptions {
-            min_depth: Some(1),  // At depth 1 or deeper
+            min_depth: Some(1), // At depth 1 or deeper
             max_depth: None,
             inside: Some("function_item"), // Inside function_item
             contains: None,
@@ -1599,5 +1725,8 @@ fn test_backward_compat_no_depth_filter() {
         .ast_context
         .as_ref()
         .expect("ast_context should be present");
-    assert_eq!(ast_ctx.depth, None, "Depth should not be populated without depth filtering or --with-ast-context");
+    assert_eq!(
+        ast_ctx.depth, None,
+        "Depth should not be populated without depth filtering or --with-ast-context"
+    );
 }

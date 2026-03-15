@@ -81,8 +81,14 @@ use std::collections::HashMap;
 pub static AST_SHORTHANDS: &[(&str, &str)] = &[
     ("loops", "for_expression,while_expression,loop_expression"),
     ("conditionals", "if_expression,match_expression,match_arm"),
-    ("functions", "function_item,closure_expression,async_function_item"),
-    ("declarations", "struct_item,enum_item,let_declaration,const_item,static_item,type_alias_item"),
+    (
+        "functions",
+        "function_item,closure_expression,async_function_item",
+    ),
+    (
+        "declarations",
+        "struct_item,enum_item,let_declaration,const_item,static_item,type_alias_item",
+    ),
     ("unsafe", "unsafe_block"),
     ("types", "struct_item,enum_item,type_alias_item,union_item"),
     ("macros", "macro_invocation,macro_definition,macro_rule"),
@@ -113,7 +119,6 @@ pub struct AstContext {
     pub byte_end: u64,
 
     // Enriched fields (only populated when --with-ast-context is enabled)
-
     /// Nesting depth from AST root (0 = top-level, 1 = one level deep, etc.)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub depth: Option<u64>,
@@ -168,9 +173,8 @@ pub struct AstContext {
 /// # }
 /// ```
 pub fn check_ast_table_exists(conn: &Connection) -> Result<bool> {
-    let mut stmt = conn.prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='ast_nodes'"
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='ast_nodes'")?;
     Ok(stmt.exists([])?)
 }
 
@@ -363,10 +367,7 @@ pub fn count_children_by_kind(conn: &Connection, ast_id: i64) -> Result<HashMap<
 
     let mut stmt = conn.prepare(sql)?;
     let rows = stmt.query_map([ast_id], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, u64>(1)?,
-        ))
+        Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?))
     })?;
 
     let mut counts = HashMap::new();
@@ -441,7 +442,14 @@ pub fn get_ast_context_for_symbol(
     byte_end: u64,
     include_enriched: bool,
 ) -> Result<Option<AstContext>> {
-    get_ast_context_for_symbol_with_preference(conn, _file_path, byte_start, byte_end, include_enriched, &[])
+    get_ast_context_for_symbol_with_preference(
+        conn,
+        _file_path,
+        byte_start,
+        byte_end,
+        include_enriched,
+        &[],
+    )
 }
 
 /// Get AST context for a symbol with preferred kinds.
@@ -457,97 +465,94 @@ pub fn get_ast_context_for_symbol_with_preference(
     preferred_kinds: &[String],
 ) -> Result<Option<AstContext>> {
     // Overlap formula: intervals [s1, e1] and [s2, e2] overlap when: s1 < e2 AND s2 < e1
-    let (ast_id, parent_id, kind, ast_byte_start, ast_byte_end) =
-        if !preferred_kinds.is_empty() {
-            // First try to find a node matching one of the preferred kinds
-            // Use direct SQL construction to avoid rusqlite parameter binding issues
-            let kind_list = preferred_kinds.iter()
-                .map(|k| format!("'{}'", k.replace('\'', "''")))
-                .collect::<Vec<_>>()
-                .join(",");
-            let sql = format!(
-                "SELECT id, parent_id, kind, byte_start, byte_end
+    let (ast_id, parent_id, kind, ast_byte_start, ast_byte_end) = if !preferred_kinds.is_empty() {
+        // First try to find a node matching one of the preferred kinds
+        // Use direct SQL construction to avoid rusqlite parameter binding issues
+        let kind_list = preferred_kinds
+            .iter()
+            .map(|k| format!("'{}'", k.replace('\'', "''")))
+            .collect::<Vec<_>>()
+            .join(",");
+        let sql = format!(
+            "SELECT id, parent_id, kind, byte_start, byte_end
                  FROM ast_nodes
                  WHERE byte_start <= {} AND byte_end >= {} AND kind IN ({})
                  ORDER BY ABS(byte_start - {}) + ABS(byte_end - {})
                  LIMIT 1",
-                byte_end, byte_start, kind_list, byte_start, byte_end
-            );
+            byte_end, byte_start, kind_list, byte_start, byte_end
+        );
 
-            match conn.query_row(
-                &sql,
-                [],
-                |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, Option<i64>>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, u64>(3)?,
-                        row.get::<_, u64>(4)?,
-                    ))
-                },
-            ) {
-                Ok(result) => result,
-                Err(rusqlite::Error::QueryReturnedNoRows) => {
-                    // No preferred kind found, fall back to any overlapping node
-                    let fallback_sql = r#"
+        match conn.query_row(&sql, [], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, u64>(3)?,
+                row.get::<_, u64>(4)?,
+            ))
+        }) {
+            Ok(result) => result,
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                // No preferred kind found, fall back to any overlapping node
+                let fallback_sql = r#"
                         SELECT id, parent_id, kind, byte_start, byte_end
                         FROM ast_nodes
                         WHERE byte_start <= ? AND byte_end >= ?
                         ORDER BY ABS(byte_start - ?) + ABS(byte_end - ?)
                         LIMIT 1
                     "#;
-                    match conn.query_row(
-                        fallback_sql,
-                        [byte_end as i64, byte_start as i64, byte_start as i64, byte_end as i64],
-                        |row| {
-                            Ok((
-                                row.get::<_, i64>(0)?,
-                                row.get::<_, Option<i64>>(1)?,
-                                row.get::<_, String>(2)?,
-                                row.get::<_, u64>(3)?,
-                                row.get::<_, u64>(4)?,
-                            ))
-                        },
-                    ) {
-                        Ok(result) => result,
-                        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
-                        Err(e) => return Err(e.into()),
-                    }
-                },
-                Err(e) => return Err(e.into()),
+                match conn.query_row(
+                    fallback_sql,
+                    [
+                        byte_end as i64,
+                        byte_start as i64,
+                        byte_start as i64,
+                        byte_end as i64,
+                    ],
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, Option<i64>>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, u64>(3)?,
+                            row.get::<_, u64>(4)?,
+                        ))
+                    },
+                ) {
+                    Ok(result) => result,
+                    Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+                    Err(e) => return Err(e.into()),
+                }
             }
-        } else {
-            // No preference, find the closest containing node
-            // Prefer nodes that fully contain the symbol span, ordered by smallest containing span first
-            let sql = format!(
-                "SELECT id, parent_id, kind, byte_start, byte_end
+            Err(e) => return Err(e.into()),
+        }
+    } else {
+        // No preference, find the closest containing node
+        // Prefer nodes that fully contain the symbol span, ordered by smallest containing span first
+        let sql = format!(
+            "SELECT id, parent_id, kind, byte_start, byte_end
                  FROM ast_nodes
                  WHERE byte_start <= {} AND byte_end >= {}
                  ORDER BY
                      CASE WHEN byte_start <= {} AND byte_end >= {} THEN 0 ELSE 1 END ASC,
                      (byte_end - byte_start) ASC
                  LIMIT 1",
-                byte_end, byte_start, byte_start, byte_end
-            );
-            match conn.query_row(
-                &sql,
-                [],
-                |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, Option<i64>>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, u64>(3)?,
-                        row.get::<_, u64>(4)?,
-                    ))
-                },
-            ) {
-                Ok(result) => result,
-                Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
-                Err(e) => return Err(e.into()),
-            }
-        };
+            byte_end, byte_start, byte_start, byte_end
+        );
+        match conn.query_row(&sql, [], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, u64>(3)?,
+                row.get::<_, u64>(4)?,
+            ))
+        }) {
+            Ok(result) => result,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+            Err(e) => return Err(e.into()),
+        }
+    };
 
     let mut ctx = AstContext {
         ast_id,
@@ -603,19 +608,55 @@ pub static PYTHON_NODE_KINDS: LanguageNodeKinds = LanguageNodeKinds {
 /// Node kind mappings for JavaScript (tree-sitter-javascript)
 pub static JAVASCRIPT_NODE_KINDS: LanguageNodeKinds = LanguageNodeKinds {
     language: "javascript",
-    loops: &["for_statement", "for_in_statement", "for_of_statement", "while_statement", "do_statement"],
+    loops: &[
+        "for_statement",
+        "for_in_statement",
+        "for_of_statement",
+        "while_statement",
+        "do_statement",
+    ],
     conditionals: &["if_statement", "switch_statement", "catch_clause"],
-    functions: &["function_declaration", "function_expression", "arrow_function", "generator_function_declaration", "generator_function_expression"],
-    declarations: &["class_declaration", "class_expression", "variable_declaration", "type_alias_declaration"],
+    functions: &[
+        "function_declaration",
+        "function_expression",
+        "arrow_function",
+        "generator_function_declaration",
+        "generator_function_expression",
+    ],
+    declarations: &[
+        "class_declaration",
+        "class_expression",
+        "variable_declaration",
+        "type_alias_declaration",
+    ],
 };
 
 /// Node kind mappings for TypeScript (tree-sitter-typescript)
 pub static TYPESCRIPT_NODE_KINDS: LanguageNodeKinds = LanguageNodeKinds {
     language: "typescript",
-    loops: &["for_statement", "for_in_statement", "for_of_statement", "while_statement", "do_statement"],
+    loops: &[
+        "for_statement",
+        "for_in_statement",
+        "for_of_statement",
+        "while_statement",
+        "do_statement",
+    ],
     conditionals: &["if_statement", "switch_statement", "catch_clause"],
-    functions: &["function_declaration", "function_expression", "arrow_function", "generator_function_declaration", "generator_function_expression"],
-    declarations: &["class_declaration", "class_expression", "variable_declaration", "type_alias_declaration", "interface_declaration", "enum_declaration"],
+    functions: &[
+        "function_declaration",
+        "function_expression",
+        "arrow_function",
+        "generator_function_declaration",
+        "generator_function_expression",
+    ],
+    declarations: &[
+        "class_declaration",
+        "class_expression",
+        "variable_declaration",
+        "type_alias_declaration",
+        "interface_declaration",
+        "enum_declaration",
+    ],
 };
 
 /// Get all supported languages for AST node kind expansion.
@@ -646,10 +687,7 @@ pub fn get_supported_languages() -> &'static [&'static str] {
 /// assert!(python_funcs.is_some());
 /// assert!(python_funcs.unwrap().iter().any(|s| s == "function_definition"));
 /// ```
-pub fn get_node_kinds_for_language(
-    language: &str,
-    category: &str,
-) -> Option<Vec<String>> {
+pub fn get_node_kinds_for_language(language: &str, category: &str) -> Option<Vec<String>> {
     let kinds = match language.to_lowercase().as_str() {
         "python" => {
             let mapping = &PYTHON_NODE_KINDS;
@@ -784,10 +822,7 @@ pub fn expand_shorthands(input: &str) -> Vec<String> {
 /// # Returns
 ///
 /// Vector of expanded node kind strings
-pub fn expand_shorthand_with_language(
-    shorthand: &str,
-    language: Option<&str>,
-) -> Vec<String> {
+pub fn expand_shorthand_with_language(shorthand: &str, language: Option<&str>) -> Vec<String> {
     let normalized = shorthand.trim().to_lowercase();
 
     if let Some(lang) = language {
@@ -917,11 +952,8 @@ mod tests {
     fn test_check_ast_table_exists_with_other_tables() {
         // Create database with other tables but not ast_nodes
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute(
-            "CREATE TABLE other_table (id INTEGER PRIMARY KEY)",
-            [],
-        )
-        .unwrap();
+        conn.execute("CREATE TABLE other_table (id INTEGER PRIMARY KEY)", [])
+            .unwrap();
 
         let result = check_ast_table_exists(&conn).unwrap();
         assert!(!result, "Should return false when only other tables exist");

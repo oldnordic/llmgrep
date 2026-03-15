@@ -1,0 +1,23 @@
+{
+  "db_path": "manual_audit.db",
+  "summary": {
+    "name": "llmgrep",
+    "version": "3.1.0",
+    "language": "Unknown",
+    "total_files": 0,
+    "total_symbols": 0,
+    "symbol_counts": {
+      "functions": 0,
+      "methods": 0,
+      "structs": 0,
+      "traits": 0,
+      "enums": 0,
+      "modules": 0,
+      "other": 0
+    },
+    "entry_points": [],
+    "description": "llmgrep 3.1.0 written in Unknown, 0 files, 0 symbols (0 functions, 0 structs)"
+  },
+  "version": "3.1.0",
+  "built_at": 1773188235
+}

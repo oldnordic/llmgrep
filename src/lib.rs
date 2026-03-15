@@ -62,15 +62,15 @@ pub use query::infer_language;
 
 // Re-export algorithm types for external use
 pub use algorithm::{
-    AlgorithmOptions, parse_symbol_set_file, resolve_fqn_to_symbol_id, run_magellan_algorithm,
+    parse_symbol_set_file, resolve_fqn_to_symbol_id, run_magellan_algorithm, AlgorithmOptions,
     SymbolSet, SymbolSetStrategy,
 };
 
 // Re-export AST types for external use
 pub use ast::{
-    AstContext, calculate_decision_depth, check_ast_table_exists, expand_shorthand,
+    calculate_decision_depth, check_ast_table_exists, expand_shorthand,
     expand_shorthand_with_language, expand_shorthands, get_node_kinds_for_language,
-    get_supported_languages,
+    get_supported_languages, AstContext,
 };
 
 // Re-export backend types for external use

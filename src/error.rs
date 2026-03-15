@@ -97,7 +97,9 @@ pub enum LlmError {
     MagellanNotFound,
 
     /// Symbol name is ambiguous (multiple matches).
-    #[error("Ambiguous symbol name '{name}': {count} matches. Use --symbol-id with full SymbolId.")]
+    #[error(
+        "Ambiguous symbol name '{name}': {count} matches. Use --symbol-id with full SymbolId."
+    )]
     AmbiguousSymbolName { name: String, count: usize },
 
     /// Magellan version is incompatible.
@@ -149,7 +151,23 @@ pub enum LlmError {
          \x20  3. Verify the database is up to date: magellan status --db {db}\n\n\
          For more information, see: https://docs.rs/llmgrep/latest/llmgrep/"
     )]
-    SymbolNotFound { fqn: String, db: String, partial: String },
+    SymbolNotFound {
+        fqn: String,
+        db: String,
+        partial: String,
+    },
+
+    /// Code chunks not available for this backend.
+    #[error(
+        "LLM-E113: Code chunks not available for {backend} backend.\n\n\
+         {message}\n\n\
+         Chunk retrieval requires Geometric (.geo) backend with chunking enabled.\n\n\
+         To use chunk retrieval:\n\
+         \x20  1. Reindex with chunking: magellan watch --root . --db code.geo --chunk\n\
+         \x20  2. Query using: llmgrep --db code.geo <query> --with-chunks\n\n\
+         For more information, see: https://docs.rs/llmgrep/latest/llmgrep/"
+    )]
+    ChunksNotAvailable { backend: String, message: String },
 }
 
 impl LlmError {
@@ -178,6 +196,7 @@ impl LlmError {
             LlmError::BackendDetectionFailed { .. } => "LLM-E110",
             LlmError::RequiresNativeV3Backend { .. } => "LLM-E111",
             LlmError::SymbolNotFound { .. } => "LLM-E112",
+            LlmError::ChunksNotAvailable { .. } => "LLM-E113",
         }
     }
 
@@ -197,6 +216,7 @@ impl LlmError {
             LlmError::BackendDetectionFailed { .. } => "error",
             LlmError::RequiresNativeV3Backend { .. } => "error",
             LlmError::SymbolNotFound { .. } => "error",
+            LlmError::ChunksNotAvailable { .. } => "warning",
             _ => "error",
         }
     }
@@ -261,6 +281,9 @@ impl LlmError {
             }
             LlmError::SymbolNotFound { .. } => {
                 Some("Use 'complete' command with --partial flag to find similar symbols by partial name match.")
+            }
+            LlmError::ChunksNotAvailable { .. } => {
+                Some("Reindex with chunking enabled: magellan watch --root . --db code.geo --chunk")
             }
         }
     }

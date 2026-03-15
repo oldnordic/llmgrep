@@ -132,7 +132,16 @@ fn insert_code_chunk(
     .expect("insert chunk");
 }
 
-fn insert_metrics(conn: &Connection, symbol_row_id: i64, symbol_name: &str, kind: &str, file_path: &str, fan_in: i64, fan_out: i64, complexity: i64) {
+fn insert_metrics(
+    conn: &Connection,
+    symbol_row_id: i64,
+    symbol_name: &str,
+    kind: &str,
+    file_path: &str,
+    fan_in: i64,
+    fan_out: i64,
+    complexity: i64,
+) {
     conn.execute(
         "INSERT INTO symbol_metrics (symbol_id, symbol_name, kind, file_path, loc, estimated_loc, fan_in, fan_out, cyclomatic_complexity, last_updated)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
@@ -340,7 +349,10 @@ fn test_chunk_retrieval_with_hash() {
     );
 
     // Verify hash is valid hex
-    let hash = result.content_hash.as_ref().expect("content_hash should be Some");
+    let hash = result
+        .content_hash
+        .as_ref()
+        .expect("content_hash should be Some");
     assert_eq!(hash.len(), 64, "SHA-256 hash should be 64 hex chars");
     assert!(
         hash.chars().all(|c| c.is_ascii_hexdigit()),
@@ -362,17 +374,44 @@ fn test_metrics_filtering() {
     let simple_name = "simple_fn";
     let simple_id = insert_symbol(&conn, simple_name, "Function", "fn", (0, 10));
     insert_define_edge(&conn, file_id, simple_id);
-    insert_metrics(&conn, simple_id, simple_name, "Function", file_path, 1, 2, 1); // low complexity
+    insert_metrics(
+        &conn,
+        simple_id,
+        simple_name,
+        "Function",
+        file_path,
+        1,
+        2,
+        1,
+    ); // low complexity
 
     let complex_name = "complex_fn";
     let complex_id = insert_symbol(&conn, complex_name, "Function", "fn", (20, 30));
     insert_define_edge(&conn, file_id, complex_id);
-    insert_metrics(&conn, complex_id, complex_name, "Function", file_path, 10, 20, 15); // high complexity
+    insert_metrics(
+        &conn,
+        complex_id,
+        complex_name,
+        "Function",
+        file_path,
+        10,
+        20,
+        15,
+    ); // high complexity
 
     let medium_name = "medium_fn";
     let medium_id = insert_symbol(&conn, medium_name, "Function", "fn", (40, 50));
     insert_define_edge(&conn, file_id, medium_id);
-    insert_metrics(&conn, medium_id, medium_name, "Function", file_path, 5, 8, 5); // medium
+    insert_metrics(
+        &conn,
+        medium_id,
+        medium_name,
+        "Function",
+        file_path,
+        5,
+        8,
+        5,
+    ); // medium
 
     // Test min_complexity filter - should only return complex_fn
     let options = SearchOptions {
@@ -450,7 +489,16 @@ fn test_symbol_id_lookup() {
     insert_define_edge(&conn, file_id, symbol_row_id);
 
     // Also insert in symbol_metrics table with row ID reference
-    insert_metrics(&conn, symbol_row_id, symbol_name, "Function", file_path, 5, 3, 2);
+    insert_metrics(
+        &conn,
+        symbol_row_id,
+        symbol_name,
+        "Function",
+        file_path,
+        5,
+        3,
+        2,
+    );
 
     // Search by SymbolId
     let options = SearchOptions {
@@ -480,7 +528,10 @@ fn test_symbol_id_lookup() {
     assert_eq!(response.0.results.len(), 1, "Should find symbol by ID");
     assert_eq!(response.0.results[0].name, symbol_name);
     assert_eq!(
-        response.0.results[0].symbol_id.as_ref().expect("symbol_id should be Some"),
+        response.0.results[0]
+            .symbol_id
+            .as_ref()
+            .expect("symbol_id should be Some"),
         known_symbol_id
     );
 }
@@ -544,7 +595,13 @@ fn test_language_filtering() {
         "Should only return Rust symbols"
     );
     assert_eq!(response.0.results[0].name, rust_fn);
-    assert_eq!(response.0.results[0].language.as_ref().expect("language should be Some"), "Rust");
+    assert_eq!(
+        response.0.results[0]
+            .language
+            .as_ref()
+            .expect("language should be Some"),
+        "Rust"
+    );
 }
 
 /// Test 7: Multi-kind filtering (comma-separated)
@@ -816,13 +873,31 @@ fn test_combined_metrics_and_language_filter() {
     let rust_complex = "complex_rust";
     let rust_id = insert_symbol(&conn, rust_complex, "Function", "fn", (0, 10));
     insert_define_edge(&conn, rust_file_id, rust_id);
-    insert_metrics(&conn, rust_id, rust_complex, "Function", rust_file, 10, 5, 20);
+    insert_metrics(
+        &conn,
+        rust_id,
+        rust_complex,
+        "Function",
+        rust_file,
+        10,
+        5,
+        20,
+    );
 
     // Rust file with low complexity
     let rust_simple_name = "simple_rust";
     let rust_simple_id = insert_symbol(&conn, rust_simple_name, "Function", "fn", (20, 30));
     insert_define_edge(&conn, rust_file_id, rust_simple_id);
-    insert_metrics(&conn, rust_simple_id, rust_simple_name, "Function", rust_file, 2, 1, 1);
+    insert_metrics(
+        &conn,
+        rust_simple_id,
+        rust_simple_name,
+        "Function",
+        rust_file,
+        2,
+        1,
+        1,
+    );
 
     // Python file with high complexity
     let python_file = "src/complex.py";
@@ -830,7 +905,16 @@ fn test_combined_metrics_and_language_filter() {
     let python_complex = "complex_python";
     let python_id = insert_symbol(&conn, python_complex, "Function", "fn", (0, 10));
     insert_define_edge(&conn, python_file_id, python_id);
-    insert_metrics(&conn, python_id, python_complex, "Function", python_file, 15, 8, 25);
+    insert_metrics(
+        &conn,
+        python_id,
+        python_complex,
+        "Function",
+        python_file,
+        15,
+        8,
+        25,
+    );
 
     // Search for high-complexity Rust functions
     let options = SearchOptions {
@@ -868,7 +952,13 @@ fn test_combined_metrics_and_language_filter() {
         "Should only return high-complexity Rust function"
     );
     assert_eq!(response.0.results[0].name, rust_complex);
-    assert_eq!(response.0.results[0].language.as_ref().expect("language should be Some"), "Rust");
+    assert_eq!(
+        response.0.results[0]
+            .language
+            .as_ref()
+            .expect("language should be Some"),
+        "Rust"
+    );
 }
 
 /// Test 11: Metrics present in search results
@@ -925,20 +1015,30 @@ fn test_metrics_present_in_search_results() {
         result.fan_in.is_some(),
         "fan_in should be present in search results"
     );
-    assert_eq!(result.fan_in.expect("fan_in should be Some"), 10, "fan_in should match inserted value");
+    assert_eq!(
+        result.fan_in.expect("fan_in should be Some"),
+        10,
+        "fan_in should match inserted value"
+    );
 
     assert!(
         result.fan_out.is_some(),
         "fan_out should be present in search results"
     );
-    assert_eq!(result.fan_out.expect("fan_out should be Some"), 5, "fan_out should match inserted value");
+    assert_eq!(
+        result.fan_out.expect("fan_out should be Some"),
+        5,
+        "fan_out should match inserted value"
+    );
 
     assert!(
         result.cyclomatic_complexity.is_some(),
         "cyclomatic_complexity should be present in search results"
     );
     assert_eq!(
-        result.cyclomatic_complexity.expect("cyclomatic_complexity should be Some"),
+        result
+            .cyclomatic_complexity
+            .expect("cyclomatic_complexity should be Some"),
         3,
         "cyclomatic_complexity should match inserted value"
     );

@@ -12,12 +12,12 @@
 //! used to filter search results.
 
 use crate::error::LlmError;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
-use rusqlite::Connection;
 
 /// SymbolSet - a collection of SymbolIds for filtering search results.
 ///
@@ -173,9 +173,7 @@ fn check_magellan_version() -> Result<(), LlmError> {
     use std::thread;
     use std::time::Duration;
 
-    let child = Command::new("magellan")
-        .arg("--version")
-        .spawn();
+    let child = Command::new("magellan").arg("--version").spawn();
 
     let output = match child {
         Ok(mut child) => {
@@ -204,13 +202,15 @@ fn check_magellan_version() -> Result<(), LlmError> {
                 }
             }
         }
-        Err(e) => return Err(match e.kind() {
-            std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
-            _ => LlmError::MagellanExecutionFailed {
-                algorithm: "version check".to_string(),
-                stderr: e.to_string(),
-            },
-        }),
+        Err(e) => {
+            return Err(match e.kind() {
+                std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
+                _ => LlmError::MagellanExecutionFailed {
+                    algorithm: "version check".to_string(),
+                    stderr: e.to_string(),
+                },
+            })
+        }
     };
 
     let output = output.map_err(|e| match e.kind() {
@@ -265,18 +265,24 @@ fn parse_magellan_version(output: &str) -> Result<(u32, u32, u32), LlmError> {
         });
     }
 
-    let major: u32 = parts[0].parse().map_err(|_| LlmError::MagellanExecutionFailed {
-        algorithm: "version parsing".to_string(),
-        stderr: format!("Invalid major version: {}", parts[0]),
-    })?;
-    let minor: u32 = parts[1].parse().map_err(|_| LlmError::MagellanExecutionFailed {
-        algorithm: "version parsing".to_string(),
-        stderr: format!("Invalid minor version: {}", parts[1]),
-    })?;
-    let patch: u32 = parts[2].parse().map_err(|_| LlmError::MagellanExecutionFailed {
-        algorithm: "version parsing".to_string(),
-        stderr: format!("Invalid patch version: {}", parts[2]),
-    })?;
+    let major: u32 = parts[0]
+        .parse()
+        .map_err(|_| LlmError::MagellanExecutionFailed {
+            algorithm: "version parsing".to_string(),
+            stderr: format!("Invalid major version: {}", parts[0]),
+        })?;
+    let minor: u32 = parts[1]
+        .parse()
+        .map_err(|_| LlmError::MagellanExecutionFailed {
+            algorithm: "version parsing".to_string(),
+            stderr: format!("Invalid minor version: {}", parts[1]),
+        })?;
+    let patch: u32 = parts[2]
+        .parse()
+        .map_err(|_| LlmError::MagellanExecutionFailed {
+            algorithm: "version parsing".to_string(),
+            stderr: format!("Invalid patch version: {}", parts[2]),
+        })?;
 
     Ok((major, minor, patch))
 }
@@ -394,44 +400,47 @@ fn extract_symbol_ids_from_magellan_json(
     // Extract symbol_ids based on algorithm type
     let symbol_ids = match algorithm {
         "reachable" => {
-            let symbols = parsed["result"]["symbols"]
-                .as_array()
-                .ok_or_else(|| LlmError::InvalidQuery {
-                    query: "Missing 'symbols' array in reachable output".to_string(),
-                })?;
+            let symbols =
+                parsed["result"]["symbols"]
+                    .as_array()
+                    .ok_or_else(|| LlmError::InvalidQuery {
+                        query: "Missing 'symbols' array in reachable output".to_string(),
+                    })?;
             symbols
                 .iter()
                 .filter_map(|s| s["symbol_id"].as_str().map(|id| id.to_string()))
                 .collect()
         }
         "dead-code" => {
-            let dead_symbols = parsed["result"]["dead_symbols"]
-                .as_array()
-                .ok_or_else(|| LlmError::InvalidQuery {
+            let dead_symbols = parsed["result"]["dead_symbols"].as_array().ok_or_else(|| {
+                LlmError::InvalidQuery {
                     query: "Missing 'dead_symbols' array in dead-code output".to_string(),
-                })?;
+                }
+            })?;
             dead_symbols
                 .iter()
                 .filter_map(|s| s["symbol"]["symbol_id"].as_str().map(|id| id.to_string()))
                 .collect()
         }
         "slice" => {
-            let included_symbols = parsed["result"]["included_symbols"]
-                .as_array()
-                .ok_or_else(|| LlmError::InvalidQuery {
-                    query: "Missing 'included_symbols' array in slice output".to_string(),
-                })?;
+            let included_symbols =
+                parsed["result"]["included_symbols"]
+                    .as_array()
+                    .ok_or_else(|| LlmError::InvalidQuery {
+                        query: "Missing 'included_symbols' array in slice output".to_string(),
+                    })?;
             included_symbols
                 .iter()
                 .filter_map(|s| s["symbol_id"].as_str().map(|id| id.to_string()))
                 .collect()
         }
         "cycles" => {
-            let cycles = parsed["result"]["cycles"]
-                .as_array()
-                .ok_or_else(|| LlmError::InvalidQuery {
-                    query: "Missing 'cycles' array in cycles output".to_string(),
-                })?;
+            let cycles =
+                parsed["result"]["cycles"]
+                    .as_array()
+                    .ok_or_else(|| LlmError::InvalidQuery {
+                        query: "Missing 'cycles' array in cycles output".to_string(),
+                    })?;
             let mut ids = Vec::new();
             for cycle in cycles {
                 if let Some(members) = cycle["members"].as_array() {
@@ -501,7 +510,9 @@ fn extract_symbol_ids_from_magellan_json(
 /// let (symbol_ids, supernode_map) = parse_condense_output(json)?;
 /// # Ok::<(), llmgrep::error::LlmError>(())
 /// ```
-pub fn parse_condense_output(json: &str) -> Result<(Vec<String>, std::collections::HashMap<String, String>), LlmError> {
+pub fn parse_condense_output(
+    json: &str,
+) -> Result<(Vec<String>, std::collections::HashMap<String, String>), LlmError> {
     use std::collections::HashMap;
 
     let parsed: Value = serde_json::from_str(json).map_err(LlmError::JsonError)?;
@@ -537,20 +548,22 @@ pub fn parse_condense_output(json: &str) -> Result<(Vec<String>, std::collection
             });
         };
 
-        let members = supernode["members"]
-            .as_array()
-            .ok_or_else(|| LlmError::MagellanExecutionFailed {
-                algorithm: "condense".to_string(),
-                stderr: "Supernode missing 'members' array".to_string(),
-            })?;
-
-        for member in members {
-            let symbol_id = member["symbol_id"]
-                .as_str()
+        let members =
+            supernode["members"]
+                .as_array()
                 .ok_or_else(|| LlmError::MagellanExecutionFailed {
                     algorithm: "condense".to_string(),
-                    stderr: "Member missing 'symbol_id' field".to_string(),
+                    stderr: "Supernode missing 'members' array".to_string(),
                 })?;
+
+        for member in members {
+            let symbol_id =
+                member["symbol_id"]
+                    .as_str()
+                    .ok_or_else(|| LlmError::MagellanExecutionFailed {
+                        algorithm: "condense".to_string(),
+                        stderr: "Member missing 'symbol_id' field".to_string(),
+                    })?;
 
             all_symbol_ids.push(symbol_id.to_string());
             supernode_map.insert(symbol_id.to_string(), supernode_id.to_string());
@@ -612,20 +625,22 @@ pub fn parse_paths_output(json: &str) -> Result<(Vec<String>, bool), LlmError> {
 
     // Extract symbol_ids from all paths
     for path in paths {
-        let symbols = path["symbols"]
-            .as_array()
-            .ok_or_else(|| LlmError::MagellanExecutionFailed {
-                algorithm: "paths".to_string(),
-                stderr: "Path missing 'symbols' array".to_string(),
-            })?;
-
-        for symbol in symbols {
-            let symbol_id = symbol["symbol_id"]
-                .as_str()
+        let symbols =
+            path["symbols"]
+                .as_array()
                 .ok_or_else(|| LlmError::MagellanExecutionFailed {
                     algorithm: "paths".to_string(),
-                    stderr: "Symbol missing 'symbol_id' field".to_string(),
+                    stderr: "Path missing 'symbols' array".to_string(),
                 })?;
+
+        for symbol in symbols {
+            let symbol_id =
+                symbol["symbol_id"]
+                    .as_str()
+                    .ok_or_else(|| LlmError::MagellanExecutionFailed {
+                        algorithm: "paths".to_string(),
+                        stderr: "Symbol missing 'symbol_id' field".to_string(),
+                    })?;
 
             all_symbol_ids.insert(symbol_id.to_string());
         }
@@ -770,44 +785,73 @@ pub fn apply_algorithm_filters(
     if let Some(symbol) = options.reachable_from {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--from", &symbol_id];
-        return Ok((run_magellan_algorithm(db_path, "reachable", &args)?.symbol_ids, HashMap::new(), false));
+        return Ok((
+            run_magellan_algorithm(db_path, "reachable", &args)?.symbol_ids,
+            HashMap::new(),
+            false,
+        ));
     }
 
     if let Some(symbol) = options.dead_code_in {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--entry", &symbol_id];
-        return Ok((run_magellan_algorithm(db_path, "dead-code", &args)?.symbol_ids, HashMap::new(), false));
+        return Ok((
+            run_magellan_algorithm(db_path, "dead-code", &args)?.symbol_ids,
+            HashMap::new(),
+            false,
+        ));
     }
 
     if let Some(symbol) = options.in_cycle {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--symbol", &symbol_id];
-        return Ok((run_magellan_algorithm(db_path, "cycles", &args)?.symbol_ids, HashMap::new(), false));
+        return Ok((
+            run_magellan_algorithm(db_path, "cycles", &args)?.symbol_ids,
+            HashMap::new(),
+            false,
+        ));
     }
 
     if let Some(symbol) = options.slice_backward_from {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--target", &symbol_id, "--direction", "backward"];
-        return Ok((run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids, HashMap::new(), false));
+        return Ok((
+            run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids,
+            HashMap::new(),
+            false,
+        ));
     }
 
     if let Some(symbol) = options.slice_forward_from {
         let symbol_id = resolve_fqn_to_symbol_id(db_path, symbol)?;
         let args = ["--target", &symbol_id, "--direction", "forward"];
-        return Ok((run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids, HashMap::new(), false));
+        return Ok((
+            run_magellan_algorithm(db_path, "slice", &args)?.symbol_ids,
+            HashMap::new(),
+            false,
+        ));
     }
 
     // Condense SCC detection
     if options.condense {
         let output = Command::new("magellan")
-            .args(["condense", "--db", &db_path.to_string_lossy(), "--output", "json"])
+            .args([
+                "condense",
+                "--db",
+                &db_path.to_string_lossy(),
+                "--output",
+                "json",
+            ])
             .output()
             .map_err(|e| match e.kind() {
                 std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
                 _ => LlmError::MagellanExecutionFailed {
                     algorithm: "condense".to_string(),
-                    stderr: format!("{}\n\nTry running: magellan condense --db {} for more details",
-                        e, db_path.to_string_lossy()),
+                    stderr: format!(
+                        "{}\n\nTry running: magellan condense --db {} for more details",
+                        e,
+                        db_path.to_string_lossy()
+                    ),
                 },
             })?;
 
@@ -815,8 +859,11 @@ pub fn apply_algorithm_filters(
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(LlmError::MagellanExecutionFailed {
                 algorithm: "condense".to_string(),
-                stderr: format!("{}\n\nTry running: magellan condense --db {} for more details",
-                    stderr, db_path.to_string_lossy()),
+                stderr: format!(
+                    "{}\n\nTry running: magellan condense --db {} for more details",
+                    stderr,
+                    db_path.to_string_lossy()
+                ),
             });
         }
 
@@ -863,8 +910,10 @@ pub fn apply_algorithm_filters(
                 std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
                 _ => LlmError::MagellanExecutionFailed {
                     algorithm: "paths".to_string(),
-                    stderr: format!("{}\n\nTry running: magellan paths --db {} --start {} for more details",
-                        e, db_path_str, start_id),
+                    stderr: format!(
+                        "{}\n\nTry running: magellan paths --db {} --start {} for more details",
+                        e, db_path_str, start_id
+                    ),
                 },
             })?;
 
@@ -872,8 +921,10 @@ pub fn apply_algorithm_filters(
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(LlmError::MagellanExecutionFailed {
                 algorithm: "paths".to_string(),
-                stderr: format!("{}\n\nTry running: magellan paths --db {} --start {} for more details",
-                    stderr, db_path_str, start_id),
+                stderr: format!(
+                    "{}\n\nTry running: magellan paths --db {} --start {} for more details",
+                    stderr, db_path_str, start_id
+                ),
             });
         }
 
@@ -904,14 +955,20 @@ pub fn create_symbol_set_temp_table(
 
     // Create temporary table
     conn.execute(
-        &format!("CREATE TEMP TABLE {} (symbol_id TEXT PRIMARY KEY)", table_name),
+        &format!(
+            "CREATE TEMP TABLE {} (symbol_id TEXT PRIMARY KEY)",
+            table_name
+        ),
         [],
     )
     .map_err(LlmError::SqliteError)?;
 
     // Insert all symbol_ids
     let mut stmt = conn
-        .prepare(&format!("INSERT INTO {} (symbol_id) VALUES (?)", table_name))
+        .prepare(&format!(
+            "INSERT INTO {} (symbol_id) VALUES (?)",
+            table_name
+        ))
         .map_err(LlmError::SqliteError)?;
 
     for symbol_id in symbol_ids {
@@ -987,7 +1044,15 @@ pub fn resolve_fqn_to_symbol_id(db_path: &Path, name: &str) -> Result<String, Ll
 
     // Run magellan find
     let output = Command::new("magellan")
-        .args(["find", "--db", &db_path.to_string_lossy(), "--name", name, "--output", "json"])
+        .args([
+            "find",
+            "--db",
+            &db_path.to_string_lossy(),
+            "--name",
+            name,
+            "--output",
+            "json",
+        ])
         .output()
         .map_err(|e| match e.kind() {
             std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
@@ -1076,9 +1141,7 @@ mod tests {
 
     #[test]
     fn test_symbol_set_empty() {
-        let symbol_set = SymbolSet {
-            symbol_ids: vec![],
-        };
+        let symbol_set = SymbolSet { symbol_ids: vec![] };
         assert!(symbol_set.validate().is_ok());
         assert_eq!(symbol_set.len(), 0);
         assert!(symbol_set.is_empty());
@@ -1089,10 +1152,7 @@ mod tests {
         let json = r#"{"symbol_ids": ["abc123def456789012345678901234ab"]}"#;
         let symbol_set: SymbolSet = serde_json::from_str(json).unwrap();
         assert_eq!(symbol_set.symbol_ids.len(), 1);
-        assert_eq!(
-            symbol_set.symbol_ids[0],
-            "abc123def456789012345678901234ab"
-        );
+        assert_eq!(symbol_set.symbol_ids[0], "abc123def456789012345678901234ab");
     }
 
     #[test]

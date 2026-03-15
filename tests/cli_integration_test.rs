@@ -31,8 +31,8 @@ fn get_test_sqlite_db() -> PathBuf {
     }
 
     // Fallback: create a minimal SQLite database file
-    let temp_file = std::env::temp_dir()
-        .join(format!("llmgrep_test_sqlite_{}.db", std::process::id()));
+    let temp_file =
+        std::env::temp_dir().join(format!("llmgrep_test_sqlite_{}.db", std::process::id()));
 
     // Remove any existing test database
     let _ = std::fs::remove_file(&temp_file);
@@ -45,6 +45,8 @@ fn get_test_sqlite_db() -> PathBuf {
             "CREATE TABLE IF NOT EXISTS graph_entities (
                 id INTEGER PRIMARY KEY,
                 kind TEXT NOT NULL,
+                name TEXT NOT NULL,
+                file_path TEXT,
                 data TEXT NOT NULL
             )",
             [],
@@ -97,12 +99,12 @@ fn get_test_sqlite_db() -> PathBuf {
         );
         // Insert test data: a file entity
         let _ = conn.execute(
-            "INSERT INTO graph_entities (id, kind, data) VALUES (1, 'File', '{\"path\":\"test.rs\"}')",
+            "INSERT INTO graph_entities (id, kind, name, file_path, data) VALUES (1, 'File', 'test.rs', 'test.rs', '{\"path\":\"test.rs\"}')",
             [],
         );
         // Insert test data: a symbol entity with all required fields
         let _ = conn.execute(
-            "INSERT INTO graph_entities (id, kind, data) VALUES (2, 'Symbol', '{\"name\":\"test\",\"fqn\":\"test::function\",\"display_fqn\":\"test::function\",\"canonical_fqn\":\"test::function\",\"byte_start\":0,\"byte_end\":10,\"line_start\":1,\"line_end\":2,\"start_line\":1,\"start_col\":0,\"language\":\"Rust\",\"symbol_id\":\"2\"}')",
+            "INSERT INTO graph_entities (id, kind, name, file_path, data) VALUES (2, 'Symbol', 'test', 'test.rs', '{\"name\":\"test\",\"fqn\":\"test::function\",\"display_fqn\":\"test::function\",\"canonical_fqn\":\"test::function\",\"byte_start\":0,\"byte_end\":10,\"line_start\":1,\"line_end\":2,\"start_line\":1,\"start_col\":0,\"language\":\"Rust\",\"symbol_id\":\"2\"}')",
             [],
         );
         // Insert test data: edge from file to symbol (DEFINES)

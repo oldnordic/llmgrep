@@ -2,13 +2,13 @@ use llmgrep::query::{
     search_symbols, AstOptions, ContextOptions, DepthOptions, FqnOptions, MetricsOptions,
     SearchOptions, SnippetOptions,
 };
-use llmgrep::AlgorithmOptions;
 /// Unit tests for v1.1 features - internal logic testing
 ///
 /// Tests for:
 /// - Safe extraction function edge cases
 /// - Public API with new v1.1 options
 use llmgrep::safe_extraction::extract_symbol_content_safe;
+use llmgrep::AlgorithmOptions;
 use llmgrep::SortMode;
 use rusqlite::{params, Connection};
 use serde_json::json;
@@ -111,7 +111,16 @@ fn insert_define_edge(conn: &Connection, file_id: i64, symbol_id: i64) {
     .expect("insert edge");
 }
 
-fn insert_metrics(conn: &Connection, symbol_row_id: i64, symbol_name: &str, kind: &str, file_path: &str, fan_in: i64, fan_out: i64, complexity: i64) {
+fn insert_metrics(
+    conn: &Connection,
+    symbol_row_id: i64,
+    symbol_name: &str,
+    kind: &str,
+    file_path: &str,
+    fan_in: i64,
+    fan_out: i64,
+    complexity: i64,
+) {
     conn.execute(
         "INSERT INTO symbol_metrics (symbol_id, symbol_name, kind, file_path, loc, estimated_loc, fan_in, fan_out, cyclomatic_complexity, last_updated)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
@@ -406,7 +415,13 @@ fn test_api_language_filtering() {
 
     let response = search_symbols(options).expect("search should succeed");
     assert_eq!(response.0.results.len(), 1);
-    assert_eq!(response.0.results[0].language.as_ref().expect("language should be Some"), "Rust");
+    assert_eq!(
+        response.0.results[0]
+            .language
+            .as_ref()
+            .expect("language should be Some"),
+        "Rust"
+    );
 }
 
 /// Test 6: Public API - position mode sorting
@@ -501,7 +516,16 @@ fn test_api_symbol_id_lookup() {
     insert_define_edge(&conn, file_id, symbol_row_id);
 
     // Insert metrics for the symbol - using row ID reference
-    insert_metrics(&conn, symbol_row_id, symbol_name, "Function", file_path, 5, 3, 2);
+    insert_metrics(
+        &conn,
+        symbol_row_id,
+        symbol_name,
+        "Function",
+        file_path,
+        5,
+        3,
+        2,
+    );
 
     // Search by SymbolId
     let options = SearchOptions {
@@ -531,7 +555,10 @@ fn test_api_symbol_id_lookup() {
     assert_eq!(response.0.results.len(), 1);
     assert_eq!(response.0.results[0].name, symbol_name);
     assert_eq!(
-        response.0.results[0].symbol_id.as_ref().expect("symbol_id should be Some"),
+        response.0.results[0]
+            .symbol_id
+            .as_ref()
+            .expect("symbol_id should be Some"),
         known_symbol_id
     );
 }

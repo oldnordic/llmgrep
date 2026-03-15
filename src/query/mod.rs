@@ -56,12 +56,6 @@ pub(crate) use symbols::search_symbols_impl;
 pub use util::infer_language;
 
 // Internal exports for tests
-pub(crate) use builder::{
-    build_call_query, build_reference_query, build_search_query,
-};
-pub(crate) use util::{
-    like_pattern, like_prefix, load_file, normalize_kind_label, score_match, FileCache,
-};
 
 // Tests
 #[cfg(test)]

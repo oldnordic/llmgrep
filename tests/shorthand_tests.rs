@@ -21,16 +21,16 @@ fn test_expand_shorthand_loops() {
 #[test]
 fn test_expand_shorthand_conditionals() {
     let result = expand_shorthand("conditionals");
-    assert_eq!(
-        result,
-        "if_expression,match_expression,match_arm"
-    );
+    assert_eq!(result, "if_expression,match_expression,match_arm");
 }
 
 #[test]
 fn test_expand_shorthand_functions() {
     let result = expand_shorthand("functions");
-    assert_eq!(result, "function_item,closure_expression,async_function_item");
+    assert_eq!(
+        result,
+        "function_item,closure_expression,async_function_item"
+    );
 }
 
 #[test]
@@ -322,7 +322,10 @@ fn test_multi_shorthand_complex_combination() {
     assert!(result.contains(&"closure_expression".to_string()));
 
     // closure_expression should not be duplicated (it's in "functions" shorthand too)
-    let closure_count = result.iter().filter(|s| s.as_str() == "closure_expression").count();
+    let closure_count = result
+        .iter()
+        .filter(|s| s.as_str() == "closure_expression")
+        .count();
     assert_eq!(closure_count, 1);
 }
 
@@ -361,15 +364,18 @@ fn test_multi_language_function_search() {
 #[test]
 fn test_language_detection_for_ast_kinds() {
     // Test that language detection maps to correct node kinds
-    let python_funcs = get_node_kinds_for_language("python", "functions").expect("Should have Python functions");
+    let python_funcs =
+        get_node_kinds_for_language("python", "functions").expect("Should have Python functions");
     assert!(python_funcs.contains(&"function_definition".to_string()));
     assert!(python_funcs.contains(&"lambda".to_string()));
 
-    let js_funcs = get_node_kinds_for_language("javascript", "functions").expect("Should have JS functions");
+    let js_funcs =
+        get_node_kinds_for_language("javascript", "functions").expect("Should have JS functions");
     assert!(js_funcs.contains(&"function_declaration".to_string()));
     assert!(js_funcs.contains(&"arrow_function".to_string()));
 
-    let ts_funcs = get_node_kinds_for_language("typescript", "functions").expect("Should have TS functions");
+    let ts_funcs =
+        get_node_kinds_for_language("typescript", "functions").expect("Should have TS functions");
     assert!(ts_funcs.contains(&"function_declaration".to_string()));
     assert!(ts_funcs.contains(&"arrow_function".to_string()));
 }
@@ -380,8 +386,14 @@ fn test_shorthand_specific_combination_no_duplicates() {
     let result = expand_shorthands("loops,for_expression");
 
     // Count occurrences of for_expression
-    let for_expr_count = result.iter().filter(|s| s.as_str() == "for_expression").count();
-    assert_eq!(for_expr_count, 1, "for_expression should appear exactly once");
+    let for_expr_count = result
+        .iter()
+        .filter(|s| s.as_str() == "for_expression")
+        .count();
+    assert_eq!(
+        for_expr_count, 1,
+        "for_expression should appear exactly once"
+    );
 
     // But for_expression should still be present
     assert!(result.contains(&"for_expression".to_string()));

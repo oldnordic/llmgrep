@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/llmgrep)](https://crates.io/crates/llmgrep)
 [![Documentation](https://docs.rs/llmgrep/badge.svg)](https://docs.rs/llmgrep)
 
-**Version:** 3.0.7
+**Version:** 3.1.0
 
 Pattern-based code search for Magellan databases. Fast, deterministic symbol search with LLM-optimized JSON output.
 
@@ -23,9 +23,9 @@ Pattern-based code search for Magellan databases. Fast, deterministic symbol sea
 - **Reference lookup** — Find all callers/callees of a function
 - **Call graph traversal** — Navigate caller → callee relationships
 - **AST filtering** — Filter by node kind, nesting depth, complexity
-- **Magellan algorithms** — Condense, paths, cycles, dead-code, slicing
-- **FQN autocomplete** — Prefix-based symbol completion (Native-V3)
-- **Exact lookup** — O(1) symbol resolution by fully-qualified name (Native-V3)
+- **Geometric backend** — Native .geo file support with chunk retrieval
+- **Path normalization** — Consistent path handling across platforms
+- **Explicit ambiguity handling** — Structured results for disambiguation
 
 ## Quick Start
 
@@ -33,23 +33,14 @@ Pattern-based code search for Magellan databases. Fast, deterministic symbol sea
 # Install
 cargo install llmgrep
 
-# Requires Magellan database (create first)
-magellan watch --root ./src --db code.v3
+# Create Geometric database (recommended)
+magellan watch --root ./src --db code.geo
 
 # Search symbols
-llmgrep --db code.v3 search --query "parse"
+llmgrep --db code.geo search --query "parse"
 
 # Find references
-llmgrep --db code.v3 search --query "MyType" --mode references
-
-# FQN autocomplete (Native-V3)
-llmgrep --db code.v3 complete --prefix "my_crate::module::"
-
-# Exact symbol lookup (Native-V3)
-llmgrep --db code.v3 lookup --fqn "my_crate::module::function_name"
-
-# Label-based search (Native-V3)
-llmgrep --db code.v3 search --mode label --label test
+llmgrep --db code.geo search --query "MyType" --mode references
 ```
 
 ## Installation
@@ -58,36 +49,33 @@ llmgrep --db code.v3 search --mode label --label test
 cargo install llmgrep
 ```
 
-Or build from source with Native-V3 backend:
-
-```bash
-# Native-V3 backend (recommended - fastest, O(1) KV operations)
-cargo install llmgrep --features native-v3
-```
-
 ## Backends
 
-| Feature | Description | File | Best For |
-|---------|-------------|------|----------|
-| `native-v3` | **High-performance binary backend** with KV store | `.v3` | Production (recommended) |
-| (default) | SQLite backend via rusqlite | `.db` | Compatibility |
+| Backend | File | Features | Status |
+|---------|------|----------|--------|
+| **Geometric** | `.geo` | Full search + chunk retrieval + path normalization | **Default** |
+| **SQLite** | `.db` | Full search | Legacy (always available) |
+| **Native-V3** | `.v3` | O(1) KV operations + autocomplete | Reserved (disabled) |
 
-**Native-V3 exclusive features:**
-- `complete` — FQN prefix autocomplete
-- `lookup` — O(1) exact symbol lookup
-- `search --mode label` — Purpose-based search (tests, entry points)
+**Geometric (.geo) features:**
+- Path normalization before queries
+- Explicit ambiguity error handling
+- Code chunk retrieval (no file I/O)
+- No SQLite dependencies
 
-Both backends have full feature parity for standard search operations.
+**Backend detection is automatic** — no flags needed. Detects by file extension (`.geo`) and header bytes.
 
 ## Requirements
 
-- **[Magellan](https://github.com/oldnordic/magellan)** 2.4.3+ — Required for code indexing
-- **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 2.0.3+ — Included automatically
+- **[Magellan](https://github.com/oldnordic/magellan)** 3.0.0+ — Required for indexing
+- **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 2.0.7+ — Included automatically
 
 ## Documentation
 
 - **[MANUAL.md](MANUAL.md)** — Complete command reference and examples
 - **[CHANGELOG.md](CHANGELOG.md)** — Version history
+- **[API_INTEGRATION.md](API_INTEGRATION.md)** — Magellan contract details
+- **[INVARIANTS.md](INVARIANTS.md)** — Behavior guarantees
 
 ## What llmgrep Does NOT Do
 

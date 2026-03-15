@@ -4,15 +4,8 @@
 //! This is the traditional storage backend and is always available.
 
 use crate::error::LlmError;
-use crate::output::{
-    CallSearchResponse, ReferenceSearchResponse, SearchResponse,
-};
-use crate::query::{
-    SearchOptions,
-    search_symbols_impl,
-    search_references_impl,
-    search_calls_impl,
-};
+use crate::output::{CallSearchResponse, ReferenceSearchResponse, SearchResponse};
+use crate::query::{search_calls_impl, search_references_impl, search_symbols_impl, SearchOptions};
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
 
@@ -55,10 +48,7 @@ impl super::BackendTrait for SqliteBackend {
         search_references_impl(&self.conn, &options)
     }
 
-    fn search_calls(
-        &self,
-        options: SearchOptions,
-    ) -> Result<(CallSearchResponse, bool), LlmError> {
+    fn search_calls(&self, options: SearchOptions) -> Result<(CallSearchResponse, bool), LlmError> {
         search_calls_impl(&self.conn, &options)
     }
 
@@ -68,17 +58,19 @@ impl super::BackendTrait for SqliteBackend {
         position: Option<usize>,
         limit: usize,
     ) -> Result<serde_json::Value, LlmError> {
-        let file_path = file.to_str()
-            .ok_or_else(|| LlmError::SearchFailed {
-                reason: format!("File path {:?} is not valid UTF-8", file),
-            })?;
+        let file_path = file.to_str().ok_or_else(|| LlmError::SearchFailed {
+            reason: format!("File path {:?} is not valid UTF-8", file),
+        })?;
 
         // Check if ast_nodes table exists
-        let table_exists: bool = self.conn.query_row(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ast_nodes'",
-            [],
-            |_| Ok(true),
-        ).unwrap_or(false);
+        let table_exists: bool = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ast_nodes'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
 
         if !table_exists {
             return Ok(serde_json::json!({
@@ -90,15 +82,18 @@ impl super::BackendTrait for SqliteBackend {
 
         let nodes = if let Some(pos) = position {
             // Query for node at specific position
+            // Join with graph_entities to filter by file path
             let mut stmt = self.conn.prepare(
-                "SELECT id, parent_id, kind, byte_start, byte_end 
-                 FROM ast_nodes 
-                 WHERE byte_start <= ?1 AND byte_end > ?1
-                 ORDER BY byte_start DESC
-                 LIMIT ?2"
+                "SELECT an.id, an.parent_id, an.kind, an.byte_start, an.byte_end
+                 FROM ast_nodes an
+                 JOIN graph_entities f ON an.file_id = f.id AND f.kind = 'File'
+                 WHERE f.name = ?1
+                   AND an.byte_start <= ?2 AND an.byte_end > ?2
+                 ORDER BY an.byte_start DESC
+                 LIMIT ?3",
             )?;
-            
-            let rows = stmt.query_map(params![pos as i64, limit as i64], |row| {
+
+            let rows = stmt.query_map(params![file_path, pos as i64, limit as i64], |row| {
                 Ok(serde_json::json!({
                     "id": row.get::<_, i64>(0)?,
                     "parent_id": row.get::<_, Option<i64>>(1)?,
@@ -107,19 +102,19 @@ impl super::BackendTrait for SqliteBackend {
                     "byte_end": row.get::<_, i64>(4)?,
                 }))
             })?;
-            
+
             rows.collect::<Result<Vec<_>, _>>()?
         } else {
-            // Query all nodes for the file (need to join with files table)
+            // Query all nodes for the file (join with graph_entities for file info)
             let mut stmt = self.conn.prepare(
-                "SELECT an.id, an.parent_id, an.kind, an.byte_start, an.byte_end 
+                "SELECT an.id, an.parent_id, an.kind, an.byte_start, an.byte_end
                  FROM ast_nodes an
-                 JOIN files f ON an.file_id = f.id
-                 WHERE f.file_path = ?1
+                 JOIN graph_entities f ON an.file_id = f.id AND f.kind = 'File'
+                 WHERE f.name = ?1
                  ORDER BY an.byte_start
-                 LIMIT ?2"
+                 LIMIT ?2",
             )?;
-            
+
             let rows = stmt.query_map(params![file_path, limit as i64], |row| {
                 Ok(serde_json::json!({
                     "id": row.get::<_, i64>(0)?,
@@ -129,7 +124,7 @@ impl super::BackendTrait for SqliteBackend {
                     "byte_end": row.get::<_, i64>(4)?,
                 }))
             })?;
-            
+
             rows.collect::<Result<Vec<_>, _>>()?
         };
 
@@ -142,11 +137,14 @@ impl super::BackendTrait for SqliteBackend {
 
     fn find_ast(&self, kind: &str) -> Result<serde_json::Value, LlmError> {
         // Check if ast_nodes table exists
-        let table_exists: bool = self.conn.query_row(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ast_nodes'",
-            [],
-            |_| Ok(true),
-        ).unwrap_or(false);
+        let table_exists: bool = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ast_nodes'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
 
         if !table_exists {
             return Ok(serde_json::json!({
@@ -157,13 +155,13 @@ impl super::BackendTrait for SqliteBackend {
         }
 
         let mut stmt = self.conn.prepare(
-            "SELECT an.id, an.parent_id, an.kind, an.byte_start, an.byte_end, f.file_path
+            "SELECT an.id, an.parent_id, an.kind, an.byte_start, an.byte_end, f.name as file_path
              FROM ast_nodes an
-             JOIN files f ON an.file_id = f.id
+             JOIN graph_entities f ON an.file_id = f.id AND f.kind = 'File'
              WHERE an.kind = ?1
-             ORDER BY f.file_path, an.byte_start"
+             ORDER BY f.name, an.byte_start",
         )?;
-        
+
         let rows = stmt.query_map(params![kind], |row| {
             Ok(serde_json::json!({
                 "id": row.get::<_, i64>(0)?,
@@ -174,7 +172,7 @@ impl super::BackendTrait for SqliteBackend {
                 "file_path": row.get::<_, String>(5)?,
             }))
         })?;
-        
+
         let nodes: Vec<_> = rows.collect::<Result<Vec<_>, _>>()?;
 
         Ok(serde_json::json!({
@@ -212,6 +210,17 @@ impl super::BackendTrait for SqliteBackend {
         Err(LlmError::RequiresNativeV3Backend {
             command: "search --mode label".to_string(),
             path: db_path.to_string(),
+        })
+    }
+
+    fn get_chunks_for_symbol(
+        &self,
+        _file_path: &str,
+        _symbol_name: &str,
+    ) -> Result<Vec<crate::backend::magellan_adapter::CodeChunk>, LlmError> {
+        Err(LlmError::ChunksNotAvailable {
+            backend: "SQLite".to_string(),
+            message: "SQLite backend does not support chunk retrieval. Use Geometric (.geo) backend with chunking enabled.".to_string(),
         })
     }
 }

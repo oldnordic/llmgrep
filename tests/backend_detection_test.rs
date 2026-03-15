@@ -14,7 +14,8 @@ fn test_detect_sqlite_backend() {
     // SQLite magic: "SQLite format 3\0"
     use std::io::Write;
     let mut file = std::fs::File::create(path).expect("failed to create file");
-    file.write_all(b"SQLite format 3\0").expect("failed to write SQLite header");
+    file.write_all(b"SQLite format 3\0")
+        .expect("failed to write SQLite header");
     file.sync_all().expect("failed to sync file");
 
     // Try to detect backend - should fail to open as valid SQLite DB
@@ -28,10 +29,16 @@ fn test_detect_sqlite_backend() {
         Err(e) => {
             // Should NOT be these errors (which indicate detection failed)
             let error_msg = e.to_string();
-            assert!(!error_msg.contains("Backend detection failed"),
-                "Should not fail detection for SQLite header: {}", error_msg);
-            assert!(!error_msg.contains("native-v3 support"),
-                "Should not think SQLite is native-v3: {}", error_msg);
+            assert!(
+                !error_msg.contains("Backend detection failed"),
+                "Should not fail detection for SQLite header: {}",
+                error_msg
+            );
+            assert!(
+                !error_msg.contains("native-v3 support"),
+                "Should not think SQLite is native-v3: {}",
+                error_msg
+            );
         }
     }
 }
@@ -44,10 +51,13 @@ fn test_detect_nonexistent_file() {
 
     assert!(result.is_err());
     let error_msg = result.unwrap_err().to_string();
-    assert!(error_msg.contains("Backend detection failed") ||
-            error_msg.contains("not found") ||
-            error_msg.contains("No such file"),
-            "Expected file not found error, got: {}", error_msg);
+    assert!(
+        error_msg.contains("Backend detection failed")
+            || error_msg.contains("not found")
+            || error_msg.contains("No such file"),
+        "Expected file not found error, got: {}",
+        error_msg
+    );
 }
 
 #[test]
@@ -60,10 +70,13 @@ fn test_detect_empty_file() {
     assert!(result.is_err());
     let error_msg = result.unwrap_err().to_string();
     // Empty file is neither SQLite nor Native-V2
-    assert!(error_msg.contains("Backend detection failed") ||
-            error_msg.contains("Unknown format") ||
-            error_msg.contains("not a valid"),
-            "Expected format error for empty file, got: {}", error_msg);
+    assert!(
+        error_msg.contains("Backend detection failed")
+            || error_msg.contains("Unknown format")
+            || error_msg.contains("not a valid"),
+        "Expected format error for empty file, got: {}",
+        error_msg
+    );
 }
 
 #[cfg(feature = "native-v3")]
@@ -91,8 +104,11 @@ fn test_detect_native_v3_backend() {
         Err(e) => {
             let error_msg = e.to_string();
             // Should NOT try to open as SQLite
-            assert!(!error_msg.contains("SQLite"),
-                "Should not detect Native-V2 header as SQLite: {}", error_msg);
+            assert!(
+                !error_msg.contains("SQLite"),
+                "Should not detect Native-V2 header as SQLite: {}",
+                error_msg
+            );
         }
     }
 }
@@ -117,10 +133,14 @@ fn test_native_v3_not_supported_error() {
 
     assert!(result.is_err());
     let error_msg = result.unwrap_err().to_string();
-    assert!(error_msg.contains("native-v3 support") ||
-            error_msg.contains("LLM-E109"),
-            "Expected native-v3 not supported error, got: {}", error_msg);
-    assert!(error_msg.contains("cargo install llmgrep --features native-v3") ||
-            error_msg.contains("--features native-v3"),
-            "Error should suggest rebuilding with native-v3 feature");
+    assert!(
+        error_msg.contains("native-v3 support") || error_msg.contains("LLM-E109"),
+        "Expected native-v3 not supported error, got: {}",
+        error_msg
+    );
+    assert!(
+        error_msg.contains("cargo install llmgrep --features native-v3")
+            || error_msg.contains("--features native-v3"),
+        "Error should suggest rebuilding with native-v3 feature"
+    );
 }

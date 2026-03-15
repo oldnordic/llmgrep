@@ -68,13 +68,18 @@ pub(crate) fn search_symbols_impl(
     );
 
     // Check if ast_nodes table exists for AST filtering
-    let has_ast_table = check_ast_table_exists(conn)
-        .map_err(|e| LlmError::SearchFailed {
-            reason: format!("Failed to check ast_nodes table: {}", e),
-        })?;
+    let has_ast_table = check_ast_table_exists(conn).map_err(|e| LlmError::SearchFailed {
+        reason: format!("Failed to check ast_nodes table: {}", e),
+    })?;
 
     // If we have AST options, rebuild query with correct AST settings
-    let (sql, params, symbol_set_strategy) = if !options.ast.ast_kinds.is_empty() || has_ast_table || options.depth.min_depth.is_some() || options.depth.max_depth.is_some() || options.depth.inside.is_some() || options.depth.contains.is_some() {
+    let (sql, params, symbol_set_strategy) = if !options.ast.ast_kinds.is_empty()
+        || has_ast_table
+        || options.depth.min_depth.is_some()
+        || options.depth.max_depth.is_some()
+        || options.depth.inside.is_some()
+        || options.depth.contains.is_some()
+    {
         build_search_query(
             options.query,
             options.path_filter,
@@ -149,27 +154,35 @@ pub(crate) fn search_symbols_impl(
         // Basic AST context is populated from the LEFT JOIN with ast_nodes
         // Enriched fields (depth, parent_kind, children_count_by_kind, decision_points)
         // require additional processing via get_ast_context_for_symbol() when with_ast_context is set
-        let ast_context: Option<crate::ast::AstContext> = match row.get::<_, String>("ast_kind").ok() {
-            Some(kind) => {
-                // All AST columns should be present if ast_kind is present
-                match (row.get("ast_id"), row.get("ast_parent_id"), row.get("ast_byte_start"), row.get("ast_byte_end")) {
-                    (Ok(ast_id), Ok(parent_id), Ok(byte_start), Ok(byte_end)) => Some(crate::ast::AstContext {
-                        ast_id,
-                        kind,
-                        parent_id,
-                        byte_start,
-                        byte_end,
-                        // Enriched fields start as None - populated later if with_ast_context is set
-                        depth: None,
-                        parent_kind: None,
-                        children_count_by_kind: None,
-                        decision_points: None,
-                    }),
-                    _ => None,
+        let ast_context: Option<crate::ast::AstContext> =
+            match row.get::<_, String>("ast_kind").ok() {
+                Some(kind) => {
+                    // All AST columns should be present if ast_kind is present
+                    match (
+                        row.get("ast_id"),
+                        row.get("ast_parent_id"),
+                        row.get("ast_byte_start"),
+                        row.get("ast_byte_end"),
+                    ) {
+                        (Ok(ast_id), Ok(parent_id), Ok(byte_start), Ok(byte_end)) => {
+                            Some(crate::ast::AstContext {
+                                ast_id,
+                                kind,
+                                parent_id,
+                                byte_start,
+                                byte_end,
+                                // Enriched fields start as None - populated later if with_ast_context is set
+                                depth: None,
+                                parent_kind: None,
+                                children_count_by_kind: None,
+                                decision_points: None,
+                            })
+                        }
+                        _ => None,
+                    }
                 }
-            },
-            None => None,
-        };
+                None => None,
+            };
 
         let symbol: SymbolNodeData = serde_json::from_str(&data)?;
 
@@ -348,14 +361,18 @@ pub(crate) fn search_symbols_impl(
                             if let Ok(kind) = crate::ast::get_parent_kind(conn, ctx.parent_id) {
                                 ctx.parent_kind = kind;
                             }
-                            if let Ok(children) = crate::ast::count_children_by_kind(conn, ctx.ast_id) {
+                            if let Ok(children) =
+                                crate::ast::count_children_by_kind(conn, ctx.ast_id)
+                            {
                                 ctx.children_count_by_kind = Some(children);
                             }
-                            if let Ok(decision_points) = crate::ast::count_decision_points(conn, ctx.ast_id) {
+                            if let Ok(decision_points) =
+                                crate::ast::count_decision_points(conn, ctx.ast_id)
+                            {
                                 ctx.decision_points = Some(decision_points);
                             }
                             Some(ctx)
-                        },
+                        }
                         Err(e) => {
                             eprintln!("Warning: Failed to get preferred AST context: {}", e);
                             if let Ok(depth) = if has_depth_filter {
@@ -368,10 +385,14 @@ pub(crate) fn search_symbols_impl(
                             if let Ok(kind) = crate::ast::get_parent_kind(conn, ctx.parent_id) {
                                 ctx.parent_kind = kind;
                             }
-                            if let Ok(children) = crate::ast::count_children_by_kind(conn, ctx.ast_id) {
+                            if let Ok(children) =
+                                crate::ast::count_children_by_kind(conn, ctx.ast_id)
+                            {
                                 ctx.children_count_by_kind = Some(children);
                             }
-                            if let Ok(decision_points) = crate::ast::count_decision_points(conn, ctx.ast_id) {
+                            if let Ok(decision_points) =
+                                crate::ast::count_decision_points(conn, ctx.ast_id)
+                            {
                                 ctx.decision_points = Some(decision_points);
                             }
                             Some(ctx)
@@ -463,7 +484,8 @@ pub(crate) fn search_symbols_impl(
             fan_out,
             cyclomatic_complexity,
             ast_context,
-            supernode_id: symbol_id.as_ref()
+            supernode_id: symbol_id
+                .as_ref()
                 .and_then(|id| supernode_map.get(id).cloned()),
         });
     }
@@ -489,7 +511,7 @@ pub(crate) fn search_symbols_impl(
                         min_ok && max_ok
                     }
                     Ok(None) => true, // No depth data, keep the result
-                    Err(_) => true, // Error calculating depth, keep the result
+                    Err(_) => true,   // Error calculating depth, keep the result
                 }
             } else {
                 true // No AST context, keep the result
@@ -523,7 +545,7 @@ pub(crate) fn search_symbols_impl(
             options.depth.max_depth,
             options.depth.inside,
             options.depth.contains,
-            None,  // symbol_set_filter - will be populated in Plan 11-04
+            None, // symbol_set_filter - will be populated in Plan 11-04
         );
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {

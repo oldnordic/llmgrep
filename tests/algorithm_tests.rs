@@ -35,14 +35,12 @@ fn test_symbol_set_parsing_valid() {
     }"#;
 
     let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
-    file.write_all(valid_json.as_bytes()).expect("failed to write valid JSON");
+    file.write_all(valid_json.as_bytes())
+        .expect("failed to write valid JSON");
 
     let symbol_set = parse_symbol_set_file(&symbol_set_path).expect("failed to parse symbol set");
     assert_eq!(symbol_set.symbol_ids.len(), 3);
-    assert_eq!(
-        symbol_set.symbol_ids[0],
-        "abc123def456789012345678901234ab"
-    );
+    assert_eq!(symbol_set.symbol_ids[0], "abc123def456789012345678901234ab");
 }
 
 #[test]
@@ -55,7 +53,8 @@ fn test_symbol_set_parsing_invalid_length() {
     }"#;
 
     let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
-    file.write_all(invalid_json.as_bytes()).expect("failed to write valid JSON");
+    file.write_all(invalid_json.as_bytes())
+        .expect("failed to write valid JSON");
 
     let result = parse_symbol_set_file(&symbol_set_path);
     assert!(result.is_err());
@@ -77,7 +76,8 @@ fn test_symbol_set_parsing_invalid_chars() {
     }"#;
 
     let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
-    file.write_all(invalid_json.as_bytes()).expect("failed to write valid JSON");
+    file.write_all(invalid_json.as_bytes())
+        .expect("failed to write valid JSON");
 
     let result = parse_symbol_set_file(&symbol_set_path);
     assert!(result.is_err());
@@ -97,7 +97,8 @@ fn test_symbol_set_parsing_empty_array() {
     let empty_json = r#"{"symbol_ids": []}"#;
 
     let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
-    file.write_all(empty_json.as_bytes()).expect("failed to write empty JSON");
+    file.write_all(empty_json.as_bytes())
+        .expect("failed to write empty JSON");
 
     let symbol_set = parse_symbol_set_file(&symbol_set_path).expect("failed to parse symbol set");
     assert!(symbol_set.symbol_ids.is_empty());
@@ -113,7 +114,8 @@ fn test_symbol_set_parsing_missing_field() {
     let invalid_json = r#"{"wrong_field": []}"#;
 
     let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
-    file.write_all(invalid_json.as_bytes()).expect("failed to write valid JSON");
+    file.write_all(invalid_json.as_bytes())
+        .expect("failed to write valid JSON");
 
     let result = parse_symbol_set_file(&symbol_set_path);
     assert!(result.is_err());
@@ -138,36 +140,28 @@ fn test_temp_table_threshold_empty() {
 
 #[test]
 fn test_temp_table_threshold_small() {
-    let symbol_ids = vec
-!["abc123def456789012345678901234ab".to_string(); 100]
-;
+    let symbol_ids = vec!["abc123def456789012345678901234ab".to_string(); 100];
     let strategy = symbol_set_filter_strategy(&symbol_ids);
     assert_eq!(strategy, SymbolSetStrategy::InClause);
 }
 
 #[test]
 fn test_temp_table_threshold_at_boundary() {
-    let symbol_ids = vec
-!["abc123def456789012345678901234ab".to_string(); 1000]
-;
+    let symbol_ids = vec!["abc123def456789012345678901234ab".to_string(); 1000];
     let strategy = symbol_set_filter_strategy(&symbol_ids);
     assert_eq!(strategy, SymbolSetStrategy::InClause);
 }
 
 #[test]
 fn test_temp_table_threshold_over_boundary() {
-    let symbol_ids = vec
-!["abc123def456789012345678901234ab".to_string(); 1001]
-;
+    let symbol_ids = vec!["abc123def456789012345678901234ab".to_string(); 1001];
     let strategy = symbol_set_filter_strategy(&symbol_ids);
     assert_eq!(strategy, SymbolSetStrategy::TempTable);
 }
 
 #[test]
 fn test_temp_table_threshold_large() {
-    let symbol_ids = vec
-!["abc123def456789012345678901234ab".to_string(); 5000]
-;
+    let symbol_ids = vec!["abc123def456789012345678901234ab".to_string(); 5000];
     let strategy = symbol_set_filter_strategy(&symbol_ids);
     assert_eq!(strategy, SymbolSetStrategy::TempTable);
 }
@@ -470,7 +464,8 @@ fn test_from_symbol_set_file() {
     }"#;
 
     let mut file = File::create(&symbol_set_path).expect("failed to create symbol set file");
-    file.write_all(valid_json.as_bytes()).expect("failed to write valid JSON");
+    file.write_all(valid_json.as_bytes())
+        .expect("failed to write valid JSON");
 
     let symbol_set = parse_symbol_set_file(&symbol_set_path).expect("failed to parse symbol set");
     assert_eq!(symbol_set.symbol_ids.len(), 2);

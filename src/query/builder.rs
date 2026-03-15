@@ -198,8 +198,15 @@ pub(crate) fn build_search_query(
         match strategy {
             SymbolSetStrategy::InClause if !symbol_ids.is_empty() => {
                 let placeholders = symbol_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-                where_clauses.push(format!("json_extract(s.data, '$.symbol_id') IN ({})", placeholders));
-                params.extend(symbol_ids.iter().map(|id| Box::new(id.clone()) as Box<dyn ToSql>));
+                where_clauses.push(format!(
+                    "json_extract(s.data, '$.symbol_id') IN ({})",
+                    placeholders
+                ));
+                params.extend(
+                    symbol_ids
+                        .iter()
+                        .map(|id| Box::new(id.clone()) as Box<dyn ToSql>),
+                );
             }
             SymbolSetStrategy::TempTable => {
                 // Will be handled via JOIN in execution (Plan 11-04)

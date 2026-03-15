@@ -8,8 +8,8 @@
 use crate::error::LlmError;
 use crate::infer_language;
 use crate::output::{
-    CallSearchResponse, CallMatch, ReferenceSearchResponse, ReferenceMatch,
-    SearchResponse, SymbolMatch, Span, SpanContext,
+    CallMatch, CallSearchResponse, ReferenceMatch, ReferenceSearchResponse, SearchResponse, Span,
+    SpanContext, SymbolMatch,
 };
 use crate::query::SearchOptions;
 use magellan::common::extract_symbol_content_safe;
@@ -180,8 +180,7 @@ unsafe impl Send for NativeV3Backend {}
 
 impl std::fmt::Debug for NativeV3Backend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NativeV3Backend")
-            .finish()
+        f.debug_struct("NativeV3Backend").finish()
     }
 }
 
@@ -237,14 +236,17 @@ impl NativeV3Backend {
     ) -> SymbolMatch {
         // Extract file path from canonical_fqn if available
         // Format: crate_name::file_path::kind symbol_name
-        let file_path = node.canonical_fqn
+        let file_path = node
+            .canonical_fqn
             .as_ref()
             .and_then(|fqn| {
                 // Try to extract file path from "crate_name::src/file.py::Function name"
                 let parts: Vec<&str> = fqn.split("::").collect();
                 if parts.len() >= 3 {
                     // Find the part that looks like a file path (contains '/' or has known extension)
-                    parts.iter().find(|p| p.contains('/') || Self::has_known_extension(p))
+                    parts
+                        .iter()
+                        .find(|p| p.contains('/') || Self::has_known_extension(p))
                         .map(|s| s.to_string())
                 } else {
                     None
@@ -319,18 +321,20 @@ impl NativeV3Backend {
     fn get_metrics(&self, entity_id: u64) -> Option<(u64, u64, u64)> {
         // Open a direct SQLite connection to query symbol_metrics
         let conn = Connection::open(&self.db_path).ok()?;
-        
+
         // Check if symbol_metrics table exists
-        let table_exists: bool = conn.query_row(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='symbol_metrics'",
-            [],
-            |_| Ok(true),
-        ).unwrap_or(false);
-        
+        let table_exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='symbol_metrics'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+
         if !table_exists {
             return None;
         }
-        
+
         // Query metrics for the entity
         conn.query_row(
             "SELECT fan_in, fan_out, cyclomatic_complexity 
@@ -343,21 +347,38 @@ impl NativeV3Backend {
                 let complexity: u64 = row.get::<_, i64>(2).unwrap_or(0) as u64;
                 Ok((fan_in, fan_out, complexity))
             },
-        ).ok()
+        )
+        .ok()
     }
 
     /// Check if a path has a known source file extension
     ///
     /// This helps identify which part of an FQN is the file path.
     fn has_known_extension(path: &str) -> bool {
-        path.ends_with(".rs") || path.ends_with(".py") || path.ends_with(".js")
-            || path.ends_with(".ts") || path.ends_with(".tsx") || path.ends_with(".jsx")
-            || path.ends_with(".c") || path.ends_with(".cpp") || path.ends_with(".cc")
-            || path.ends_with(".cxx") || path.ends_with(".h") || path.ends_with(".hpp")
-            || path.ends_with(".java") || path.ends_with(".go") || path.ends_with(".rb")
-            || path.ends_with(".php") || path.ends_with(".swift") || path.ends_with(".kt")
-            || path.ends_with(".kts") || path.ends_with(".scala") || path.ends_with(".lua")
-            || path.ends_with(".r") || path.ends_with(".m") || path.ends_with(".cs")
+        path.ends_with(".rs")
+            || path.ends_with(".py")
+            || path.ends_with(".js")
+            || path.ends_with(".ts")
+            || path.ends_with(".tsx")
+            || path.ends_with(".jsx")
+            || path.ends_with(".c")
+            || path.ends_with(".cpp")
+            || path.ends_with(".cc")
+            || path.ends_with(".cxx")
+            || path.ends_with(".h")
+            || path.ends_with(".hpp")
+            || path.ends_with(".java")
+            || path.ends_with(".go")
+            || path.ends_with(".rb")
+            || path.ends_with(".php")
+            || path.ends_with(".swift")
+            || path.ends_with(".kt")
+            || path.ends_with(".kts")
+            || path.ends_with(".scala")
+            || path.ends_with(".lua")
+            || path.ends_with(".r")
+            || path.ends_with(".m")
+            || path.ends_with(".cs")
     }
 
     /// Calculate relevance score for a search match
@@ -421,7 +442,6 @@ impl NativeV3Backend {
 
         score
     }
-
 }
 
 impl super::BackendTrait for NativeV3Backend {
@@ -435,9 +455,11 @@ impl super::BackendTrait for NativeV3Backend {
 
         // Compile regex pattern if using regex search
         let regex_pattern = if options.use_regex {
-            Some(Regex::new(options.query).map_err(|e| LlmError::InvalidQuery {
-                query: format!("Invalid regex: {}", e),
-            })?)
+            Some(
+                Regex::new(options.query).map_err(|e| LlmError::InvalidQuery {
+                    query: format!("Invalid regex: {}", e),
+                })?,
+            )
         } else {
             None
         };
@@ -450,15 +472,15 @@ impl super::BackendTrait for NativeV3Backend {
         let graph = unsafe { self.graph() };
 
         // Get all indexed files
-        let file_nodes = graph.all_file_nodes()
-            .map_err(|e| LlmError::SearchFailed {
-                reason: format!("Failed to get file nodes: {}", e),
-            })?;
+        let file_nodes = graph.all_file_nodes().map_err(|e| LlmError::SearchFailed {
+            reason: format!("Failed to get file nodes: {}", e),
+        })?;
 
         // Apply path filter if specified
         let files_to_search: Vec<_> = if let Some(path_filter) = options.path_filter {
             let path_str = path_filter.to_string_lossy().to_lowercase();
-            file_nodes.keys()
+            file_nodes
+                .keys()
                 .filter(|p| p.to_lowercase().starts_with(&path_str))
                 .cloned()
                 .collect()
@@ -472,10 +494,11 @@ impl super::BackendTrait for NativeV3Backend {
                 break;
             }
 
-            let entries = query::symbol_nodes_in_file_with_ids(graph, &file_path)
-                .map_err(|e| LlmError::SearchFailed {
+            let entries = query::symbol_nodes_in_file_with_ids(graph, &file_path).map_err(|e| {
+                LlmError::SearchFailed {
                     reason: format!("Failed to query symbols in {}: {}", file_path, e),
-                })?;
+                }
+            })?;
 
             for (entity_id, symbol, _symbol_id) in entries {
                 if results.len() >= options.limit {
@@ -580,7 +603,10 @@ impl super::BackendTrait for NativeV3Backend {
 
                 // Create SymbolMatch directly (SymbolFact, not SymbolNode)
                 let span = Span {
-                    span_id: format!("{}:{}:{}", file_path_str, symbol.byte_start, symbol.byte_end),
+                    span_id: format!(
+                        "{}:{}:{}",
+                        file_path_str, symbol.byte_start, symbol.byte_end
+                    ),
                     file_path: file_path_str.clone(),
                     byte_start: symbol.byte_start as u64,
                     byte_end: symbol.byte_end as u64,
@@ -644,9 +670,11 @@ impl super::BackendTrait for NativeV3Backend {
 
         // Compile regex pattern if using regex search
         let regex_pattern = if options.use_regex {
-            Some(Regex::new(options.query).map_err(|e| LlmError::InvalidQuery {
-                query: format!("Invalid regex: {}", e),
-            })?)
+            Some(
+                Regex::new(options.query).map_err(|e| LlmError::InvalidQuery {
+                    query: format!("Invalid regex: {}", e),
+                })?,
+            )
         } else {
             None
         };
@@ -659,15 +687,15 @@ impl super::BackendTrait for NativeV3Backend {
         let graph = unsafe { self.graph() };
 
         // Get all indexed files
-        let file_nodes = graph.all_file_nodes()
-            .map_err(|e| LlmError::SearchFailed {
-                reason: format!("Failed to get file nodes: {}", e),
-            })?;
+        let file_nodes = graph.all_file_nodes().map_err(|e| LlmError::SearchFailed {
+            reason: format!("Failed to get file nodes: {}", e),
+        })?;
 
         // Apply path filter if specified
         let files_to_search: Vec<_> = if let Some(path_filter) = options.path_filter {
             let path_str = path_filter.to_string_lossy().to_lowercase();
-            file_nodes.keys()
+            file_nodes
+                .keys()
                 .filter(|p| p.to_lowercase().starts_with(&path_str))
                 .cloned()
                 .collect()
@@ -682,10 +710,12 @@ impl super::BackendTrait for NativeV3Backend {
             }
 
             // Get all symbols in this file
-            let symbols = graph.symbol_nodes_in_file(&file_path)
-                .map_err(|e| LlmError::SearchFailed {
-                    reason: format!("Failed to get symbols in {}: {}", file_path, e),
-                })?;
+            let symbols =
+                graph
+                    .symbol_nodes_in_file(&file_path)
+                    .map_err(|e| LlmError::SearchFailed {
+                        reason: format!("Failed to get symbols in {}: {}", file_path, e),
+                    })?;
 
             // Get references to each symbol
             for (entity_id, _symbol) in symbols {
@@ -693,10 +723,15 @@ impl super::BackendTrait for NativeV3Backend {
                     break;
                 }
 
-                let references = graph.references_to_symbol(entity_id)
-                    .map_err(|e| LlmError::SearchFailed {
-                        reason: format!("Failed to get references for symbol {}: {}", entity_id, e),
-                    })?;
+                let references =
+                    graph
+                        .references_to_symbol(entity_id)
+                        .map_err(|e| LlmError::SearchFailed {
+                            reason: format!(
+                                "Failed to get references for symbol {}: {}",
+                                entity_id, e
+                            ),
+                        })?;
 
                 for reference in references {
                     if results.len() >= options.limit {
@@ -737,7 +772,10 @@ impl super::BackendTrait for NativeV3Backend {
                     };
 
                     let span = Span {
-                        span_id: format!("{}:{}:{}", file_path, reference.byte_start, reference.byte_end),
+                        span_id: format!(
+                            "{}:{}:{}",
+                            file_path, reference.byte_start, reference.byte_end
+                        ),
                         file_path,
                         byte_start: reference.byte_start as u64,
                         byte_end: reference.byte_end as u64,
@@ -777,19 +815,18 @@ impl super::BackendTrait for NativeV3Backend {
         Ok((response, partial))
     }
 
-    fn search_calls(
-        &self,
-        options: SearchOptions,
-    ) -> Result<(CallSearchResponse, bool), LlmError> {
+    fn search_calls(&self, options: SearchOptions) -> Result<(CallSearchResponse, bool), LlmError> {
         let mut results = Vec::new();
         let query_lower = options.query.to_lowercase();
         let mut file_cache = HashMap::new();
 
         // Compile regex pattern if using regex search
         let regex_pattern = if options.use_regex {
-            Some(Regex::new(options.query).map_err(|e| LlmError::InvalidQuery {
-                query: format!("Invalid regex: {}", e),
-            })?)
+            Some(
+                Regex::new(options.query).map_err(|e| LlmError::InvalidQuery {
+                    query: format!("Invalid regex: {}", e),
+                })?,
+            )
         } else {
             None
         };
@@ -802,15 +839,15 @@ impl super::BackendTrait for NativeV3Backend {
         let graph = unsafe { self.graph() };
 
         // Get all indexed files
-        let file_nodes = graph.all_file_nodes()
-            .map_err(|e| LlmError::SearchFailed {
-                reason: format!("Failed to get file nodes: {}", e),
-            })?;
+        let file_nodes = graph.all_file_nodes().map_err(|e| LlmError::SearchFailed {
+            reason: format!("Failed to get file nodes: {}", e),
+        })?;
 
         // Apply path filter if specified
         let files_to_search: Vec<_> = if let Some(path_filter) = options.path_filter {
             let path_str = path_filter.to_string_lossy().to_lowercase();
-            file_nodes.keys()
+            file_nodes
+                .keys()
                 .filter(|p| p.to_lowercase().starts_with(&path_str))
                 .cloned()
                 .collect()
@@ -825,10 +862,12 @@ impl super::BackendTrait for NativeV3Backend {
             }
 
             // Get all symbols in this file
-            let symbols = graph.symbol_nodes_in_file(&file_path)
-                .map_err(|e| LlmError::SearchFailed {
-                    reason: format!("Failed to get symbols in {}: {}", file_path, e),
-                })?;
+            let symbols =
+                graph
+                    .symbol_nodes_in_file(&file_path)
+                    .map_err(|e| LlmError::SearchFailed {
+                        reason: format!("Failed to get symbols in {}: {}", file_path, e),
+                    })?;
 
             // Get calls from each symbol
             for (_entity_id, symbol) in symbols {
@@ -842,10 +881,11 @@ impl super::BackendTrait for NativeV3Backend {
                     continue;
                 };
 
-                let calls = graph.calls_from_symbol(&file_path, &name)
-                    .map_err(|e| LlmError::SearchFailed {
+                let calls = graph.calls_from_symbol(&file_path, &name).map_err(|e| {
+                    LlmError::SearchFailed {
                         reason: format!("Failed to get calls from {}::{}: {}", file_path, name, e),
-                    })?;
+                    }
+                })?;
 
                 for call in calls {
                     if results.len() >= options.limit {
@@ -855,7 +895,8 @@ impl super::BackendTrait for NativeV3Backend {
                     let caller_lower = call.caller.to_lowercase();
                     let callee_lower = call.callee.to_lowercase();
 
-                    if !caller_lower.contains(&query_lower) && !callee_lower.contains(&query_lower) {
+                    if !caller_lower.contains(&query_lower) && !callee_lower.contains(&query_lower)
+                    {
                         continue;
                     }
 
@@ -943,10 +984,9 @@ impl super::BackendTrait for NativeV3Backend {
         position: Option<usize>,
         limit: usize,
     ) -> Result<serde_json::Value, LlmError> {
-        let file_path = file.to_str()
-            .ok_or_else(|| LlmError::SearchFailed {
-                reason: format!("File path {:?} is not valid UTF-8", file),
-            })?;
+        let file_path = file.to_str().ok_or_else(|| LlmError::SearchFailed {
+            reason: format!("File path {:?} is not valid UTF-8", file),
+        })?;
 
         // # Safety
         // We have exclusive access through &self because:
@@ -955,14 +995,16 @@ impl super::BackendTrait for NativeV3Backend {
         // - The returned reference's lifetime is scoped to this method
         let graph = unsafe { self.graph() };
 
-        let nodes = graph.get_ast_nodes_by_file(file_path)
+        let nodes = graph
+            .get_ast_nodes_by_file(file_path)
             .map_err(|e| LlmError::SearchFailed {
                 reason: format!("Failed to get AST nodes for {}: {}", file_path, e),
             })?;
 
         // Apply position filter if specified
         let filtered: Vec<_> = if let Some(pos) = position {
-            nodes.into_iter()
+            nodes
+                .into_iter()
                 .filter(|n| n.node.byte_start <= pos && pos < n.node.byte_end)
                 .take(limit)
                 .collect()
@@ -981,7 +1023,8 @@ impl super::BackendTrait for NativeV3Backend {
         // - The returned reference's lifetime is scoped to this method
         let graph = unsafe { self.graph() };
 
-        let nodes = graph.get_ast_nodes_by_kind(kind)
+        let nodes = graph
+            .get_ast_nodes_by_kind(kind)
             .map_err(|e| LlmError::SearchFailed {
                 reason: format!("Failed to get AST nodes by kind: {}", e),
             })?;
@@ -998,22 +1041,30 @@ impl super::BackendTrait for NativeV3Backend {
     fn lookup(&self, fqn: &str, db_path: &str) -> Result<crate::output::SymbolMatch, LlmError> {
         // Use magellan's V3 FQN lookup API to get symbol ID
         let graph = unsafe { self.graph() };
-        
+
         let entity_id = graph.lookup_symbol_by_fqn(fqn);
-        
+
         if let Some(id) = entity_id {
             // Get full symbol details from graph
             if let Some(symbol) = graph.get_symbol_by_entity_id(id) {
                 // Extract file path from canonical_fqn or use empty string
-                let file_path = symbol.canonical_fqn.as_ref()
+                let file_path = symbol
+                    .canonical_fqn
+                    .as_ref()
                     .and_then(|fqn| {
                         // Try to extract file path from "crate::src/lib.rs::Function name"
                         let parts: Vec<&str> = fqn.split("::").collect();
-                        parts.iter().find(|p| p.contains('/')).map(|s| s.to_string())
+                        parts
+                            .iter()
+                            .find(|p| p.contains('/'))
+                            .map(|s| s.to_string())
                     })
                     .unwrap_or_else(|| "<unknown>".to_string());
-                let name = symbol.name.clone().unwrap_or_else(|| "<unknown>".to_string());
-                
+                let name = symbol
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "<unknown>".to_string());
+
                 Ok(crate::output::SymbolMatch {
                     match_id: format!("sym-{}", id),
                     span: crate::output::Span {
@@ -1075,23 +1126,31 @@ impl super::BackendTrait for NativeV3Backend {
         // Use magellan's V3 label search API
         let graph = unsafe { self.graph() };
         let entity_ids = graph.get_symbols_by_label_kv(label);
-        
+
         let mut results = Vec::new();
-        
+
         // Convert entity IDs to SymbolMatch objects with full details
         for (idx, entity_id) in entity_ids.iter().take(limit).enumerate() {
             // Get full symbol details from graph
             if let Some(symbol) = graph.get_symbol_by_entity_id(*entity_id) {
                 // Extract file path from canonical_fqn or use empty string
-                let file_path = symbol.canonical_fqn.as_ref()
+                let file_path = symbol
+                    .canonical_fqn
+                    .as_ref()
                     .and_then(|fqn| {
                         // Try to extract file path from "crate::src/lib.rs::Function name"
                         let parts: Vec<&str> = fqn.split("::").collect();
-                        parts.iter().find(|p| p.contains('/')).map(|s| s.to_string())
+                        parts
+                            .iter()
+                            .find(|p| p.contains('/'))
+                            .map(|s| s.to_string())
                     })
                     .unwrap_or_else(|| "<unknown>".to_string());
-                let name = symbol.name.clone().unwrap_or_else(|| "<unknown>".to_string());
-                
+                let name = symbol
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "<unknown>".to_string());
+
                 results.push(crate::output::SymbolMatch {
                     match_id: format!("label-{}-{}", label, idx),
                     span: crate::output::Span {
@@ -1128,10 +1187,10 @@ impl super::BackendTrait for NativeV3Backend {
                 });
             }
         }
-        
+
         let total_count = results.len() as u64;
         let partial = entity_ids.len() > limit;
-        
+
         Ok((
             SearchResponse {
                 results,
@@ -1144,5 +1203,16 @@ impl super::BackendTrait for NativeV3Backend {
             partial,
             false,
         ))
+    }
+
+    fn get_chunks_for_symbol(
+        &self,
+        _file_path: &str,
+        _symbol_name: &str,
+    ) -> Result<Vec<crate::backend::magellan_adapter::CodeChunk>, LlmError> {
+        Err(LlmError::ChunksNotAvailable {
+            backend: "NativeV3".to_string(),
+            message: "NativeV3 backend does not support chunk retrieval. Use Geometric (.geo) backend with chunking enabled.".to_string(),
+        })
     }
 }

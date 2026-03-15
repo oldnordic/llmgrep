@@ -20,8 +20,7 @@ fn test_backend_opens_sqlite_database() {
 
     // Create a simple SQLite database (just enough to be detected as SQLite)
     let db_path = temp_dir.path().join("test.db");
-    let conn = rusqlite::Connection::open(&db_path)
-        .expect("Failed to create SQLite database");
+    let conn = rusqlite::Connection::open(&db_path).expect("Failed to create SQLite database");
 
     // Create basic tables so magellan can recognize it
     conn.execute_batch(
@@ -38,7 +37,8 @@ fn test_backend_opens_sqlite_database() {
             byte_start INTEGER NOT NULL,
             byte_end INTEGER NOT NULL
         );",
-    ).expect("Failed to create schema");
+    )
+    .expect("Failed to create schema");
 
     // Insert some AST nodes
     conn.execute(
@@ -46,11 +46,11 @@ fn test_backend_opens_sqlite_database() {
             (1, NULL, 'source_file', 0, 200),
             (2, 1, 'function_item', 10, 100)",
         [],
-    ).expect("Failed to insert AST nodes");
+    )
+    .expect("Failed to insert AST nodes");
 
     // Open via Backend abstraction
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open SQLite database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open SQLite database");
 
     // Verify it detected as SQLite
     match backend {
@@ -60,6 +60,9 @@ fn test_backend_opens_sqlite_database() {
         #[cfg(feature = "native-v3")]
         Backend::NativeV3(_) => {
             panic!("Should not detect simple SQLite as native-v3");
+        }
+        Backend::Geometric(_) => {
+            panic!("Should not detect simple SQLite as geometric");
         }
     }
 }
@@ -71,8 +74,7 @@ fn test_backend_ast_handles_missing_file() {
 
     // Create a simple SQLite database
     let db_path = temp_dir.path().join("test.db");
-    let conn = rusqlite::Connection::open(&db_path)
-        .expect("Failed to create SQLite database");
+    let conn = rusqlite::Connection::open(&db_path).expect("Failed to create SQLite database");
 
     conn.execute(
         "CREATE TABLE ast_nodes (
@@ -83,17 +85,13 @@ fn test_backend_ast_handles_missing_file() {
             byte_end INTEGER NOT NULL
         );",
         [],
-    ).expect("Failed to create schema");
+    )
+    .expect("Failed to create schema");
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     // Query for non-existent file - should handle gracefully
-    let result = backend.ast(
-        Path::new("src/nonexistent.rs"),
-        None,
-        10,
-    );
+    let result = backend.ast(Path::new("src/nonexistent.rs"), None, 10);
 
     // The magellan binary will fail to find the file
     // This should return an error, not panic
@@ -106,8 +104,7 @@ fn test_backend_ast_limit_parameter_accepted() {
     let temp_dir = TempDir::new().expect("tempdir");
 
     let db_path = temp_dir.path().join("test.db");
-    let conn = rusqlite::Connection::open(&db_path)
-        .expect("Failed to create SQLite database");
+    let conn = rusqlite::Connection::open(&db_path).expect("Failed to create SQLite database");
 
     conn.execute(
         "CREATE TABLE ast_nodes (
@@ -118,10 +115,10 @@ fn test_backend_ast_limit_parameter_accepted() {
             byte_end INTEGER NOT NULL
         );",
         [],
-    ).expect("Failed to create schema");
+    )
+    .expect("Failed to create schema");
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     // The limit is applied by the backend after getting results
     // This test verifies the code compiles and the parameter is accepted
@@ -129,7 +126,10 @@ fn test_backend_ast_limit_parameter_accepted() {
 
     // We expect an error since our mock database isn't valid for magellan
     // but it demonstrates the API works correctly
-    assert!(result.is_err() || result.is_ok(), "ast() should return Result");
+    assert!(
+        result.is_err() || result.is_ok(),
+        "ast() should return Result"
+    );
 }
 
 /// Test position parameter is properly passed through
@@ -138,8 +138,7 @@ fn test_backend_ast_position_parameter_accepted() {
     let temp_dir = TempDir::new().expect("tempdir");
 
     let db_path = temp_dir.path().join("test.db");
-    let conn = rusqlite::Connection::open(&db_path)
-        .expect("Failed to create SQLite database");
+    let conn = rusqlite::Connection::open(&db_path).expect("Failed to create SQLite database");
 
     conn.execute(
         "CREATE TABLE ast_nodes (
@@ -150,16 +149,19 @@ fn test_backend_ast_position_parameter_accepted() {
             byte_end INTEGER NOT NULL
         );",
         [],
-    ).expect("Failed to create schema");
+    )
+    .expect("Failed to create schema");
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     // Test with position parameter
     let result = backend.ast(Path::new("test.rs"), Some(50), 10);
 
     // Should not panic - parameter is passed through correctly
-    assert!(result.is_err() || result.is_ok(), "ast() with position should return Result");
+    assert!(
+        result.is_err() || result.is_ok(),
+        "ast() with position should return Result"
+    );
 }
 
 // ============================================================================
@@ -172,8 +174,7 @@ fn test_backend_find_ast_api() {
     let temp_dir = TempDir::new().expect("tempdir");
 
     let db_path = temp_dir.path().join("test.db");
-    let conn = rusqlite::Connection::open(&db_path)
-        .expect("Failed to create SQLite database");
+    let conn = rusqlite::Connection::open(&db_path).expect("Failed to create SQLite database");
 
     conn.execute(
         "CREATE TABLE ast_nodes (
@@ -184,10 +185,10 @@ fn test_backend_find_ast_api() {
             byte_end INTEGER NOT NULL
         );",
         [],
-    ).expect("Failed to create schema");
+    )
+    .expect("Failed to create schema");
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     // Query for unknown kind - should not panic
     let result = backend.find_ast("function_item");
@@ -203,8 +204,7 @@ fn test_backend_find_ast_various_kinds() {
     let temp_dir = TempDir::new().expect("tempdir");
 
     let db_path = temp_dir.path().join("test.db");
-    let conn = rusqlite::Connection::open(&db_path)
-        .expect("Failed to create SQLite database");
+    let conn = rusqlite::Connection::open(&db_path).expect("Failed to create SQLite database");
 
     conn.execute(
         "CREATE TABLE ast_nodes (
@@ -215,13 +215,18 @@ fn test_backend_find_ast_various_kinds() {
             byte_end INTEGER NOT NULL
         );",
         [],
-    ).expect("Failed to create schema");
+    )
+    .expect("Failed to create schema");
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     // Test various node kinds
-    let kinds = vec!["function_item", "struct_item", "if_expression", "let_declaration"];
+    let kinds = vec![
+        "function_item",
+        "struct_item",
+        "if_expression",
+        "let_declaration",
+    ];
 
     for kind in kinds {
         let result = backend.find_ast(kind);
@@ -244,12 +249,11 @@ fn test_native_v3_backend_detection() {
     let db_path = temp_dir.path().join("test.db");
 
     // Create a native-v3 database
-    let _graph = CodeGraph::open(&db_path)
-        .expect("Failed to create native-v3 database");
+    let _graph = CodeGraph::open(&db_path).expect("Failed to create native-v3 database");
 
     // Open via Backend abstraction
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open native-v3 database");
+    let backend =
+        Backend::detect_and_open(&db_path).expect("Backend should open native-v3 database");
 
     // Verify it detected as native-v3
     match backend {
@@ -259,6 +263,9 @@ fn test_native_v3_backend_detection() {
         }
         Backend::Sqlite(_) => {
             panic!("Should detect native-v3 database as native-v3, not SQLite");
+        }
+        Backend::Geometric(_) => {
+            panic!("Should detect native-v3 database as native-v3, not geometric");
         }
     }
 }
@@ -273,25 +280,22 @@ fn test_native_v3_ast_empty_result_for_missing_file() {
     let db_path = temp_dir.path().join("test.db");
 
     // Create a native-v3 database
-    let _graph = CodeGraph::open(&db_path)
-        .expect("Failed to create native-v3 database");
+    let _graph = CodeGraph::open(&db_path).expect("Failed to create native-v3 database");
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     // Query for non-existent file
-    let result = backend.ast(
-        Path::new("src/nonexistent.rs"),
-        None,
-        10,
-    );
+    let result = backend.ast(Path::new("src/nonexistent.rs"), None, 10);
 
     // Should return empty array, not error
     let json = result.expect("native-v3 backend should handle missing file gracefully");
 
     match json {
         serde_json::Value::Array(arr) => {
-            assert!(arr.is_empty(), "Non-existent file should return empty array");
+            assert!(
+                arr.is_empty(),
+                "Non-existent file should return empty array"
+            );
         }
         serde_json::Value::Null => {
             // Null is also acceptable
@@ -312,18 +316,16 @@ fn test_native_v3_find_ast_empty_result_for_unknown_kind() {
     let db_path = temp_dir.path().join("test.db");
 
     // Create a native-v3 database
-    let _graph = CodeGraph::open(&db_path)
-        .expect("Failed to create native-v3 database");
+    let _graph = CodeGraph::open(&db_path).expect("Failed to create native-v3 database");
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     // Query for unknown kind
-    let result = backend.find_ast("unknown_kind_xyz")
+    let result = backend
+        .find_ast("unknown_kind_xyz")
         .expect("find_ast should not error for unknown kind");
 
     // Should return empty array
-    let arr = result.as_array()
-        .expect("Result should be array");
+    let arr = result.as_array().expect("Result should be array");
     assert_eq!(arr.len(), 0, "Unknown kind should return empty array");
 }

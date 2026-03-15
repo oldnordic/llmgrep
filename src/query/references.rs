@@ -9,8 +9,8 @@ use crate::query::builder::build_reference_query;
 use crate::query::chunks::search_chunks_by_span;
 use crate::query::options::SearchOptions;
 use crate::query::util::{
-    match_id, referenced_symbol_from_name, score_match, snippet_from_file,
-    span_context_from_file, span_id, ReferenceNodeData, MAX_REGEX_SIZE,
+    match_id, referenced_symbol_from_name, score_match, snippet_from_file, span_context_from_file,
+    span_id, ReferenceNodeData, MAX_REGEX_SIZE,
 };
 use crate::safe_extraction::extract_symbol_content_safe;
 use crate::SortMode;

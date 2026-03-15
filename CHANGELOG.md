@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-03-15
+
+### Fixed
+- **SQLite backend compatibility** - Fixed schema mismatches with Magellan 3.1.1
+  - Fixed `files` table query to use `graph_entities` with `kind = 'File'` filter
+  - Updated SQL queries to match Magellan's actual schema
+  - Fixed test database schema to include `name` and `file_path` columns
+
+### Changed
+- **Cross-database compatibility** - Now fully compatible with Magellan 3.1.1 SQLite databases
+
+## [3.1.0] - 2026-03-10 (Release Freeze)
+
+### Changed
+- **Magellan integration:**
+  - Updated to Magellan v3.0.0+ with Geometric (.geo) backend support
+  - Fixed `debug_print!` macro compatibility with Rust 1.83+ (removed trailing semicolon)
+  - Added `native-v3` feature definition to silence cfg warnings (feature reserved, currently disabled)
+
+### Fixed
+- **Zero compile warnings:**
+  - Removed unused `SearchParams::from_command` method
+  - Removed unused imports (`std::sync::atomic::AtomicBool`, `std::sync::Arc`) from main.rs
+  - All llmgrep lib and bin code now compiles with zero warnings
+
+### Added
+- **Geometric backend integration:**
+  - `GeometricBackend` wrapper for Magellan's .geo format
+  - `normalize_path_for_query()` helper for consistent path handling
+  - `paths_equivalent()` for normalized path comparison
+  - `lookup_symbol_by_path_and_name()` with ambiguity handling
+  - `apply_path_filter()` with normalized comparison
+  - `get_chunks_for_symbol()` for chunk retrieval from .geo files
+
+### Documentation
+- Updated README.md with current Magellan v3.0.0+ integration truth
+- Created API_INTEGRATION.md documenting Magellan contract
+- Created INVARIANTS.md documenting path normalization and ambiguity behavior
+- Updated CHANGELOG.md with complete version history
+
+## [3.0.11] - 2026-03-02
+
+### Changed
+- **Magellan dependency:** Updated to local path dependency for v3.0.0 development
+
+### Added
+- **Geometric backend module:** `src/backend/geometric.rs` with .geo file support
+- **Magellan adapter module:** `src/backend/magellan_adapter.rs` for contract-aware integration
+- **Path normalization:** Consistent path handling across all queries
+- **Ambiguity handling:** Explicit `SymbolLookupResult` and `SearchResult` types
+- **Code chunk support:** `CodeChunk` and `ChunkLookupResult` types for .geo chunk retrieval
+
+## [3.0.10] - 2026-02-22
+
+### Changed
+- **Dependencies:** Updated sqlitegraph from 2.0.5 to 2.0.7
+
 ## [3.0.9] - 2026-02-20
 
 ### Updated

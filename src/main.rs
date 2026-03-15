@@ -1,6 +1,7 @@
 use clap::builder::{RangedI64ValueParser, TypedValueParser};
 use clap::{Parser, Subcommand, ValueEnum};
 use llmgrep::algorithm::AlgorithmOptions;
+use llmgrep::backend::Backend;
 use llmgrep::error::LlmError;
 use llmgrep::output::{
     json_response, json_response_with_partial_and_performance, CallSearchResponse,
@@ -8,14 +9,13 @@ use llmgrep::output::{
     ReferenceSearchResponse, SearchResponse,
 };
 use llmgrep::output_common::{format_partial_footer, format_total_header};
-use llmgrep::backend::Backend;
 use llmgrep::query::{
     AstOptions, ContextOptions, DepthOptions, FqnOptions, MetricsOptions, SearchOptions,
     SnippetOptions,
 };
 
 /// Search parameters bundled into a single struct.
-/// 
+///
 /// This eliminates the 42-parameter explosion in run_search() and makes
 /// the code easier to maintain, test, and call.
 #[derive(Debug)]
@@ -62,104 +62,9 @@ struct SearchParams {
     paths_to: Option<String>,
 }
 
-impl SearchParams {
-    /// Extract search parameters from the Command::Search variant.
-    /// 
-    /// Returns None if the command is not a Search variant.
-    fn from_command(cmd: &Command) -> Option<Self> {
-        match cmd {
-            Command::Search {
-                query,
-                mode,
-                path,
-                kind,
-                language,
-                label,
-                limit,
-                regex,
-                candidates,
-                with_context,
-                context_lines,
-                max_context_lines,
-                with_snippet,
-                with_fqn,
-                max_snippet_bytes,
-                fields,
-                sort_by,
-                auto_limit,
-                min_complexity,
-                max_complexity,
-                min_fan_in,
-                min_fan_out,
-                symbol_id,
-                fqn,
-                exact_fqn,
-                ast_kind,
-                with_ast_context,
-                min_depth,
-                max_depth,
-                inside,
-                contains,
-                from_symbol_set,
-                reachable_from,
-                dead_code_in,
-                in_cycle,
-                slice_backward_from,
-                slice_forward_from,
-                condense,
-                paths_from,
-                paths_to,
-            } => Some(Self {
-                query: query.clone(),
-                mode: *mode,
-                path: path.clone(),
-                kind: kind.clone(),
-                language: language.clone(),
-                label: label.clone(),
-                limit: *limit,
-                regex: *regex,
-                candidates: *candidates,
-                with_context: *with_context,
-                context_lines: *context_lines,
-                max_context_lines: *max_context_lines,
-                with_snippet: *with_snippet,
-                with_fqn: *with_fqn,
-                max_snippet_bytes: *max_snippet_bytes,
-                fields: fields.clone(),
-                sort_by: *sort_by,
-                auto_limit: *auto_limit,
-                min_complexity: *min_complexity,
-                max_complexity: *max_complexity,
-                min_fan_in: *min_fan_in,
-                min_fan_out: *min_fan_out,
-                symbol_id: symbol_id.clone(),
-                fqn: fqn.clone(),
-                exact_fqn: exact_fqn.clone(),
-                ast_kind: ast_kind.clone(),
-                with_ast_context: *with_ast_context,
-                min_depth: *min_depth,
-                max_depth: *max_depth,
-                inside: inside.clone(),
-                contains: contains.clone(),
-                from_symbol_set: from_symbol_set.clone(),
-                reachable_from: reachable_from.clone(),
-                dead_code_in: dead_code_in.clone(),
-                in_cycle: in_cycle.clone(),
-                slice_backward_from: slice_backward_from.clone(),
-                slice_forward_from: slice_forward_from.clone(),
-                condense: *condense,
-                paths_from: paths_from.clone(),
-                paths_to: paths_to.clone(),
-            }),
-            _ => None,
-        }
-    }
-}
 use llmgrep::ast::{expand_shorthand_with_language, expand_shorthands};
 use llmgrep::SortMode;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 
 // Custom value parser for ranged usize - needed because clap doesn't provide RangedUsizeValueParser
 fn ranged_usize(min: i64, max: i64) -> impl TypedValueParser<Value = usize> {
@@ -654,17 +559,16 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
         let validated_db = validate_path(db_path, true)?;
 
         use magellan::migrate_backend_cmd::{detect_backend_format, BackendFormat};
-        let format = detect_backend_format(&validated_db).map_err(|e| {
-            LlmError::BackendDetectionFailed {
+        let format =
+            detect_backend_format(&validated_db).map_err(|e| LlmError::BackendDetectionFailed {
                 path: validated_db.display().to_string(),
                 reason: e.to_string(),
-            }
-        })?;
+            })?;
 
         // Check file extension for V3 backend detection
         let path_str = validated_db.to_string_lossy();
         let is_v3 = path_str.ends_with(".v3");
-        
+
         let backend_str = match format {
             BackendFormat::Sqlite if is_v3 => "native-v3",
             BackendFormat::Sqlite => "sqlite",
@@ -691,115 +595,115 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             })
         }
         Some(cmd) => match cmd {
-        Command::Ast {
-            file,
-            position,
-            limit,
-        } => run_ast(cli, file, *position, *limit),
+            Command::Ast {
+                file,
+                position,
+                limit,
+            } => run_ast(cli, file, *position, *limit),
 
-        Command::FindAst { kind } => run_find_ast(cli, kind),
+            Command::FindAst { kind } => run_find_ast(cli, kind),
 
-        Command::Complete { prefix, limit } => run_complete(cli, prefix.clone(), *limit),
+            Command::Complete { prefix, limit } => run_complete(cli, prefix.clone(), *limit),
 
-        Command::Lookup { fqn } => run_lookup(cli, fqn),
+            Command::Lookup { fqn } => run_lookup(cli, fqn),
 
-        Command::Search {
-            query,
-            mode,
-            path,
-            kind,
-            language,
-            label,
-            limit,
-            regex,
-            candidates,
-            with_context,
-            context_lines,
-            max_context_lines,
-            with_snippet,
-            with_fqn,
-            max_snippet_bytes,
-            fields,
-            sort_by,
-            auto_limit,
-            min_complexity,
-            max_complexity,
-            min_fan_in,
-            min_fan_out,
-            symbol_id,
-            fqn,
-            exact_fqn,
-            ast_kind,
-            with_ast_context,
-            min_depth,
-            max_depth,
-            inside,
-            contains,
-            from_symbol_set,
-            reachable_from,
-            dead_code_in,
-            in_cycle,
-            slice_backward_from,
-            slice_forward_from,
-            condense,
-            paths_from,
-            paths_to,
-        } => {
-            let params = SearchParams {
-                query: query.clone(),
-                mode: *mode,
-                path: path.clone(),
-                kind: kind.clone(),
-                language: language.clone(),
-                label: label.clone(),
-                limit: *limit,
-                regex: *regex,
-                candidates: *candidates,
-                with_context: *with_context,
-                context_lines: *context_lines,
-                max_context_lines: *max_context_lines,
-                with_snippet: *with_snippet,
-                with_fqn: *with_fqn,
-                max_snippet_bytes: *max_snippet_bytes,
-                fields: fields.clone(),
-                sort_by: *sort_by,
-                auto_limit: *auto_limit,
-                min_complexity: *min_complexity,
-                max_complexity: *max_complexity,
-                min_fan_in: *min_fan_in,
-                min_fan_out: *min_fan_out,
-                symbol_id: symbol_id.clone(),
-                fqn: fqn.clone(),
-                exact_fqn: exact_fqn.clone(),
-                ast_kind: ast_kind.clone(),
-                with_ast_context: *with_ast_context,
-                min_depth: *min_depth,
-                max_depth: *max_depth,
-                inside: inside.clone(),
-                contains: contains.clone(),
-                from_symbol_set: from_symbol_set.clone(),
-                reachable_from: reachable_from.clone(),
-                dead_code_in: dead_code_in.clone(),
-                in_cycle: in_cycle.clone(),
-                slice_backward_from: slice_backward_from.clone(),
-                slice_forward_from: slice_forward_from.clone(),
-                condense: *condense,
-                paths_from: paths_from.clone(),
-                paths_to: paths_to.clone(),
-            };
-            run_search(cli, &params)
-        }
+            Command::Search {
+                query,
+                mode,
+                path,
+                kind,
+                language,
+                label,
+                limit,
+                regex,
+                candidates,
+                with_context,
+                context_lines,
+                max_context_lines,
+                with_snippet,
+                with_fqn,
+                max_snippet_bytes,
+                fields,
+                sort_by,
+                auto_limit,
+                min_complexity,
+                max_complexity,
+                min_fan_in,
+                min_fan_out,
+                symbol_id,
+                fqn,
+                exact_fqn,
+                ast_kind,
+                with_ast_context,
+                min_depth,
+                max_depth,
+                inside,
+                contains,
+                from_symbol_set,
+                reachable_from,
+                dead_code_in,
+                in_cycle,
+                slice_backward_from,
+                slice_forward_from,
+                condense,
+                paths_from,
+                paths_to,
+            } => {
+                let params = SearchParams {
+                    query: query.clone(),
+                    mode: *mode,
+                    path: path.clone(),
+                    kind: kind.clone(),
+                    language: language.clone(),
+                    label: label.clone(),
+                    limit: *limit,
+                    regex: *regex,
+                    candidates: *candidates,
+                    with_context: *with_context,
+                    context_lines: *context_lines,
+                    max_context_lines: *max_context_lines,
+                    with_snippet: *with_snippet,
+                    with_fqn: *with_fqn,
+                    max_snippet_bytes: *max_snippet_bytes,
+                    fields: fields.clone(),
+                    sort_by: *sort_by,
+                    auto_limit: *auto_limit,
+                    min_complexity: *min_complexity,
+                    max_complexity: *max_complexity,
+                    min_fan_in: *min_fan_in,
+                    min_fan_out: *min_fan_out,
+                    symbol_id: symbol_id.clone(),
+                    fqn: fqn.clone(),
+                    exact_fqn: exact_fqn.clone(),
+                    ast_kind: ast_kind.clone(),
+                    with_ast_context: *with_ast_context,
+                    min_depth: *min_depth,
+                    max_depth: *max_depth,
+                    inside: inside.clone(),
+                    contains: contains.clone(),
+                    from_symbol_set: from_symbol_set.clone(),
+                    reachable_from: reachable_from.clone(),
+                    dead_code_in: dead_code_in.clone(),
+                    in_cycle: in_cycle.clone(),
+                    slice_backward_from: slice_backward_from.clone(),
+                    slice_forward_from: slice_forward_from.clone(),
+                    condense: *condense,
+                    paths_from: paths_from.clone(),
+                    paths_to: paths_to.clone(),
+                };
+                run_search(cli, &params)
+            }
 
-        #[cfg(feature = "unstable-watch")]
-        Command::Watch {
-            query,
-            mode,
-            path,
-            kind,
-            limit,
-            regex,
-        } => run_watch(cli, query, *mode, path, kind, *limit, *regex),
-        }
+            #[cfg(feature = "unstable-watch")]
+            Command::Watch {
+                query,
+                mode,
+                path,
+                kind,
+                limit,
+                regex,
+            } => run_watch(cli, query, *mode, path, kind, *limit, *regex),
+        },
     }
 }
 
@@ -822,16 +726,16 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
     }
 
     // Normalize and validate language filter
-    let normalized_language = params.language.as_ref().map(|lang| normalize_language(lang));
+    let normalized_language = params
+        .language
+        .as_ref()
+        .map(|lang| normalize_language(lang));
 
     // Expand AST shorthands with language-aware expansion
     let expanded_ast_kind = if let Some(kind_input) = &params.ast_kind {
         // Use language-aware expansion if language is specified
         let kinds = if normalized_language.is_some() {
-            expand_shorthand_with_language(
-                &kind_input,
-                normalized_language.as_deref(),
-            )
+            expand_shorthand_with_language(&kind_input, normalized_language.as_deref())
         } else {
             // Use Rust shorthands by default
             expand_shorthands(&kind_input)
@@ -873,7 +777,11 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
         );
     }
 
-    if params.query.trim().is_empty() && params.symbol_id.is_none() && !params.condense && params.paths_from.is_none() {
+    if params.query.trim().is_empty()
+        && params.symbol_id.is_none()
+        && !params.condense
+        && params.paths_from.is_none()
+    {
         return Err(LlmError::EmptyQuery);
     }
 
@@ -905,7 +813,11 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
     let wants_json = matches!(cli.output, OutputFormat::Json | OutputFormat::Pretty);
     let candidates = params.candidates.max(params.limit);
     let fields = if wants_json {
-        params.fields.as_ref().map(|value| parse_fields(value)).transpose()?
+        params
+            .fields
+            .as_ref()
+            .map(|value| parse_fields(value))
+            .transpose()?
     } else {
         None
     };
@@ -919,8 +831,10 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
     };
 
     let include_fqn = wants_json && fields.as_ref().map_or(params.with_fqn, |f| f.fqn);
-    let include_canonical_fqn = wants_json && fields.as_ref().map_or(params.with_fqn, |f| f.canonical_fqn);
-    let include_display_fqn = wants_json && fields.as_ref().map_or(params.with_fqn, |f| f.display_fqn);
+    let include_canonical_fqn =
+        wants_json && fields.as_ref().map_or(params.with_fqn, |f| f.canonical_fqn);
+    let include_display_fqn =
+        wants_json && fields.as_ref().map_or(params.with_fqn, |f| f.display_fqn);
 
     let metrics = MetricsOptions {
         min_complexity: params.min_complexity,
@@ -1002,9 +916,8 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
 
             // Populate notice when condense finds no SCCs
             if params.condense && scc_count == 0 {
-                response.notice = Some(
-                    "No SCCs found - codebase is acyclic (no cycles detected)".to_string(),
-                );
+                response.notice =
+                    Some("No SCCs found - codebase is acyclic (no cycles detected)".to_string());
             }
 
             // Warn if path enumeration hit bounds
@@ -1030,7 +943,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                     backend_detection_ms,
                     query_execution_ms,
                     output_formatting_ms: 0, // Will update after formatting
-                    total_ms: 0, // Will update after formatting
+                    total_ms: 0,             // Will update after formatting
                 })
             } else {
                 None
@@ -1307,7 +1220,8 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
             };
             let partial = symbols_partial || refs_partial || calls_partial;
 
-            let query_execution_ms = total_start.elapsed().as_millis() as u64 - backend_detection_ms;
+            let query_execution_ms =
+                total_start.elapsed().as_millis() as u64 - backend_detection_ms;
 
             // Time output formatting
             let format_start = std::time::Instant::now();
@@ -1347,11 +1261,11 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
 
             // Time query execution
             let query_start = std::time::Instant::now();
-            let db_path_str = db_path.to_str()
-                .ok_or_else(|| LlmError::SearchFailed {
-                    reason: format!("Database path {:?} is not valid UTF-8", db_path),
-                })?;
-            let (response, partial, _paths_bounded) = backend.search_by_label(&label_name, params.limit, db_path_str)?;
+            let db_path_str = db_path.to_str().ok_or_else(|| LlmError::SearchFailed {
+                reason: format!("Database path {:?} is not valid UTF-8", db_path),
+            })?;
+            let (response, partial, _paths_bounded) =
+                backend.search_by_label(&label_name, params.limit, db_path_str)?;
             let query_execution_ms = query_start.elapsed().as_millis() as u64;
 
             // Time output formatting
@@ -1386,12 +1300,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
     Ok(())
 }
 
-fn run_ast(
-    cli: &Cli,
-    file: &Path,
-    position: Option<usize>,
-    limit: usize,
-) -> Result<(), LlmError> {
+fn run_ast(cli: &Cli, file: &Path, position: Option<usize>, limit: usize) -> Result<(), LlmError> {
     // Validate database path
     let db_path = if let Some(db_path) = &cli.db {
         validate_path(db_path, true)?
@@ -1434,10 +1343,7 @@ fn run_ast(
                         "Warning: AST output truncated to {} nodes (total: {})",
                         limit, count
                     );
-                    eprintln!(
-                        "         Use --limit {} to see all nodes.",
-                        count
-                    );
+                    eprintln!("         Use --limit {} to see all nodes.", count);
                 }
             }
         }
@@ -1467,10 +1373,7 @@ fn run_ast(
     Ok(())
 }
 
-fn run_find_ast(
-    cli: &Cli,
-    kind: &str,
-) -> Result<(), LlmError> {
+fn run_find_ast(cli: &Cli, kind: &str) -> Result<(), LlmError> {
     // Validate database path
     let db_path = if let Some(db_path) = &cli.db {
         validate_path(db_path, true)?
@@ -1539,11 +1442,7 @@ fn run_find_ast(
     Ok(())
 }
 
-fn run_complete(
-    cli: &Cli,
-    prefix: String,
-    limit: usize,
-) -> Result<(), LlmError> {
+fn run_complete(cli: &Cli, prefix: String, limit: usize) -> Result<(), LlmError> {
     // Validate database path
     let db_path = if let Some(db_path) = &cli.db {
         validate_path(db_path, true)?
@@ -1614,10 +1513,7 @@ fn run_complete(
     Ok(())
 }
 
-fn run_lookup(
-    cli: &Cli,
-    fqn: &str,
-) -> Result<(), LlmError> {
+fn run_lookup(cli: &Cli, fqn: &str) -> Result<(), LlmError> {
     // Validate database path
     let db_path = if let Some(db_path) = &cli.db {
         validate_path(db_path, true)?
@@ -1663,10 +1559,9 @@ fn run_lookup(
             if let Some(display_fqn) = &symbol.display_fqn {
                 println!("Display FQN: {}", display_fqn);
             }
-            println!("Location: {}:{}:{}",
-                symbol.span.file_path,
-                symbol.span.start_line,
-                symbol.span.start_col
+            println!(
+                "Location: {}:{}:{}",
+                symbol.span.file_path, symbol.span.start_line, symbol.span.start_col
             );
             if let Some(parent) = &symbol.parent {
                 println!("Parent: {}", parent);
@@ -1714,8 +1609,8 @@ fn run_watch(
 ) -> Result<(), LlmError> {
     use llmgrep::algorithm::AlgorithmOptions;
     use llmgrep::query::{
-        AstOptions, ContextOptions, DepthOptions, FqnOptions,
-        MetricsOptions, SearchOptions, SnippetOptions,
+        AstOptions, ContextOptions, DepthOptions, FqnOptions, MetricsOptions, SearchOptions,
+        SnippetOptions,
     };
 
     // Validate database path
@@ -1742,7 +1637,8 @@ fn run_watch(
     // For watch command, we only support symbols mode for now
     if !matches!(mode, SearchMode::Symbols) {
         return Err(LlmError::InvalidQuery {
-            query: "Watch mode only supports symbols search. Use --mode symbols (default).".to_string(),
+            query: "Watch mode only supports symbols search. Use --mode symbols (default)."
+                .to_string(),
         });
     }
 
@@ -1806,8 +1702,11 @@ fn run_watch(
     }
 
     // Run the watch command
-    llmgrep::watch_cmd::run_watch(db_path.clone(), options, cli.output, shutdown)
-        .map_err(|e| LlmError::SearchFailed { reason: e.to_string() })?;
+    llmgrep::watch_cmd::run_watch(db_path.clone(), options, cli.output, shutdown).map_err(|e| {
+        LlmError::SearchFailed {
+            reason: e.to_string(),
+        }
+    })?;
     Ok(())
 }
 
@@ -1830,7 +1729,10 @@ fn output_symbols(
     match cli.output {
         OutputFormat::Human => {
             if scc_count > 0 {
-                println!("{}", format_scc_summary(response.total_count as usize, scc_count));
+                println!(
+                    "{}",
+                    format_scc_summary(response.total_count as usize, scc_count)
+                );
             } else if let Some(notice) = &response.notice {
                 // Empty SCCs case - print warning from notice field
                 eprintln!("Warning: {}", notice);
@@ -1853,11 +1755,8 @@ fn output_symbols(
             }
         }
         OutputFormat::Json | OutputFormat::Pretty => {
-            let json_response = json_response_with_partial_and_performance(
-                response,
-                partial,
-                metrics.cloned(),
-            );
+            let json_response =
+                json_response_with_partial_and_performance(response, partial, metrics.cloned());
             let rendered = if matches!(cli.output, OutputFormat::Pretty) {
                 serde_json::to_string_pretty(&json_response)?
             } else {
@@ -1893,11 +1792,8 @@ fn output_references(
             }
         }
         OutputFormat::Json | OutputFormat::Pretty => {
-            let json_response = json_response_with_partial_and_performance(
-                response,
-                partial,
-                metrics.cloned(),
-            );
+            let json_response =
+                json_response_with_partial_and_performance(response, partial, metrics.cloned());
             let rendered = if matches!(cli.output, OutputFormat::Pretty) {
                 serde_json::to_string_pretty(&json_response)?
             } else {
@@ -1934,11 +1830,8 @@ fn output_calls(
             }
         }
         OutputFormat::Json | OutputFormat::Pretty => {
-            let json_response = json_response_with_partial_and_performance(
-                response,
-                partial,
-                metrics.cloned(),
-            );
+            let json_response =
+                json_response_with_partial_and_performance(response, partial, metrics.cloned());
             let rendered = if matches!(cli.output, OutputFormat::Pretty) {
                 serde_json::to_string_pretty(&json_response)?
             } else {
@@ -2094,27 +1987,25 @@ fn emit_error(cli: &Cli, err: &LlmError) {
 /// Check if backend is native-v3, return error if SQLite
 ///
 /// This helper function is used by commands that require native-v3 storage.
-/// When native-v3 feature is disabled, SQLite backend is the only variant,
-/// so this function always returns RequiresNativeV3Backend error.
+/// Check if the backend supports native-v3 specific commands.
+///
+/// Note: Geometric backend now supports most commands that were previously
+/// native-v3 only (like complete). This function should be updated as
+/// geometric backend gains more capabilities.
 fn require_native_v3(backend: &Backend, command: &str, db_path: &Path) -> Result<(), LlmError> {
-    #[cfg(feature = "native-v3")]
-    {
-        match backend {
-            Backend::NativeV3(_) => Ok(()),
-            Backend::Sqlite(_) => Err(LlmError::RequiresNativeV3Backend {
-                command: command.to_string(),
-                path: db_path.display().to_string(),
-            }),
+    match backend {
+        #[cfg(feature = "native-v3")]
+        Backend::NativeV3(_) => Ok(()),
+        Backend::Geometric(_) => {
+            // Geometric backend now supports most commands
+            // If a specific command isn't supported, the backend will return
+            // an appropriate error
+            Ok(())
         }
-    }
-    #[cfg(not(feature = "native-v3"))]
-    {
-        // When native-v3 feature is disabled, all backends are SQLite
-        let _ = (backend, command);
-        Err(LlmError::RequiresNativeV3Backend {
+        Backend::Sqlite(_) => Err(LlmError::RequiresNativeV3Backend {
             command: command.to_string(),
             path: db_path.display().to_string(),
-        })
+        }),
     }
 }
 
@@ -2595,7 +2486,11 @@ mod cli_tests {
 
         let cli = result.unwrap();
         match cli.command {
-            Some(Command::Ast { file, position, limit }) => {
+            Some(Command::Ast {
+                file,
+                position,
+                limit,
+            }) => {
                 assert_eq!(file, temp_file);
                 assert_eq!(position, None);
                 assert_eq!(limit, 10000); // default

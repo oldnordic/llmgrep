@@ -2,7 +2,6 @@
 //!
 //! This module provides helper functions for file loading, snippet extraction,
 /// scoring, and ID generation.
-
 use crate::output::SpanContext;
 use regex::Regex;
 use sha2::{Digest, Sha256};
@@ -81,7 +80,10 @@ pub(crate) struct FileCache {
 }
 
 /// Load a file into the cache
-pub(crate) fn load_file<'a>(path: &str, cache: &'a mut HashMap<String, FileCache>) -> Option<&'a FileCache> {
+pub(crate) fn load_file<'a>(
+    path: &str,
+    cache: &'a mut HashMap<String, FileCache>,
+) -> Option<&'a FileCache> {
     if !cache.contains_key(path) {
         let bytes = match std::fs::read(path) {
             Ok(bytes) => bytes,
@@ -122,14 +124,15 @@ pub(crate) fn snippet_from_file(
 
     // Use safe UTF-8 extraction to handle multi-byte characters
     // This prevents panics on emoji, CJK, and accented characters
-    let snippet = match crate::safe_extraction::extract_symbol_content_safe(&file.bytes, start, capped_end) {
-        Some(s) => s,
-        None => {
-            // Fallback: if safe extraction fails, use from_utf8_lossy
-            // This is less ideal but shouldn't panic
-            String::from_utf8_lossy(&file.bytes[start..capped_end]).to_string()
-        }
-    };
+    let snippet =
+        match crate::safe_extraction::extract_symbol_content_safe(&file.bytes, start, capped_end) {
+            Some(s) => s,
+            None => {
+                // Fallback: if safe extraction fails, use from_utf8_lossy
+                // This is less ideal but shouldn't panic
+                String::from_utf8_lossy(&file.bytes[start..capped_end]).to_string()
+            }
+        };
 
     (Some(snippet), Some(truncated))
 }

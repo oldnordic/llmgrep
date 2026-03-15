@@ -50,7 +50,8 @@ fn create_sqlite_test_db() -> (TempDir, PathBuf) {
             last_updated INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (symbol_id) REFERENCES graph_entities(id) ON DELETE CASCADE
         );",
-    ).expect("Failed to create schema");
+    )
+    .expect("Failed to create schema");
 
     // Insert a file entity
     let file_data = serde_json::json!({
@@ -58,12 +59,14 @@ fn create_sqlite_test_db() -> (TempDir, PathBuf) {
         "hash": "sha256:abc123",
         "last_indexed_at": 1234567890,
         "last_modified": 1234567890
-    }).to_string();
+    })
+    .to_string();
 
     conn.execute(
         "INSERT INTO graph_entities (id, kind, name, data) VALUES (1, 'File', 'src/test.rs', ?1)",
         rusqlite::params_from_iter([&file_data]),
-    ).expect("failed to execute SQL");
+    )
+    .expect("failed to execute SQL");
 
     // Insert symbol entities
     let symbol1_data = serde_json::json!({
@@ -80,7 +83,8 @@ fn create_sqlite_test_db() -> (TempDir, PathBuf) {
         "start_col": 0,
         "end_line": 5,
         "end_col": 10
-    }).to_string();
+    })
+    .to_string();
 
     conn.execute(
         "INSERT INTO graph_entities (id, kind, name, data) VALUES (10, 'Symbol', 'test_function', ?1)",
@@ -91,18 +95,28 @@ fn create_sqlite_test_db() -> (TempDir, PathBuf) {
     conn.execute(
         "INSERT INTO graph_edges (from_id, to_id, edge_type) VALUES (1, 10, 'DEFINES')",
         [],
-    ).expect("failed to execute SQL");
+    )
+    .expect("failed to execute SQL");
 
     // Create test source file for context/snippet extraction
     let test_file_path = dir.path().join("src/test.rs");
-    std::fs::create_dir_all(test_file_path.parent().expect("test file should have parent")).expect("failed to create test directory");
-    std::fs::write(&test_file_path, r#"
+    std::fs::create_dir_all(
+        test_file_path
+            .parent()
+            .expect("test file should have parent"),
+    )
+    .expect("failed to create test directory");
+    std::fs::write(
+        &test_file_path,
+        r#"
 // Line 1: Before context
 pub fn test_function() {
     println!("test");
 }
 // Line 7: After context
-"#).expect("failed to execute SQL");
+"#,
+    )
+    .expect("failed to execute SQL");
 
     (dir, db_path)
 }
@@ -116,8 +130,7 @@ pub fn test_function() {
 fn test_backend_detection_sqlite() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     match backend {
         Backend::Sqlite(_) => {
@@ -126,6 +139,9 @@ fn test_backend_detection_sqlite() {
         #[cfg(feature = "native-v3")]
         Backend::NativeV3(_) => {
             panic!("Should not detect SQLite as native-v3");
+        }
+        Backend::Geometric(_) => {
+            panic!("Should not detect SQLite as geometric");
         }
     }
 }
@@ -140,11 +156,9 @@ fn test_backend_detection_native_v3() {
     let db_path = dir.path().join("test.mag2");
 
     // Create a native-v3 database (empty, but valid format)
-    let _graph = CodeGraph::open(&db_path)
-        .expect("Failed to create native-v3 database");
+    let _graph = CodeGraph::open(&db_path).expect("Failed to create native-v3 database");
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Should detect native-v3 backend");
+    let backend = Backend::detect_and_open(&db_path).expect("Should detect native-v3 backend");
 
     match backend {
         Backend::NativeV3(_) => {
@@ -152,6 +166,9 @@ fn test_backend_detection_native_v3() {
         }
         Backend::Sqlite(_) => {
             panic!("Should detect native-v3 as native-v3, not SQLite");
+        }
+        Backend::Geometric(_) => {
+            panic!("Should detect native-v3 as native-v3, not geometric");
         }
     }
 }
@@ -165,8 +182,7 @@ fn test_backend_detection_native_v3() {
 fn test_context_structure_parity() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     let options = SearchOptions {
         db_path: &db_path,
@@ -198,7 +214,11 @@ fn test_context_structure_parity() {
     let result = backend.search_symbols(options);
 
     // The search should succeed (not error)
-    assert!(result.is_ok(), "search_symbols should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "search_symbols should succeed: {:?}",
+        result.err()
+    );
 
     let (response, _partial, _bounded) = result.expect("result should be Ok");
 
@@ -212,8 +232,7 @@ fn test_context_structure_parity() {
 fn test_context_file_boundaries() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     // Request more context than available
     let options = SearchOptions {
@@ -246,7 +265,10 @@ fn test_context_file_boundaries() {
     let result = backend.search_symbols(options);
 
     // Should not panic even when requesting more context than available
-    assert!(result.is_ok(), "search_symbols with excessive context should succeed");
+    assert!(
+        result.is_ok(),
+        "search_symbols with excessive context should succeed"
+    );
 }
 
 // ============================================================================
@@ -258,8 +280,7 @@ fn test_context_file_boundaries() {
 fn test_snippet_structure_parity() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     let options = SearchOptions {
         db_path: &db_path,
@@ -298,8 +319,7 @@ fn test_snippet_structure_parity() {
 fn test_snippet_truncation() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     // Test with very small max_bytes
     let options = SearchOptions {
@@ -331,7 +351,10 @@ fn test_snippet_truncation() {
     let result = backend.search_symbols(options);
 
     // Should handle truncation gracefully
-    assert!(result.is_ok(), "search_symbols with truncation should succeed");
+    assert!(
+        result.is_ok(),
+        "search_symbols with truncation should succeed"
+    );
 }
 
 // ============================================================================
@@ -343,8 +366,7 @@ fn test_snippet_truncation() {
 fn test_score_calculation_enabled() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     let options = SearchOptions {
         db_path: &db_path,
@@ -384,8 +406,7 @@ fn test_score_calculation_enabled() {
 fn test_score_calculation_disabled() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     let options = SearchOptions {
         db_path: &db_path,
@@ -412,7 +433,10 @@ fn test_score_calculation_disabled() {
 
     let result = backend.search_symbols(options);
 
-    assert!(result.is_ok(), "search_symbols without scoring should succeed");
+    assert!(
+        result.is_ok(),
+        "search_symbols without scoring should succeed"
+    );
 }
 
 // ============================================================================
@@ -424,8 +448,7 @@ fn test_score_calculation_disabled() {
 fn test_metrics_api_accepts_options() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     // Test with metrics filters
     let options = SearchOptions {
@@ -460,7 +483,10 @@ fn test_metrics_api_accepts_options() {
 
     // API should accept metrics options without error
     // Results may be empty if no symbols match the filter
-    assert!(result.is_ok(), "search_symbols with metrics filters should accept the options");
+    assert!(
+        result.is_ok(),
+        "search_symbols with metrics filters should accept the options"
+    );
 }
 
 // ============================================================================
@@ -472,8 +498,7 @@ fn test_metrics_api_accepts_options() {
 fn test_filter_min_fan_in_api() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     let options = SearchOptions {
         db_path: &db_path,
@@ -512,8 +537,7 @@ fn test_filter_min_fan_in_api() {
 fn test_filter_min_fan_out_api() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     let options = SearchOptions {
         db_path: &db_path,
@@ -552,8 +576,7 @@ fn test_filter_min_fan_out_api() {
 fn test_filter_min_complexity_api() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let backend = Backend::detect_and_open(&db_path)
-        .expect("Backend should open database");
+    let backend = Backend::detect_and_open(&db_path).expect("Backend should open database");
 
     let options = SearchOptions {
         db_path: &db_path,
@@ -596,8 +619,7 @@ fn test_filter_min_complexity_api() {
 fn test_cross_backend_search_options_compatibility() {
     let (_dir, db_path) = create_sqlite_test_db();
 
-    let sqlite_backend = Backend::detect_and_open(&db_path)
-        .expect("Should open SQLite backend");
+    let sqlite_backend = Backend::detect_and_open(&db_path).expect("Should open SQLite backend");
 
     // Create a comprehensive SearchOptions
     let options = SearchOptions {
@@ -639,5 +661,8 @@ fn test_cross_backend_search_options_compatibility() {
 
     // SQLite backend should accept these options
     let sqlite_result = sqlite_backend.search_symbols(options.clone());
-    assert!(sqlite_result.is_ok(), "SQLite backend should accept comprehensive SearchOptions");
+    assert!(
+        sqlite_result.is_ok(),
+        "SQLite backend should accept comprehensive SearchOptions"
+    );
 }

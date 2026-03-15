@@ -1,3 +1,7 @@
+use super::builder::{build_call_query, build_reference_query, build_search_query};
+use super::util::{
+    like_pattern, like_prefix, load_file, normalize_kind_label, score_match, FileCache,
+};
 use super::*;
 use crate::algorithm::AlgorithmOptions;
 use crate::error::LlmError;
@@ -877,7 +881,8 @@ fn test_build_call_query_regex_mode() {
 
 // Helper to create a test database with sample data for search_symbols tests
 fn create_test_db() -> (tempfile::NamedTempFile, Connection) {
-    let db_file = tempfile::NamedTempFile::new().expect("failed to create temp file for test database");
+    let db_file =
+        tempfile::NamedTempFile::new().expect("failed to create temp file for test database");
     let conn = Connection::open(db_file.path()).expect("failed to open test database connection");
 
     // Create schema
@@ -975,7 +980,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 1, "Should find 1 result");
         assert_eq!(
@@ -1012,7 +1018,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 0, "Should find 0 results");
     }
@@ -1045,7 +1052,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 2, "Should find 2 results");
 
@@ -1082,7 +1090,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 1, "Should find 1 result");
         assert_eq!(response.results[0].name, "helper", "Should match helper");
@@ -1116,7 +1125,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 1, "Should find 1 Function result");
         assert_eq!(response.results[0].name, "test_func", "Should be test_func");
@@ -1154,7 +1164,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(
             response.results.len(),
@@ -1191,7 +1202,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(
             response.results.len(),
@@ -1229,7 +1241,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 0, "Should find 0 results");
     }
@@ -1262,7 +1275,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 1, "Should find 1 result");
         assert_eq!(
@@ -1300,7 +1314,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 2, "Should find 2 results");
 
@@ -1355,7 +1370,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(partial, "Should be partial since candidates < total count");
         assert_eq!(response.results.len(), 1, "Should return at most 1 result");
     }
@@ -1388,7 +1404,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.total_count, 2, "Total count should be 2");
     }
@@ -1421,7 +1438,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 2, "Should find 2 results");
 
@@ -1473,7 +1491,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 1, "Should find 1 result");
         assert!(
@@ -1515,7 +1534,8 @@ mod pub_api_tests_symbols {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 1, "Should find 1 result");
         assert_eq!(
@@ -2005,7 +2025,10 @@ mod pub_api_tests {
                 let prev = &response.results[i - 1];
                 let curr = &response.results[i];
                 // Scores should be non-increasing
-                assert!(prev.score.expect("score should be Some") >= curr.score.expect("score should be Some"));
+                assert!(
+                    prev.score.expect("score should be Some")
+                        >= curr.score.expect("score should be Some")
+                );
                 // Within same score, sorted by start_line
                 if prev.score == curr.score {
                     assert!(prev.span.start_line <= curr.span.start_line);
@@ -2144,7 +2167,8 @@ mod pub_api_tests {
             language_filter: None,
         };
 
-        let (result, _partial) = search_references(options).expect("search_references should succeed");
+        let (result, _partial) =
+            search_references(options).expect("search_references should succeed");
         assert_eq!(
             result.results.len(),
             1,
@@ -2181,7 +2205,8 @@ mod pub_api_tests {
             language_filter: None,
         };
 
-        let (result, _partial) = search_references(options).expect("search_references should succeed");
+        let (result, _partial) =
+            search_references(options).expect("search_references should succeed");
         assert_eq!(
             result.results.len(),
             0,
@@ -2216,7 +2241,8 @@ mod pub_api_tests {
             language_filter: None,
         };
 
-        let (result, _partial) = search_references(options).expect("search_references should succeed");
+        let (result, _partial) =
+            search_references(options).expect("search_references should succeed");
         assert_eq!(
             result.results.len(),
             1,
@@ -2252,7 +2278,8 @@ mod pub_api_tests {
             language_filter: None,
         };
 
-        let (result, _partial) = search_references(options).expect("search_references should succeed");
+        let (result, _partial) =
+            search_references(options).expect("search_references should succeed");
         assert_eq!(
             result.results.len(),
             1,
@@ -2288,7 +2315,8 @@ mod pub_api_tests {
             language_filter: None,
         };
 
-        let (result, _partial) = search_references(options).expect("search_references should succeed");
+        let (result, _partial) =
+            search_references(options).expect("search_references should succeed");
         assert_eq!(
             result.results.len(),
             0,
@@ -2323,7 +2351,8 @@ mod pub_api_tests {
             language_filter: None,
         };
 
-        let (result, _partial) = search_references(options).expect("search_references should succeed");
+        let (result, _partial) =
+            search_references(options).expect("search_references should succeed");
         assert_eq!(result.results.len(), 1);
         assert_eq!(
             result.results[0].score,
@@ -2359,7 +2388,8 @@ mod pub_api_tests {
             language_filter: None,
         };
 
-        let (result, _partial) = search_references(options).expect("search_references should succeed");
+        let (result, _partial) =
+            search_references(options).expect("search_references should succeed");
         assert_eq!(
             result.results.len(),
             1,
@@ -2394,7 +2424,8 @@ mod pub_api_tests {
             language_filter: None,
         };
 
-        let (result, _partial) = search_references(options).expect("search_references should succeed");
+        let (result, _partial) =
+            search_references(options).expect("search_references should succeed");
         assert_eq!(result.total_count, 1, "Total count should be 1");
     }
 
@@ -2426,7 +2457,8 @@ mod pub_api_tests {
             language_filter: None,
         };
 
-        let (result, _partial) = search_references(options).expect("search_references should succeed");
+        let (result, _partial) =
+            search_references(options).expect("search_references should succeed");
         assert_eq!(
             result.results.len(),
             1,
@@ -2462,7 +2494,8 @@ mod pub_api_tests {
             language_filter: None,
         };
 
-        let (result, _partial) = search_references(options).expect("search_references should succeed");
+        let (result, _partial) =
+            search_references(options).expect("search_references should succeed");
         assert_eq!(result.results.len(), 1);
         assert!(
             result.results[0].score.is_some(),
@@ -2497,7 +2530,8 @@ mod pub_api_tests {
             language_filter: None,
         };
 
-        let (result, _partial) = search_references(options).expect("search_references should succeed");
+        let (result, _partial) =
+            search_references(options).expect("search_references should succeed");
         // Verify that results are sorted by score (descending)
         for i in 1..result.results.len() {
             let prev_score = result.results[i - 1].score.unwrap_or(0);
@@ -2524,10 +2558,13 @@ fn test_load_file_caches_successful_reads() {
     let temp_dir = std::env::temp_dir();
     let temp_file = temp_dir.join("llmgrep_test_load_file.txt");
     let mut file = std::fs::File::create(&temp_file).expect("failed to create temp file");
-    file.write_all(b"line1\nline2\nline3").expect("failed to execute SQL");
+    file.write_all(b"line1\nline2\nline3")
+        .expect("failed to execute SQL");
 
     let mut cache = HashMap::new();
-    let path_str = temp_file.to_str().expect("failed to convert path to string");
+    let path_str = temp_file
+        .to_str()
+        .expect("failed to convert path to string");
 
     let result1 = load_file(path_str, &mut cache);
     assert!(result1.is_some());
@@ -2546,8 +2583,10 @@ fn test_search_symbols_corrupted_database() {
     let temp_dir = std::env::temp_dir();
     let fake_db = temp_dir.join("llmgrep_test_corrupt.db");
     {
-        let mut file = std::fs::File::create(&fake_db).expect("search_symbols should handle corrupted database");
-        file.write_all(b"This is not a SQLite database").expect("failed to execute SQL");
+        let mut file = std::fs::File::create(&fake_db)
+            .expect("search_symbols should handle corrupted database");
+        file.write_all(b"This is not a SQLite database")
+            .expect("failed to execute SQL");
     }
 
     let result = search_symbols(SearchOptions {
@@ -2629,7 +2668,8 @@ mod chunk_tests {
         let (_db_file, conn) = create_test_db_with_chunks();
 
         // Query for test_func symbol
-        let chunks = search_chunks_by_symbol_name(&conn, "test_func").expect("failed to search chunks by symbol name");
+        let chunks = search_chunks_by_symbol_name(&conn, "test_func")
+            .expect("failed to search chunks by symbol name");
         assert_eq!(chunks.len(), 1, "Should find 1 chunk for test_func");
 
         let chunk = &chunks[0];
@@ -2646,7 +2686,8 @@ mod chunk_tests {
         let (_db_file, conn) = create_test_db_with_chunks();
 
         // Query for non-existent symbol
-        let chunks = search_chunks_by_symbol_name(&conn, "nonexistent").expect("failed to search chunks by symbol name");
+        let chunks = search_chunks_by_symbol_name(&conn, "nonexistent")
+            .expect("failed to search chunks by symbol name");
         assert_eq!(
             chunks.len(),
             0,
@@ -2659,7 +2700,8 @@ mod chunk_tests {
         let (_db_file, conn) = create_test_db_with_chunks();
 
         // Query for exact span
-        let chunk = search_chunks_by_span(&conn, "/test/file.rs", 100, 200).expect("failed to search chunks by span");
+        let chunk = search_chunks_by_span(&conn, "/test/file.rs", 100, 200)
+            .expect("failed to search chunks by span");
         assert!(chunk.is_some(), "Should find chunk for exact span");
 
         let chunk = chunk.expect("chunk should be Some");
@@ -2676,11 +2718,13 @@ mod chunk_tests {
         let (_db_file, conn) = create_test_db_with_chunks();
 
         // Query for non-existent span
-        let chunk = search_chunks_by_span(&conn, "/test/file.rs", 999, 1000).expect("failed to search chunks by span");
+        let chunk = search_chunks_by_span(&conn, "/test/file.rs", 999, 1000)
+            .expect("failed to search chunks by span");
         assert!(chunk.is_none(), "Should return None for non-existent span");
 
         // Query for non-existent file
-        let chunk = search_chunks_by_span(&conn, "/test/nonexistent.rs", 100, 200).expect("failed to search chunks by span");
+        let chunk = search_chunks_by_span(&conn, "/test/nonexistent.rs", 100, 200)
+            .expect("failed to search chunks by span");
         assert!(chunk.is_none(), "Should return None for non-existent file");
     }
 
@@ -2689,14 +2733,16 @@ mod chunk_tests {
         let (_db_file, conn) = create_test_db_with_chunks();
 
         // Query with wrong byte_start
-        let chunk = search_chunks_by_span(&conn, "/test/file.rs", 101, 200).expect("failed to search chunks by span");
+        let chunk = search_chunks_by_span(&conn, "/test/file.rs", 101, 200)
+            .expect("failed to search chunks by span");
         assert!(
             chunk.is_none(),
             "Should return None when byte_start doesn't match"
         );
 
         // Query with wrong byte_end
-        let chunk = search_chunks_by_span(&conn, "/test/file.rs", 100, 201).expect("failed to search chunks by span");
+        let chunk = search_chunks_by_span(&conn, "/test/file.rs", 100, 201)
+            .expect("failed to search chunks by span");
         assert!(
             chunk.is_none(),
             "Should return None when byte_end doesn't match"
@@ -2707,7 +2753,8 @@ mod chunk_tests {
     fn test_content_hash_format() {
         let (_db_file, conn) = create_test_db_with_chunks();
 
-        let chunks = search_chunks_by_symbol_name(&conn, "test_func").expect("failed to search chunks by symbol name");
+        let chunks = search_chunks_by_symbol_name(&conn, "test_func")
+            .expect("failed to search chunks by symbol name");
         assert_eq!(chunks.len(), 1);
 
         let hash = &chunks[0].content_hash;
@@ -2723,11 +2770,13 @@ mod chunk_tests {
         let (_db_file, conn) = create_test_db_with_chunks();
 
         // Test Function kind
-        let chunks = search_chunks_by_symbol_name(&conn, "test_func").expect("failed to search chunks by symbol name");
+        let chunks = search_chunks_by_symbol_name(&conn, "test_func")
+            .expect("failed to search chunks by symbol name");
         assert_eq!(chunks[0].symbol_kind, Some("Function".to_string()));
 
         // Test Struct kind
-        let chunks = search_chunks_by_symbol_name(&conn, "TestStruct").expect("failed to search chunks by symbol name");
+        let chunks = search_chunks_by_symbol_name(&conn, "TestStruct")
+            .expect("failed to search chunks by symbol name");
         assert_eq!(chunks[0].symbol_kind, Some("Struct".to_string()));
     }
 
@@ -2762,7 +2811,8 @@ mod chunk_tests {
         ).expect("failed to execute SQL");
 
         // Query should return all chunks for the symbol
-        let chunks = search_chunks_by_symbol_name(&conn, "my_symbol").expect("failed to search chunks by symbol name");
+        let chunks = search_chunks_by_symbol_name(&conn, "my_symbol")
+            .expect("failed to search chunks by symbol name");
         assert_eq!(chunks.len(), 2, "Should find 2 chunks for my_symbol");
     }
 }
@@ -2882,7 +2932,8 @@ mod metrics_tests {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         // Should find med_complexity (15) and high_complexity (25), but not low_complexity (5)
         assert_eq!(
@@ -2939,7 +2990,8 @@ mod metrics_tests {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         // Should find only low_complexity (5), not med (15) or high (25)
         assert_eq!(
@@ -2983,7 +3035,8 @@ mod metrics_tests {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         // Should find only med_complexity (15), not low (5) or high (25)
         assert_eq!(
@@ -3027,7 +3080,8 @@ mod metrics_tests {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         // Should find only low_complexity (fan_in=10)
         assert_eq!(
@@ -3076,7 +3130,8 @@ mod metrics_tests {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         // Should find only high_complexity (fan_out=15)
         assert_eq!(
@@ -3120,7 +3175,8 @@ mod metrics_tests {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
@@ -3170,7 +3226,8 @@ mod metrics_tests {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
@@ -3220,7 +3277,8 @@ mod metrics_tests {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 3, "Should find all 3 results");
 
@@ -3270,7 +3328,8 @@ mod metrics_tests {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(response.results.len(), 1);
 
@@ -3385,7 +3444,8 @@ mod metrics_tests {
             language_filter: None,
         };
 
-        let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, _partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert_eq!(response.results.len(), 3, "Should find all 3 symbols");
 
         // Symbols without metrics should have None for metrics fields
@@ -3393,7 +3453,8 @@ mod metrics_tests {
         let with_metrics = response
             .results
             .iter()
-            .find(|r| r.name == "with_metrics").expect("result should be found");
+            .find(|r| r.name == "with_metrics")
+            .expect("result should be found");
         assert_eq!(
             with_metrics.fan_in,
             Some(10),
@@ -3403,7 +3464,8 @@ mod metrics_tests {
         let no_metrics_1 = response
             .results
             .iter()
-            .find(|r| r.name == "no_metrics_1").expect("result should be found");
+            .find(|r| r.name == "no_metrics_1")
+            .expect("result should be found");
         assert_eq!(
             no_metrics_1.fan_in, None,
             "Symbol without metrics should have None for fan_in"
@@ -3412,7 +3474,8 @@ mod metrics_tests {
         let no_metrics_2 = response
             .results
             .iter()
-            .find(|r| r.name == "no_metrics_2").expect("result should be found");
+            .find(|r| r.name == "no_metrics_2")
+            .expect("result should be found");
         assert_eq!(
             no_metrics_2.fan_in, None,
             "Symbol without metrics should have None for fan_in"
@@ -3445,7 +3508,8 @@ mod metrics_tests {
             language_filter: None,
         };
 
-        let (response_filter, _, _) = search_symbols(options_filter).expect("search_symbols with filter should succeed");
+        let (response_filter, _, _) =
+            search_symbols(options_filter).expect("search_symbols with filter should succeed");
         assert_eq!(
             response_filter.results.len(),
             1,
@@ -3488,7 +3552,8 @@ mod symbol_id_tests {
             language_filter: None,
         };
 
-        let (response, partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert!(!partial, "Should not be partial");
         assert_eq!(
             response.results.len(),
@@ -3528,7 +3593,8 @@ mod symbol_id_tests {
             language_filter: None,
         };
 
-        let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, _partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         // All test symbols are in /test/file.rs
         assert!(
             !response.results.is_empty(),
@@ -3569,7 +3635,8 @@ mod symbol_id_tests {
             language_filter: None,
         };
 
-        let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, _partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert_eq!(
             response.results.len(),
             1,
@@ -3614,7 +3681,8 @@ mod symbol_id_tests {
             language_filter: None,
         };
 
-        let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, _partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         // All test symbols have symbol_id
         for result in &response.results {
             assert!(
@@ -3725,7 +3793,8 @@ mod symbol_id_tests {
         };
 
         // Capture stderr to check for warning
-        let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, _partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         // Should find both symbols
         assert_eq!(
             response.results.len(),
@@ -3830,7 +3899,8 @@ mod symbol_id_tests {
             language_filter: None,
         };
 
-        let (response, _partial, _) = search_symbols(options).expect("search_symbols should succeed");
+        let (response, _partial, _) =
+            search_symbols(options).expect("search_symbols should succeed");
         assert_eq!(
             response.results.len(),
             1,
@@ -3900,8 +3970,8 @@ mod symbol_id_tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
-        None,  // symbol_set_filter
-    );
+            None,  // symbol_set_filter
+        );
 
         // Should filter by .rs extension
         assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));
@@ -3932,8 +4002,8 @@ mod symbol_id_tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
-        None,  // symbol_set_filter
-    );
+            None,  // symbol_set_filter
+        );
 
         // Should NOT add language filter for unknown language
         // Should have 4 params: 3 LIKE + 1 LIMIT (no extra language param)
@@ -3962,8 +4032,8 @@ mod symbol_id_tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
-        None,  // symbol_set_filter
-    );
+            None,  // symbol_set_filter
+        );
 
         // Should have both path, kind, and language filters
         assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));
@@ -3996,8 +4066,8 @@ mod symbol_id_tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
-        None,  // symbol_set_filter
-    );
+            None,  // symbol_set_filter
+        );
 
         // Should filter by .cpp extension
         assert!(sql.contains("f.file_path LIKE ? ESCAPE '\\'"));
