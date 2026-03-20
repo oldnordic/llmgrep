@@ -170,56 +170,20 @@ pub fn check_magellan_available() -> Result<(), LlmError> {
 /// Parses `magellan --version` output and enforces minimum version.
 /// Magellan output format: "magellan VERSION (DATE) rustc RUSTC_VERSION"
 fn check_magellan_version() -> Result<(), LlmError> {
-    use std::thread;
-    use std::time::Duration;
-
-    let child = Command::new("magellan").arg("--version").spawn();
-
-    let output = match child {
-        Ok(mut child) => {
-            let timeout = Duration::from_secs(5);
-            let start = std::time::Instant::now();
-
-            loop {
-                if let Ok(status) = child.try_wait() {
-                    match status {
-                        Some(_status) => {
-                            // Process has exited, get output
-                            break child.wait_with_output();
-                        }
-                        None => {
-                            // Still running, check timeout
-                            if start.elapsed() >= timeout {
-                                child.kill().ok();
-                                return Err(LlmError::MagellanExecutionFailed {
-                                    algorithm: "version check".to_string(),
-                                    stderr: "Version check timed out after 5 seconds".to_string(),
-                                });
-                            }
-                            thread::sleep(Duration::from_millis(100));
-                        }
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            return Err(match e.kind() {
-                std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
-                _ => LlmError::MagellanExecutionFailed {
-                    algorithm: "version check".to_string(),
-                    stderr: e.to_string(),
-                },
-            })
-        }
-    };
-
-    let output = output.map_err(|e| match e.kind() {
-        std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
-        _ => LlmError::MagellanExecutionFailed {
-            algorithm: "version check".to_string(),
-            stderr: e.to_string(),
-        },
-    })?;
+    // Use output() directly - it handles pipe management correctly
+    // and waits for process completion before reading stdout/stderr.
+    // The previous spawn() + try_wait() + wait_with_output() approach
+    // had a race condition where stdout could be lost.
+    let output = Command::new("magellan")
+        .arg("--version")
+        .output()
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
+            _ => LlmError::MagellanExecutionFailed {
+                algorithm: "version check".to_string(),
+                stderr: e.to_string(),
+            },
+        })?;
 
     if !output.status.success() {
         return Err(LlmError::MagellanExecutionFailed {
@@ -1071,11 +1035,13 @@ pub fn resolve_fqn_to_symbol_id(db_path: &Path, name: &str) -> Result<String, Ll
     // Parse JSON response
     let json: Value = serde_json::from_slice(&output.stdout).map_err(LlmError::JsonError)?;
 
-    // Check for matches array
-    let matches = json["matches"]
-        .as_array()
+    // Check for matches array - it new format wraps matches in "data" object
+    let matches = json
+        .get("data")
+        .and_then(|d| d.get("matches"))
+        .and_then(|m| m.as_array())
         .ok_or_else(|| LlmError::InvalidQuery {
-            query: "Invalid magellan find output: missing 'matches' array".to_string(),
+            query: "Invalid magellan find output: missing 'data.matches' array".to_string(),
         })?;
 
     // Handle ambiguity
