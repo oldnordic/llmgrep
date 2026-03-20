@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] - 2026-03-19
+
+### Fixed
+- **Compiler warnings** - Fixed unreachable pattern warning in `require_native_v3()`
+  - Reorganized match arms to handle all backend variants properly
+  - Removed redundant fallback arm when geometric-backend is enabled
+  - Location: `src/main.rs:1995`
+
 ## [3.1.1] - 2026-03-15
 
 ### Fixed

@@ -762,6 +762,17 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
         }
     });
 
+    // Auto-detect regex patterns and enable regex mode if needed
+    // This fixes the bug where --query ".*" returns 0 results without --regex
+    let auto_regex = !params.regex && looks_like_regex(&params.query);
+    let use_regex = params.regex || auto_regex;
+    if auto_regex {
+        eprintln!(
+            "Note: Auto-enabled --regex mode for query '{}' (detected regex pattern)",
+            params.query
+        );
+    }
+
     // Validate mutual exclusivity of --fqn and --exact-fqn
     if params.fqn.is_some() && params.exact_fqn.is_some() {
         return Err(LlmError::InvalidQuery {
@@ -852,7 +863,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 kind_filter: normalized_kind.as_deref(),
                 language_filter: normalized_language.as_deref(),
                 limit: params.limit,
-                use_regex: params.regex,
+                use_regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
@@ -971,7 +982,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 kind_filter: None,
                 language_filter: None,
                 limit: params.limit,
-                use_regex: params.regex,
+                use_regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
@@ -1034,7 +1045,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 kind_filter: None,
                 language_filter: None,
                 limit: params.limit,
-                use_regex: params.regex,
+                use_regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
@@ -1107,7 +1118,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 kind_filter: normalized_kind.as_deref(),
                 language_filter: normalized_language.as_deref(),
                 limit: symbols_limit,
-                use_regex: params.regex,
+                use_regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
@@ -1152,7 +1163,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 kind_filter: None,
                 language_filter: None,
                 limit: references_limit,
-                use_regex: params.regex,
+                use_regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
@@ -1181,7 +1192,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 kind_filter: None,
                 language_filter: None,
                 limit: calls_limit,
-                use_regex: params.regex,
+                use_regex,
                 candidates,
                 context: ContextOptions {
                     include: include_context,
@@ -1954,6 +1965,60 @@ fn normalize_kind(kind: &str) -> String {
     }
 }
 
+/// Check if a query string looks like a regex pattern
+///
+/// Detects common regex patterns that users might pass without --regex flag:
+/// - `.*` (match all)
+/// - `.+` (match one or more)
+/// - Patterns starting with `^` or ending with `$`
+/// - Patterns containing character classes like `[a-z]`
+/// - Patterns with quantifiers like `*`, `+`, `?`, `{n}`
+fn looks_like_regex(query: &str) -> bool {
+    // Common "match all" patterns
+    if query == ".*" || query == ".+" {
+        return true;
+    }
+
+    // Anchors
+    if query.starts_with('^') || query.ends_with('$') {
+        return true;
+    }
+
+    // Character classes
+    if query.contains('[') && query.contains(']') {
+        return true;
+    }
+
+    // Quantifiers (but not standalone * which could be a glob)
+    // Check for patterns like: a*, a+, a?, a{n}, .*, .+
+    let has_quantifier = query.contains(".*")
+        || query.contains(".+")
+        || query.contains(".?")
+        || query.matches('{').count() > 0;
+
+    if has_quantifier {
+        return true;
+    }
+
+    // Escaped special characters
+    if query.contains("\\d")
+        || query.contains("\\w")
+        || query.contains("\\s")
+        || query.contains("\\.")
+        || query.contains("\\(")
+        || query.contains("\\)")
+    {
+        return true;
+    }
+
+    // Pipe for alternation
+    if query.contains('|') && !query.starts_with('|') && !query.ends_with('|') {
+        return true;
+    }
+
+    false
+}
+
 fn emit_error(cli: &Cli, err: &LlmError) {
     match cli.output {
         OutputFormat::Human => {
@@ -2003,11 +2068,6 @@ fn require_native_v3(backend: &Backend, command: &str, db_path: &Path) -> Result
             // an appropriate error
             Ok(())
         }
-        #[cfg(not(feature = "geometric-backend"))]
-        _ => Err(LlmError::BackendDetectionFailed {
-            path: db_path.display().to_string(),
-            reason: "Geometric backend not available".to_string(),
-        }),
         Backend::Sqlite(_) => Err(LlmError::RequiresNativeV3Backend {
             command: command.to_string(),
             path: db_path.display().to_string(),
