@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.3] - 2026-03-20
+
+### Fixed
+- **Auto-detect regex patterns for `--query ".*"`**
+  - Added `looks_like_regex()` function to detect common regex patterns
+  - Auto-enables `--regex` mode with warning when regex patterns detected
+  - Patterns detected: `.*`, `.+`, `^...$`, character classes, quantifiers, escaped chars
+  - Location: `src/main.rs`
+
+- **`--paths-from` version parsing and JSON handling**
+  - Fixed `spawn()` + `try_wait()` + `wait_with_output()` race condition that lost stdout
+  - Replaced with simple `Command::output()` which handles pipe management correctly
+  - Fixed JSON parsing to look for `data.matches` instead of `matches` (Magellan API change)
+  - Location: `src/algorithm.rs`
+
 ## [3.1.2] - 2026-03-19
 
 ### Fixed
