@@ -26,6 +26,8 @@ impl SqliteBackend {
     /// * `db_path` - Path to the SQLite database file
     pub fn open(db_path: &Path) -> Result<Self, LlmError> {
         let conn = Connection::open(db_path)?;
+        crate::backend::schema_check::check_schema_version(&conn)
+            .map_err(|e| LlmError::SchemaMismatch { reason: e })?;
         Ok(Self {
             conn,
             db_path: db_path.to_path_buf(),

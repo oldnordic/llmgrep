@@ -32,6 +32,10 @@ pub enum LlmError {
     #[error("Database corrupted: {reason}")]
     DatabaseCorrupted { reason: String },
 
+    /// Database schema version is incompatible.
+    #[error("Schema mismatch: {reason}")]
+    SchemaMismatch { reason: String },
+
     /// Invalid query string provided.
     #[error("Invalid query: {query}")]
     InvalidQuery { query: String },
@@ -176,6 +180,7 @@ impl LlmError {
         match self {
             LlmError::DatabaseNotFound { .. } => "LLM-E001",
             LlmError::DatabaseCorrupted { .. } => "LLM-E002",
+            LlmError::SchemaMismatch { .. } => "LLM-E003",
             LlmError::InvalidQuery { .. } => "LLM-E011",
             LlmError::EmptyQuery => "LLM-E012",
             LlmError::RegexRejected { .. } => "LLM-E101",
@@ -229,6 +234,9 @@ impl LlmError {
             }
             LlmError::DatabaseCorrupted { .. } => {
                 Some("The database file may be corrupted. Try reindexing your codebase.")
+            }
+            LlmError::SchemaMismatch { .. } => {
+                Some("The database schema version is incompatible. Try reindexing with a compatible Magellan version or upgrade llmgrep.")
             }
             LlmError::InvalidQuery { .. } => {
                 Some("Check that your query is properly formatted and valid.")
