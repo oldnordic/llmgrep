@@ -1,4 +1,4 @@
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::Connection;
 
 /// The maximum Magellan schema version that llmgrep v3.1.3 is known to support.
 /// Magellan v11 is supported (4D coordinates, cfg_edges table, xxHash64 hashes).
@@ -13,14 +13,24 @@ pub const SUPPORTED_MAGELLAN_SCHEMA_VERSION: i64 = 11;
 /// If the magellan_meta table doesn't exist (very old database), returns Ok(())
 /// but logs a warning — the query will likely fail later anyway.
 pub fn check_schema_version(conn: &Connection) -> Result<(), String> {
-    let version: Option<i64> = conn
-        .query_row(
-            "SELECT magellan_schema_version FROM magellan_meta WHERE id = 1",
-            [],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|e| format!("Failed to read schema version: {}", e))?;
+    let version: Option<i64> = match conn.query_row(
+        "SELECT magellan_schema_version FROM magellan_meta WHERE id = 1",
+        [],
+        |row| row.get(0),
+    ) {
+        Ok(v) => Some(v),
+        Err(rusqlite::Error::QueryReturnedNoRows) => None,
+        Err(rusqlite::Error::SqliteFailure(_, Some(msg)))
+            if msg.contains("no such table") =>
+        {
+            eprintln!(
+                "Warning: Could not determine Magellan schema version (magellan_meta table missing). \
+                 Queries may fail if the database was created by an incompatible Magellan version."
+            );
+            return Ok(());
+        }
+        Err(e) => return Err(format!("Failed to read schema version: {}", e)),
+    };
 
     match version {
         Some(v) if v > SUPPORTED_MAGELLAN_SCHEMA_VERSION => Err(format!(
@@ -38,8 +48,10 @@ pub fn check_schema_version(conn: &Connection) -> Result<(), String> {
             Ok(())
         }
         None => {
-            eprintln!("Warning: Could not determine Magellan schema version (magellan_meta table missing). \
-                       Queries may fail if the database was created by an incompatible Magellan version.");
+            eprintln!(
+                "Warning: magellan_meta table exists but has no row with id=1. \
+                 Schema version unknown."
+            );
             Ok(())
         }
     }
