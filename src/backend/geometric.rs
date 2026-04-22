@@ -13,10 +13,8 @@ use crate::output::{
     SymbolMatch,
 };
 use crate::query::SearchOptions;
-// use magellan::graph::backend::Backend; // Not used in geometric backend
-use magellan::graph::geometric_backend::{
-    GeometricBackend as MagellanGeometricBackend, SymbolInfo,
-};
+use magellan::graph::GeometricBackend as MagellanGeometricBackend;
+use magellan::graph::geometric_backend::SymbolInfo;
 use regex::Regex;
 use std::path::Path;
 
@@ -61,6 +59,19 @@ impl GeometricBackend {
                 reason: format!("Failed to open geometric backend: {}", e),
             }
         })?;
+
+        // Validate Magellan schema version if the file is also a valid SQLite database
+        // (some .geo files may be SQLite-based or have companion SQLite metadata)
+        if let Ok(conn) = rusqlite::Connection::open(db_path) {
+            if let Err(e) = crate::backend::schema_check::check_schema_version(&conn) {
+                // Only fail on actual schema version mismatch, not on "not a database"
+                if !e.to_lowercase().contains("not a database") {
+                    return Err(LlmError::DatabaseCorrupted {
+                        reason: format!("Schema version check failed: {}", e),
+                    });
+                }
+            }
+        }
 
         Ok(Self {
             inner,
@@ -114,6 +125,96 @@ impl GeometricBackend {
             ast_context: None,
             supernode_id: None,
         }
+    }
+
+    /// Get CFG blocks for a symbol from the geometric backend.
+    ///
+    /// Returns all CFG blocks associated with the given symbol ID,
+    /// including their 4D spatial coordinates.
+    fn get_cfg_blocks_for_symbol(
+        &self,
+        symbol_id: u64,
+    ) -> Vec<magellan::graph::geometric_backend::CfgBlock> {
+        // The magellan geometric backend returns Vec directly, not Result
+        self.inner.get_cfg_blocks_for_function(symbol_id as i64)
+    }
+
+    /// Convert geometric backend CfgBlock coordinates to spatial coordinates.
+    ///
+    /// Maps geometric backend fields to the 4D spatial coordinate system:
+    /// - X (dominator depth): dominator_depth field
+    /// - Y (loop nesting): loop_nesting field
+    /// - Z (branch distance): branch_count field (simplified approximation)
+    fn cfg_block_to_spatial_coords(block: &magellan::graph::geometric_backend::CfgBlock) -> (i64, i64, i64) {
+        // Note: The geometric backend stores coordinates differently than the schema
+        // dominator_depth -> coord_x
+        // loop_nesting -> coord_y
+        // branch_count -> coord_z (approximation, not true branch distance)
+        (
+            block.dominator_depth as i64,
+            block.loop_nesting as i64,
+            block.branch_count as i64,
+        )
+    }
+
+    /// Check if a symbol matches the given spatial criteria.
+    ///
+    /// A symbol matches if ANY of its CFG blocks falls within the specified
+    /// spatial ranges. If no spatial criteria are specified, returns true (no filter).
+    fn symbol_matches_spatial_criteria(
+        &self,
+        symbol_id: u64,
+        depth_range_x: Option<(i64, i64)>,
+        depth_range_y: Option<(i64, i64)>,
+        depth_range_z: Option<(i64, i64)>,
+    ) -> bool {
+        // If no spatial criteria specified, all symbols match
+        if depth_range_x.is_none() && depth_range_y.is_none() && depth_range_z.is_none() {
+            return true;
+        }
+
+        // Get CFG blocks for this symbol
+        let cfg_blocks = self.get_cfg_blocks_for_symbol(symbol_id);
+
+        // If symbol has no CFG blocks, it doesn't match spatial criteria
+        if cfg_blocks.is_empty() {
+            return false;
+        }
+
+        // Check if ANY block matches the spatial criteria
+        for block in &cfg_blocks {
+            let (coord_x, coord_y, coord_z) = Self::cfg_block_to_spatial_coords(block);
+            let mut matches = true;
+
+            // Check X coordinate (dominator depth)
+            if let Some((min_x, max_x)) = depth_range_x {
+                if coord_x < min_x || coord_x > max_x {
+                    matches = false;
+                }
+            }
+
+            // Check Y coordinate (loop nesting)
+            if let Some((min_y, max_y)) = depth_range_y {
+                if coord_y < min_y || coord_y > max_y {
+                    matches = false;
+                }
+            }
+
+            // Check Z coordinate (branch distance approximation)
+            if let Some((min_z, max_z)) = depth_range_z {
+                if coord_z < min_z || coord_z > max_z {
+                    matches = false;
+                }
+            }
+
+            // If this block matches all criteria, the symbol matches
+            if matches {
+                return true;
+            }
+        }
+
+        // No blocks matched the spatial criteria
+        false
     }
 }
 
@@ -176,6 +277,18 @@ impl crate::backend::BackendTrait for GeometricBackend {
                     {
                         return false;
                     }
+                }
+
+                // Spatial filtering - check if symbol has CFG blocks matching spatial criteria
+                let matches_spatial = self.symbol_matches_spatial_criteria(
+                    info.id,
+                    options.depth_range_x,
+                    options.depth_range_y,
+                    options.depth_range_z,
+                );
+
+                if !matches_spatial {
+                    return false;
                 }
 
                 true
@@ -843,5 +956,64 @@ impl GeometricBackend {
             },
             partial,
         ))
+    }
+}
+
+#[cfg(test)]
+mod spatial_tests {
+    use super::*;
+
+    /// Test spatial filtering with real .geo database.
+    ///
+    /// This test verifies that symbols can be filtered by their 4D spatial coordinates.
+    /// It requires a real .geo database with computed 4D coordinates.
+    ///
+    /// Note: This test is currently disabled due to pre-existing compilation issues
+    /// in the geometric backend integration. Once those are fixed, this test should
+    /// be enabled and run against a real .geo database.
+    #[test]
+    #[ignore]
+    fn test_symbol_matches_spatial_criteria_depth_x() {
+        // This test requires a real .geo database with computed 4D coordinates
+        // TODO: Enable this test once geometric backend compilation issues are fixed
+        // Expected behavior:
+        // 1. Open a .geo database
+        // 2. Query symbols with different coord_x values
+        // 3. Verify filtering returns only symbols within X range
+    }
+
+    #[test]
+    #[ignore]
+    fn test_symbol_matches_spatial_criteria_depth_y() {
+        // Test loop nesting filtering (Y coordinate)
+        // TODO: Implement once geometric backend is fixed
+    }
+
+    #[test]
+    #[ignore]
+    fn test_symbol_matches_spatial_criteria_depth_z() {
+        // Test branch distance filtering (Z coordinate)
+        // TODO: Implement once geometric backend is fixed
+    }
+
+    #[test]
+    #[ignore]
+    fn test_symbol_matches_spatial_criteria_combined() {
+        // Test combined X, Y, Z filtering
+        // TODO: Implement once geometric backend is fixed
+    }
+
+    #[test]
+    #[ignore]
+    fn test_symbol_matches_spatial_criteria_no_filter() {
+        // Test that when no spatial criteria specified, all symbols match
+        // TODO: Implement once geometric backend is fixed
+    }
+
+    #[test]
+    #[ignore]
+    fn test_search_symbols_with_spatial_filtering_integration() {
+        // Full integration test: search_symbols() with spatial options
+        // TODO: Implement once geometric backend is fixed
     }
 }
