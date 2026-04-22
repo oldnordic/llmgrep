@@ -18,7 +18,7 @@ use crate::safe_extraction::extract_symbol_content_safe;
 use crate::SortMode;
 use regex::RegexBuilder;
 use rusqlite::{params_from_iter, Connection, ErrorCode, OpenFlags};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// Internal implementation of search_symbols that takes an explicit Connection.
@@ -518,6 +518,10 @@ pub(crate) fn search_symbols_impl(
             }
         });
     }
+
+    // Deduplicate by match_id to handle duplicate AST nodes from LEFT JOIN
+    let mut seen_ids = HashSet::new();
+    results.retain(|r| seen_ids.insert(r.match_id.clone()));
 
     let mut partial = false;
     let total_count = if options.use_regex {
