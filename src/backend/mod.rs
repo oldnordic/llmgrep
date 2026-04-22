@@ -16,6 +16,7 @@ pub mod geometric;
 pub mod magellan_adapter; // Contract-aware Magellan adapter layer
 #[cfg(feature = "native-v3")]
 mod native_v3;
+pub mod schema_check;
 pub mod sqlite;
 
 #[cfg(feature = "geometric-backend")]
