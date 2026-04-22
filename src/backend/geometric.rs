@@ -66,7 +66,7 @@ impl GeometricBackend {
             if let Err(e) = crate::backend::schema_check::check_schema_version(&conn) {
                 // Only fail on actual schema version mismatch, not on "not a database"
                 if !e.to_lowercase().contains("not a database") {
-                    return Err(LlmError::DatabaseCorrupted {
+                    return Err(LlmError::SchemaMismatch {
                         reason: format!("Schema version check failed: {}", e),
                     });
                 }
