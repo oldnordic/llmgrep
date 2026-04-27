@@ -27,13 +27,13 @@ mod chunks;
 mod options;
 mod references;
 mod symbols;
-mod util;
+pub(crate) mod util;
 
 // Re-exports for backward compatibility
 // Options
 pub use options::{
-    AstOptions, ContextOptions, DepthOptions, FqnOptions, MetricsOptions, SearchOptions,
-    SnippetOptions,
+    AstOptions, ContextOptions, CoverageFilter, DepthOptions, FqnOptions, MetricsOptions,
+    SearchOptions, SnippetOptions,
 };
 
 // Backend

@@ -11,12 +11,10 @@ use std::process::Command;
 /// Helper to get a SQLite database for testing.
 ///
 /// Uses the project's existing codegraph database if available,
-/// or copies a minimal test database. Since Magellan 2.x defaults
-/// to native-v3 format, we use the existing .codemcp/codegraph.db
-/// which is guaranteed to be SQLite format.
+/// or creates a minimal test database.
 fn get_test_sqlite_db() -> PathBuf {
     // First, try to use the existing codegraph database
-    let existing_db = PathBuf::from(".codemcp/codegraph.db");
+    let existing_db = PathBuf::from(".magellan/llmgrep.db");
     if existing_db.exists() {
         // Verify it's actually SQLite format
         if let Ok(mut file) = std::fs::File::open(&existing_db) {
@@ -220,9 +218,7 @@ fn test_ast_with_sqlite_backend() {
     if !output.status.success() {
         // Acceptable failures:
         // 1. File not in database
-        // 2. Magellan binary version mismatch (expected native-v3, got SQLite)
-        // This is a known limitation - ast/find-ast shell out to magellan
-        // which expects native-v3 format in newer versions
+        // 2. Magellan binary version mismatch
         if stderr.contains("No AST nodes found")
             || stderr.contains("File not indexed")
             || stderr.contains("connection error")
@@ -273,9 +269,7 @@ fn test_find_ast_with_sqlite_backend() {
     if !output.status.success() {
         // Acceptable failures:
         // 1. No nodes found
-        // 2. Magellan binary version mismatch (expected native-v3, got SQLite)
-        // This is a known limitation - ast/find-ast shell out to magellan
-        // which expects native-v3 format in newer versions
+        // 2. Magellan binary version mismatch
         if stderr.contains("No AST nodes found")
             || stderr.contains("connection error")
             || stderr.contains("Invalid magic number")
@@ -287,50 +281,6 @@ fn test_find_ast_with_sqlite_backend() {
             output.status, stdout, stderr
         );
     }
-}
-
-#[test]
-#[cfg(not(feature = "native-v3"))]
-fn test_native_v3_backend_error() {
-    let binary = match llmgrep_binary() {
-        Some(b) => b,
-        None => {
-            eprintln!("SKIP: llmgrep binary not found. Run: cargo build --release");
-            return;
-        }
-    };
-
-    // Check if we have a native-v3 test database available
-    let db_path = std::env::var("LLMGREP_TEST_NATIVE_V2_DB");
-    if db_path.is_err() {
-        eprintln!("SKIP: LLMGREP_TEST_NATIVE_V2_DB not set");
-        return;
-    }
-    let db_path = db_path.expect("LLMGREP_TEST_NATIVE_V2_DB should be set after is_err check");
-
-    let output = Command::new(&binary)
-        .args(["--db", &db_path, "search", "--query", "test"])
-        .output()
-        .expect("Failed to execute llmgrep");
-
-    // Should fail with LLM-E109
-    assert!(
-        !output.status.success(),
-        "Expected failure for native-v3 DB without native-v3 feature"
-    );
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("LLM-E109") || stderr.contains("native-v3"),
-        "Expected LLM-E109 error, got: {}",
-        stderr
-    );
-    assert!(
-        stderr.contains("cargo install llmgrep --features native-v3")
-            || stderr.contains("--features native-v3"),
-        "Expected remediation hint, got: {}",
-        stderr
-    );
 }
 
 #[test]
@@ -368,7 +318,7 @@ fn test_backend_detection_via_cli() {
     );
     assert!(
         !stderr.contains("LLM-E109"),
-        "Should not report native-v3 error for SQLite database"
+        "Should not report backend error for SQLite database"
     );
 }
 

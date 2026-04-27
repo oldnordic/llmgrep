@@ -227,6 +227,7 @@ fn process_emoji(input: &str) -> String {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -333,6 +334,7 @@ fn test_chunk_retrieval_with_hash() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -440,6 +442,7 @@ fn test_metrics_filtering() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -522,6 +525,7 @@ fn test_symbol_id_lookup() {
         symbol_id: Some(known_symbol_id),
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -586,6 +590,7 @@ fn test_language_filtering() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -649,6 +654,7 @@ fn test_multi_kind_filtering() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response_fn = search_symbols(options_fn).expect("search should succeed");
@@ -681,6 +687,7 @@ fn test_multi_kind_filtering() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response_struct = search_symbols(options_struct).expect("search should succeed");
@@ -740,6 +747,7 @@ fn test_sort_by_fan_in() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -838,6 +846,7 @@ fn test_fqn_pattern_filtering() {
         symbol_id: None,
         fqn_pattern: Some("%module_a%"), // Use LIKE wildcard pattern
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -943,6 +952,7 @@ fn test_combined_metrics_and_language_filter() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -1003,6 +1013,7 @@ fn test_metrics_present_in_search_results() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");

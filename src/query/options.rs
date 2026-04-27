@@ -6,6 +6,18 @@ use crate::algorithm::AlgorithmOptions;
 use crate::SortMode;
 use std::path::PathBuf;
 
+/// Coverage filter for symbol search.
+///
+/// Filters symbols based on whether they have CFG coverage data recorded
+/// in Magellan's coverage side tables.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoverageFilter {
+    /// Only include symbols that have coverage data (covered or partially covered)
+    Covered,
+    /// Only include symbols that have NO coverage data (0% block coverage)
+    Uncovered,
+}
+
 /// Options for all search functions
 #[derive(Debug, Clone)]
 pub struct SearchOptions<'a> {
@@ -49,6 +61,8 @@ pub struct SearchOptions<'a> {
     pub fqn_pattern: Option<&'a str>,
     /// Exact FQN filter (exact match on canonical_fqn)
     pub exact_fqn: Option<&'a str>,
+    /// Coverage filter (covered/uncovered symbols only)
+    pub coverage_filter: Option<CoverageFilter>,
 }
 
 /// Context extraction options

@@ -3,17 +3,17 @@
 [![Crates.io](https://img.shields.io/crates/v/llmgrep)](https://crates.io/crates/llmgrep)
 [![Documentation](https://docs.rs/llmgrep/badge.svg)](https://docs.rs/llmgrep)
 
-**Version:** 3.1.0
+**Version:** 3.1.6
 
-Pattern-based code search for Magellan databases. Fast, deterministic symbol search with LLM-optimized JSON output.
+Pattern-based code search for Magellan databases. Fast, deterministic symbol search with JSON output.
 
-**Positioning:** Read-only query tool for codebases indexed by Magellan. Use to find symbols, references, and call relationships. Emits structured JSON for AI-assisted code understanding.
+**Positioning:** Read-only query tool for codebases indexed by Magellan. Use to find symbols, references, and call relationships. Emits structured JSON for code analysis.
 
 ## Purpose
 
 **llmgrep queries Magellan databases.** Built for:
 
-- **AI Assistants** — Structured JSON output designed for LLM consumption
+- **Code Analysis** — Structured JSON output for programmatic analysis
 - **Developers** — Fast symbol search without IDE overhead
 - **Tooling** — Scriptable code analysis with precise byte spans
 
@@ -26,6 +26,7 @@ Pattern-based code search for Magellan databases. Fast, deterministic symbol sea
 - **Geometric backend** — Native .geo file support with chunk retrieval
 - **Path normalization** — Consistent path handling across platforms
 - **Explicit ambiguity handling** — Structured results for disambiguation
+- **Parameterized SQL** — All database queries use bound parameters (no string interpolation)
 
 ## Quick Start
 
@@ -46,16 +47,19 @@ llmgrep --db code.geo search --query "MyType" --mode references
 ## Installation
 
 ```bash
+# Install with default features
 cargo install llmgrep
+
+# Install with geometric backend support
+cargo install llmgrep --features geometric-backend
 ```
 
 ## Backends
 
 | Backend | File | Features | Status |
 |---------|------|----------|--------|
-| **Geometric** | `.geo` | Full search + chunk retrieval + path normalization | **Default** |
-| **SQLite** | `.db` | Full search | Legacy (always available) |
-| **Native-V3** | `.v3` | O(1) KV operations + autocomplete | Reserved (disabled) |
+| **Geometric** | `.geo` | Full search + chunk retrieval + path normalization | Requires `--features geometric-backend` |
+| | **SQLite** | `.db` | Full search | Default (always available) |
 
 **Geometric (.geo) features:**
 - Path normalization before queries
@@ -67,7 +71,7 @@ cargo install llmgrep
 
 ## Requirements
 
-- **[Magellan](https://github.com/oldnordic/magellan)** 3.0.0+ — Required for indexing
+- **[Magellan](https://github.com/oldnordic/magellan)** 3.1.7 — Required for indexing
 - **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 2.0.7+ — Included automatically
 
 ## Documentation

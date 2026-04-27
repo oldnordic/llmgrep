@@ -1,4 +1,4 @@
-//! Backend abstraction for SQLite, Native-V3, and Geometric storage.
+//! Backend abstraction for SQLite and Geometric storage.
 //!
 //! The Backend trait provides a unified interface for code graph queries
 //! across different storage backends. This enables runtime backend detection
@@ -14,8 +14,6 @@ use std::path::Path;
 pub mod geometric;
 #[cfg(feature = "geometric-backend")]
 pub mod magellan_adapter; // Contract-aware Magellan adapter layer
-#[cfg(feature = "native-v3")]
-mod native_v3;
 pub mod schema_check;
 pub mod sqlite;
 
@@ -26,11 +24,9 @@ pub use magellan_adapter::{
     apply_path_filter, lookup_symbol_by_path_and_name, normalize_path_for_query, paths_equivalent,
     SymbolLookupResult,
 };
-#[cfg(feature = "native-v3")]
-pub use native_v3::NativeV3Backend;
 pub use sqlite::SqliteBackend;
 
-/// Backend trait for abstracting over SQLite, Native-V3, and Geometric storage.
+/// Backend trait for abstracting over SQLite and Geometric storage.
 ///
 /// All backend implementations must provide these core operations:
 /// - Symbol search with filtering and scoring
@@ -41,7 +37,6 @@ pub use sqlite::SqliteBackend;
 ///
 /// Note: This trait does not require Send or Sync because:
 /// - rusqlite::Connection is not Sync
-/// - magellan::CodeGraph (native-v3) is not Send
 ///
 /// Each backend instance should be used from a single thread or externally synchronized.
 pub trait BackendTrait {
@@ -86,7 +81,6 @@ pub trait BackendTrait {
     /// Get FQN completions for a prefix.
     ///
     /// This method provides prefix-based autocomplete for fully qualified names.
-    /// Only available with native-v3 backend (KV prefix scan).
     ///
     /// # Arguments
     /// * `prefix` - Prefix string to match (e.g., "std::collections")
@@ -95,8 +89,7 @@ pub trait BackendTrait {
 
     /// Lookup symbol by exact fully-qualified name.
     ///
-    /// This method provides O(1) symbol resolution by FQN using KV store.
-    /// Only available with native-v3 backend.
+    /// This method provides symbol resolution by FQN.
     ///
     /// # Arguments
     /// * `fqn` - Fully-qualified name to lookup (e.g., "std::collections::HashMap::new")
@@ -111,7 +104,6 @@ pub trait BackendTrait {
     ///
     /// This method provides purpose-based label search using Magellan's label system.
     /// Labels group symbols by purpose category (e.g., "test", "entry_point", "public_api").
-    /// Only available with native-v3 backend.
     ///
     /// # Arguments
     /// * `label` - Label name to search for (e.g., "test", "entry_point")
@@ -120,7 +112,6 @@ pub trait BackendTrait {
     ///
     /// # Returns
     /// * `Ok((SearchResponse, partial, paths_bounded))` - Search results and metadata
-    /// * `Err(LlmError::RequiresNativeV3Backend)` - If SQLite backend detected
     fn search_by_label(
         &self,
         label: &str,
@@ -150,19 +141,23 @@ pub trait BackendTrait {
 
 /// Runtime backend dispatcher.
 ///
-/// Wraps either SqliteBackend, NativeV3Backend, or GeometricBackend and delegates Backend trait methods
+/// Wraps either SqliteBackend or GeometricBackend and delegates Backend trait methods
 /// to the appropriate implementation based on database format detection.
 #[derive(Debug)]
-#[allow(clippy::large_enum_variant)] // NativeV3Backend contains CodeGraph which is large
 pub enum Backend {
     /// SQLite storage backend (traditional, always available)
     Sqlite(SqliteBackend),
-    /// Native-V3 storage backend (high-performance, requires native-v3 feature)
-    #[cfg(feature = "native-v3")]
-    NativeV3(NativeV3Backend),
     /// Geometric storage backend (spatial/CGF optimized, requires geometric-backend feature)
     #[cfg(feature = "geometric-backend")]
     Geometric(GeometricBackend),
+}
+
+/// Check if a database file path has the geometric backend extension.
+fn is_geometric_extension(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e == "geo")
+        .unwrap_or(false)
 }
 
 impl Backend {
@@ -170,7 +165,6 @@ impl Backend {
     ///
     /// Checks file extension and header magic bytes to distinguish between:
     /// - Geometric backend: ".geo" extension
-    /// - V3 backend: "SQLTGF" header (SQLiteGraph native format)
     /// - SQLite backend: "SQLite format 3\0" header
     ///
     /// # Arguments
@@ -178,7 +172,6 @@ impl Backend {
     ///
     /// # Returns
     /// * `Ok(Backend)` - Appropriate backend variant based on file detection
-    /// * `Err(LlmError::NativeV3BackendNotSupported)` - Native-V3 detected but feature not enabled
     /// * `Err(LlmError::BackendDetectionFailed)` - Detection failed
     pub fn detect_and_open(db_path: &Path) -> Result<Self, LlmError> {
         use std::fs::File;
@@ -194,34 +187,23 @@ impl Backend {
         // First check file extension for geometric backend
         #[cfg(feature = "geometric-backend")]
         {
-            let is_geometric = db_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e == "geo")
-                .unwrap_or(false);
-
-            if is_geometric {
+            if is_geometric_extension(db_path) {
                 return GeometricBackend::open(db_path).map(Backend::Geometric);
             }
         }
 
         #[cfg(not(feature = "geometric-backend"))]
         {
-            let is_geometric = db_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| e == "geo")
-                .unwrap_or(false);
-
-            if is_geometric {
+            if is_geometric_extension(db_path) {
                 return Err(LlmError::BackendDetectionFailed {
                     path: db_path.display().to_string(),
-                    reason: "Geometric backend (.geo files) requires 'geometric-backend' feature".to_string(),
+                    reason: "Geometric backend (.geo files) requires 'geometric-backend' feature"
+                        .to_string(),
                 });
             }
         }
 
-        // Read first 16 bytes to detect format for other backends
+        // Read first 16 bytes to detect format
         let mut file = File::open(db_path).map_err(|e| LlmError::BackendDetectionFailed {
             path: db_path.display().to_string(),
             reason: format!("Cannot open file: {}", e),
@@ -234,21 +216,10 @@ impl Backend {
                 reason: format!("Cannot read file header: {}", e),
             })?;
 
-        // Check for V3 format magic: "SQLTGF" (SQLiteGraph Native)
-        let is_v3 = &header[0..6] == b"SQLTGF";
-
         // Check for SQLite format: "SQLite format 3\0"
         let is_sqlite = &header[0..16] == b"SQLite format 3\0";
 
-        if is_v3 {
-            #[cfg(feature = "native-v3")]
-            return NativeV3Backend::open(db_path).map(Backend::NativeV3);
-
-            #[cfg(not(feature = "native-v3"))]
-            return Err(LlmError::NativeV3BackendNotSupported {
-                path: db_path.display().to_string(),
-            });
-        } else if is_sqlite {
+        if is_sqlite {
             SqliteBackend::open(db_path).map(Backend::Sqlite)
         } else {
             // Unknown format, try SQLite as fallback (may fail with better error)
@@ -263,8 +234,6 @@ impl Backend {
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_symbols(options),
-            #[cfg(feature = "native-v3")]
-            Backend::NativeV3(b) => b.search_symbols(options),
             #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.search_symbols(options),
         }
@@ -277,8 +246,6 @@ impl Backend {
     ) -> Result<(ReferenceSearchResponse, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_references(options),
-            #[cfg(feature = "native-v3")]
-            Backend::NativeV3(b) => b.search_references(options),
             #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.search_references(options),
         }
@@ -291,8 +258,6 @@ impl Backend {
     ) -> Result<(CallSearchResponse, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_calls(options),
-            #[cfg(feature = "native-v3")]
-            Backend::NativeV3(b) => b.search_calls(options),
             #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.search_calls(options),
         }
@@ -307,8 +272,6 @@ impl Backend {
     ) -> Result<serde_json::Value, LlmError> {
         match self {
             Backend::Sqlite(b) => b.ast(file, position, limit),
-            #[cfg(feature = "native-v3")]
-            Backend::NativeV3(b) => b.ast(file, position, limit),
             #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.ast(file, position, limit),
         }
@@ -318,45 +281,30 @@ impl Backend {
     pub fn find_ast(&self, kind: &str) -> Result<serde_json::Value, LlmError> {
         match self {
             Backend::Sqlite(b) => b.find_ast(kind),
-            #[cfg(feature = "native-v3")]
-            Backend::NativeV3(b) => b.find_ast(kind),
             #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.find_ast(kind),
         }
     }
 
     /// Get FQN completions for a prefix.
-    ///
-    /// This method is only available with native-v3 backend.
-    /// SQLite and Geometric backends return RequiresNativeV3Backend error.
     pub fn complete(&self, prefix: &str, limit: usize) -> Result<Vec<String>, LlmError> {
         match self {
             Backend::Sqlite(b) => b.complete(prefix, limit),
-            #[cfg(feature = "native-v3")]
-            Backend::NativeV3(b) => b.complete(prefix, limit),
             #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.complete(prefix, limit),
         }
     }
 
     /// Lookup symbol by exact FQN.
-    ///
-    /// This method is available with all backends but may have different
-    /// performance characteristics.
     pub fn lookup(&self, fqn: &str, db_path: &str) -> Result<crate::output::SymbolMatch, LlmError> {
         match self {
             Backend::Sqlite(b) => b.lookup(fqn, db_path),
-            #[cfg(feature = "native-v3")]
-            Backend::NativeV3(b) => b.lookup(fqn, db_path),
             #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.lookup(fqn, db_path),
         }
     }
 
     /// Search for symbols by label.
-    ///
-    /// This method is only available with native-v3 backend.
-    /// SQLite and Geometric backends return RequiresNativeV3Backend error.
     pub fn search_by_label(
         &self,
         label: &str,
@@ -365,8 +313,6 @@ impl Backend {
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_by_label(label, limit, db_path),
-            #[cfg(feature = "native-v3")]
-            Backend::NativeV3(b) => b.search_by_label(label, limit, db_path),
             #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.search_by_label(label, limit, db_path),
         }
@@ -376,7 +322,7 @@ impl Backend {
     ///
     /// This method provides pre-extracted code snippets for a symbol.
     /// Geometric backend supports chunks from .geo files.
-    /// Other backends return RequiresGeometricBackend error.
+    /// SQLite backend returns ChunksNotAvailable error.
     #[cfg(feature = "geometric-backend")]
     pub fn get_chunks_for_symbol(
         &self,
@@ -386,12 +332,9 @@ impl Backend {
         match self {
             Backend::Sqlite(_) => Err(LlmError::ChunksNotAvailable {
                 backend: "SQLite".to_string(),
-                message: "SQLite backend does not support chunk retrieval. Use Geometric (.geo) backend.".to_string(),
-            }),
-            #[cfg(feature = "native-v3")]
-            Backend::NativeV3(_) => Err(LlmError::ChunksNotAvailable {
-                backend: "NativeV3".to_string(),
-                message: "NativeV3 backend does not support chunk retrieval. Use Geometric (.geo) backend.".to_string(),
+                message:
+                    "SQLite backend does not support chunk retrieval. Use Geometric (.geo) backend."
+                        .to_string(),
             }),
             #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.get_chunks_for_symbol(file_path, symbol_name),
@@ -403,11 +346,11 @@ impl Backend {
 mod tests {
     use super::*;
     use std::io::Write;
-    use tempfile::{NamedTempFile, TempDir};
+    use tempfile::NamedTempFile;
 
     #[cfg(feature = "geometric-backend")]
-    fn create_test_geo_db() -> (TempDir, std::path::PathBuf) {
-        let temp_dir = TempDir::new().unwrap();
+    fn create_test_geo_db() -> (tempfile::TempDir, std::path::PathBuf) {
+        let temp_dir = tempfile::TempDir::new().unwrap();
         let geo_path = temp_dir.path().join("test.geo");
 
         // Create a valid geometric database using Magellan's API
@@ -457,12 +400,11 @@ mod tests {
         // Layer 2: For a valid SQLite header, should attempt SQLite
         // Note: This may fail to open due to invalid SQLite content, but detection should work
         if result.is_ok() {
-            match result.unwrap() {
-                Backend::Sqlite(_) => {
-                    // Success - correct backend type
-                }
-                _ => panic!("Layer 2: Expected Sqlite backend variant for SQLite header"),
-            }
+            let backend = result.unwrap();
+            assert!(
+                matches!(backend, Backend::Sqlite(_)),
+                "Layer 2: Expected Sqlite backend variant for SQLite header"
+            );
         }
     }
 

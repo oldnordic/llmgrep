@@ -21,7 +21,7 @@
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Open a Magellan database
-//! let db_path = Path::new(".codemcp/codegraph.db");
+//! let db_path = Path::new(".magellan/llmgrep.db");
 //! let backend = Backend::detect_and_open(db_path)?;
 //! # Ok(())
 //! # }
@@ -33,7 +33,7 @@
 //!
 //! - [`algorithm`] - Magellan algorithm integration (reachable, dead-code, cycles)
 //! - [`ast`] - AST node queries and context
-//! - [`backend`] - Backend abstraction (SQLite, Native-V2)
+//! - [`backend`] - Backend abstraction (SQLite, Geometric)
 //! - [`error`] - Error types
 //! - [`output`] - Response types and formatting
 //! - [`query`] - Search functions and options
@@ -78,6 +78,9 @@ pub use backend::Backend;
 
 // Re-export output types for external use
 pub use output::PerformanceMetrics;
+
+// Re-export coverage types for external use
+pub use query::CoverageFilter;
 
 use clap::ValueEnum;
 

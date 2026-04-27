@@ -3,6 +3,7 @@
 //! Tests cross-crate component interactions between llmgrep and
 //! the Magellan geometric backend. These tests verify end-to-end
 //! workflows work correctly.
+#![cfg(feature = "geometric-backend")]
 
 use llmgrep::backend::Backend;
 use llmgrep::query::{
@@ -76,6 +77,7 @@ fn create_test_search_options<'a>(
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     }
 }
 

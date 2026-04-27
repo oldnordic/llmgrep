@@ -12,9 +12,10 @@ use crate::output::{
     CallMatch, CallSearchResponse, ReferenceMatch, ReferenceSearchResponse, SearchResponse, Span,
     SymbolMatch,
 };
+use crate::query::util::score_match;
 use crate::query::SearchOptions;
-use magellan::graph::GeometricBackend as MagellanGeometricBackend;
 use magellan::graph::geometric_backend::SymbolInfo;
+use magellan::graph::GeometricBackend as MagellanGeometricBackend;
 use regex::Regex;
 use std::path::Path;
 
@@ -34,7 +35,6 @@ impl std::fmt::Debug for GeometricBackend {
             .finish_non_exhaustive()
     }
 }
-
 impl GeometricBackend {
     /// Open a geometric database file.
     ///
@@ -80,7 +80,12 @@ impl GeometricBackend {
     }
 
     /// Convert Magellan's SymbolInfo to llmgrep's SymbolMatch with metrics
-    fn symbol_info_to_match(&self, info: SymbolInfo, _query: &str) -> SymbolMatch {
+    fn symbol_info_to_match(
+        &self,
+        info: SymbolInfo,
+        query: &str,
+        regex: Option<&Regex>,
+    ) -> SymbolMatch {
         // Get complexity if it's a function
         let mut complexity = None;
         if matches!(
@@ -90,6 +95,8 @@ impl GeometricBackend {
             let res = self.inner.calculate_complexity(info.id as i64);
             complexity = Some(res.cyclomatic_complexity as u64);
         }
+
+        let score = score_match(query, &info.name, &info.fqn, &info.fqn, regex);
 
         SymbolMatch {
             match_id: format!("match_{}", info.id),
@@ -108,7 +115,7 @@ impl GeometricBackend {
             kind: format!("{:?}", info.kind),
             parent: None,
             symbol_id: Some(format!("{:016x}", info.id)),
-            score: Some(100),
+            score: if score > 0 { Some(score) } else { None },
             fqn: Some(info.fqn.clone()),
             canonical_fqn: Some(info.fqn.clone()),
             display_fqn: Some(info.fqn.clone()),
@@ -124,97 +131,8 @@ impl GeometricBackend {
             cyclomatic_complexity: complexity.map(|c| c as u64),
             ast_context: None,
             supernode_id: None,
+            coverage: None,
         }
-    }
-
-    /// Get CFG blocks for a symbol from the geometric backend.
-    ///
-    /// Returns all CFG blocks associated with the given symbol ID,
-    /// including their 4D spatial coordinates.
-    fn get_cfg_blocks_for_symbol(
-        &self,
-        symbol_id: u64,
-    ) -> Vec<magellan::graph::geometric_backend::CfgBlock> {
-        // The magellan geometric backend returns Vec directly, not Result
-        self.inner.get_cfg_blocks_for_function(symbol_id as i64)
-    }
-
-    /// Convert geometric backend CfgBlock coordinates to spatial coordinates.
-    ///
-    /// Maps geometric backend fields to the 4D spatial coordinate system:
-    /// - X (dominator depth): dominator_depth field
-    /// - Y (loop nesting): loop_nesting field
-    /// - Z (branch distance): branch_count field (simplified approximation)
-    fn cfg_block_to_spatial_coords(block: &magellan::graph::geometric_backend::CfgBlock) -> (i64, i64, i64) {
-        // Note: The geometric backend stores coordinates differently than the schema
-        // dominator_depth -> coord_x
-        // loop_nesting -> coord_y
-        // branch_count -> coord_z (approximation, not true branch distance)
-        (
-            block.dominator_depth as i64,
-            block.loop_nesting as i64,
-            block.branch_count as i64,
-        )
-    }
-
-    /// Check if a symbol matches the given spatial criteria.
-    ///
-    /// A symbol matches if ANY of its CFG blocks falls within the specified
-    /// spatial ranges. If no spatial criteria are specified, returns true (no filter).
-    fn symbol_matches_spatial_criteria(
-        &self,
-        symbol_id: u64,
-        depth_range_x: Option<(i64, i64)>,
-        depth_range_y: Option<(i64, i64)>,
-        depth_range_z: Option<(i64, i64)>,
-    ) -> bool {
-        // If no spatial criteria specified, all symbols match
-        if depth_range_x.is_none() && depth_range_y.is_none() && depth_range_z.is_none() {
-            return true;
-        }
-
-        // Get CFG blocks for this symbol
-        let cfg_blocks = self.get_cfg_blocks_for_symbol(symbol_id);
-
-        // If symbol has no CFG blocks, it doesn't match spatial criteria
-        if cfg_blocks.is_empty() {
-            return false;
-        }
-
-        // Check if ANY block matches the spatial criteria
-        for block in &cfg_blocks {
-            let (coord_x, coord_y, coord_z) = Self::cfg_block_to_spatial_coords(block);
-            let mut matches = true;
-
-            // Check X coordinate (dominator depth)
-            if let Some((min_x, max_x)) = depth_range_x {
-                if coord_x < min_x || coord_x > max_x {
-                    matches = false;
-                }
-            }
-
-            // Check Y coordinate (loop nesting)
-            if let Some((min_y, max_y)) = depth_range_y {
-                if coord_y < min_y || coord_y > max_y {
-                    matches = false;
-                }
-            }
-
-            // Check Z coordinate (branch distance approximation)
-            if let Some((min_z, max_z)) = depth_range_z {
-                if coord_z < min_z || coord_z > max_z {
-                    matches = false;
-                }
-            }
-
-            // If this block matches all criteria, the symbol matches
-            if matches {
-                return true;
-            }
-        }
-
-        // No blocks matched the spatial criteria
-        false
     }
 }
 
@@ -273,22 +191,13 @@ impl crate::backend::BackendTrait for GeometricBackend {
                 // Kind filter - compare SymbolKind enum as strings
                 if let Some(ref kind_filter) = options.kind_filter {
                     let kind_str = format!("{:?}", info.kind).to_lowercase();
-                    if !kind_str.contains(&kind_filter.to_lowercase())
-                    {
+                    let allowed: Vec<String> = kind_filter
+                        .split(',')
+                        .map(|s| s.trim().to_lowercase())
+                        .collect();
+                    if !allowed.iter().any(|k| kind_str.contains(k)) {
                         return false;
                     }
-                }
-
-                // Spatial filtering - check if symbol has CFG blocks matching spatial criteria
-                let matches_spatial = self.symbol_matches_spatial_criteria(
-                    info.id,
-                    options.depth_range_x,
-                    options.depth_range_y,
-                    options.depth_range_z,
-                );
-
-                if !matches_spatial {
-                    return false;
                 }
 
                 true
@@ -308,9 +217,16 @@ impl crate::backend::BackendTrait for GeometricBackend {
             .map(|info| {
                 // Get full metadata for the match
                 if let Some(full_info) = self.inner.find_symbol_by_id_info(info.id) {
-                    self.symbol_info_to_match(full_info, options.query)
+                    self.symbol_info_to_match(full_info, options.query, regex.as_ref())
                 } else {
                     // Fallback to basic info if metadata lookup fails
+                    let score = score_match(
+                        options.query,
+                        &info.name,
+                        &info.fqn,
+                        &info.fqn,
+                        regex.as_ref(),
+                    );
                     SymbolMatch {
                         match_id: format!("match_{}", info.id),
                         span: Span {
@@ -328,7 +244,7 @@ impl crate::backend::BackendTrait for GeometricBackend {
                         kind: format!("{:?}", info.kind),
                         parent: None,
                         symbol_id: Some(format!("{:016x}", info.id)),
-                        score: Some(100),
+                        score: if score > 0 { Some(score) } else { None },
                         fqn: Some(info.fqn.clone()),
                         canonical_fqn: Some(info.fqn.clone()),
                         display_fqn: Some(info.fqn.clone()),
@@ -344,6 +260,7 @@ impl crate::backend::BackendTrait for GeometricBackend {
                         cyclomatic_complexity: None,
                         ast_context: None,
                         supernode_id: None,
+                        coverage: None,
                     }
                 }
             })
@@ -668,11 +585,11 @@ impl crate::backend::BackendTrait for GeometricBackend {
 
     fn lookup(&self, fqn: &str, db_path: &str) -> Result<SymbolMatch, LlmError> {
         match self.inner.find_symbol_by_fqn_info(fqn) {
-            Some(info) => Ok(self.symbol_info_to_match(info, fqn)),
+            Some(info) => Ok(self.symbol_info_to_match(info, fqn, None)),
             None => Err(LlmError::SymbolNotFound {
                 fqn: fqn.to_string(),
                 db: db_path.to_string(),
-                partial: fqn.split("::").last().unwrap_or(fqn).to_string(),
+                partial: fqn.split("::").last().unwrap().to_string(), // SAFETY: split always yields >=1 element
             }),
         }
     }
@@ -683,9 +600,10 @@ impl crate::backend::BackendTrait for GeometricBackend {
         _limit: usize,
         db_path: &str,
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
-        Err(LlmError::RequiresNativeV3Backend {
-            command: "search_by_label".to_string(),
-            path: db_path.to_string(),
+        Err(LlmError::FeatureNotAvailable {
+            feature: "search_by_label".to_string(),
+            backend: "Geometric".to_string(),
+            message: format!("Label search is not supported for Geometric backend. Use SQLite backend for label-based queries. Database: {}", db_path),
         })
     }
 
@@ -717,11 +635,11 @@ impl GeometricBackend {
         symbol: &SymbolInfo,
         options: SearchOptions,
     ) -> Result<(ReferenceSearchResponse, bool), LlmError> {
-        let (callers, _callees): (Vec<u64>, Vec<u64>) = self
-            .inner
-            .get_references_bidirectional(symbol.id);
+        let (callers, _callees): (Vec<u64>, Vec<u64>) =
+            self.inner.get_references_bidirectional(symbol.id);
 
         let mut results = Vec::new();
+        let ref_score = score_match(options.query, &symbol.name, "", "", None);
 
         // Structured references from DB
         for caller_id in callers.iter() {
@@ -754,7 +672,7 @@ impl GeometricBackend {
                     referenced_symbol: symbol.name.clone(),
                     reference_kind: Some("structured".to_string()),
                     target_symbol_id: Some(format!("{:016x}", symbol.id)),
-                    score: Some(100),
+                    score: if ref_score > 0 { Some(ref_score) } else { None },
                     content_hash: None,
                     symbol_kind_from_chunk: None,
                     snippet: None,
@@ -789,6 +707,7 @@ impl GeometricBackend {
                 // Read file content and search for symbol name
                 if let Ok(content) = std::fs::read_to_string(&sym.file_path) {
                     if content.contains(&symbol.name) {
+                        let text_score = score_match(options.query, &symbol.name, "", "", None);
                         results.push(ReferenceMatch {
                             match_id: format!("textref_{}_{}", symbol.id, sym.id),
                             span: Span {
@@ -805,7 +724,11 @@ impl GeometricBackend {
                             referenced_symbol: symbol.name.clone(),
                             reference_kind: Some("textual".to_string()),
                             target_symbol_id: Some(format!("{:016x}", symbol.id)),
-                            score: Some(50),
+                            score: if text_score > 0 {
+                                Some(text_score)
+                            } else {
+                                None
+                            },
                             content_hash: None,
                             symbol_kind_from_chunk: None,
                             snippet: None,
@@ -856,6 +779,7 @@ impl GeometricBackend {
                     }
                 }
 
+                let call_score = score_match(options.query, &info.name, "", "", None);
                 results.push(CallMatch {
                     match_id: format!("call_{}_{}", symbol.id, callee_id),
                     span: Span {
@@ -873,7 +797,11 @@ impl GeometricBackend {
                     callee: info.name.clone(),
                     caller_symbol_id: Some(format!("{:016x}", symbol.id)),
                     callee_symbol_id: Some(format!("{:016x}", callee_id)),
-                    score: Some(100),
+                    score: if call_score > 0 {
+                        Some(call_score)
+                    } else {
+                        None
+                    },
                     content_hash: None,
                     symbol_kind_from_chunk: None,
                     snippet: None,
@@ -912,6 +840,7 @@ impl GeometricBackend {
                         }
 
                         if func_src.contains(&other.name) {
+                            let text_score = score_match(options.query, &other.name, "", "", None);
                             results.push(CallMatch {
                                 match_id: format!("textcall_{}_{}", symbol.id, other.id),
                                 span: Span {
@@ -929,7 +858,11 @@ impl GeometricBackend {
                                 callee: other.name.clone(),
                                 caller_symbol_id: Some(format!("{:016x}", symbol.id)),
                                 callee_symbol_id: Some(format!("{:016x}", other.id)),
-                                score: Some(50),
+                                score: if text_score > 0 {
+                                    Some(text_score)
+                                } else {
+                                    None
+                                },
                                 content_hash: None,
                                 symbol_kind_from_chunk: None,
                                 snippet: None,
@@ -956,64 +889,5 @@ impl GeometricBackend {
             },
             partial,
         ))
-    }
-}
-
-#[cfg(test)]
-mod spatial_tests {
-    use super::*;
-
-    /// Test spatial filtering with real .geo database.
-    ///
-    /// This test verifies that symbols can be filtered by their 4D spatial coordinates.
-    /// It requires a real .geo database with computed 4D coordinates.
-    ///
-    /// Note: This test is currently disabled due to pre-existing compilation issues
-    /// in the geometric backend integration. Once those are fixed, this test should
-    /// be enabled and run against a real .geo database.
-    #[test]
-    #[ignore]
-    fn test_symbol_matches_spatial_criteria_depth_x() {
-        // This test requires a real .geo database with computed 4D coordinates
-        // TODO: Enable this test once geometric backend compilation issues are fixed
-        // Expected behavior:
-        // 1. Open a .geo database
-        // 2. Query symbols with different coord_x values
-        // 3. Verify filtering returns only symbols within X range
-    }
-
-    #[test]
-    #[ignore]
-    fn test_symbol_matches_spatial_criteria_depth_y() {
-        // Test loop nesting filtering (Y coordinate)
-        // TODO: Implement once geometric backend is fixed
-    }
-
-    #[test]
-    #[ignore]
-    fn test_symbol_matches_spatial_criteria_depth_z() {
-        // Test branch distance filtering (Z coordinate)
-        // TODO: Implement once geometric backend is fixed
-    }
-
-    #[test]
-    #[ignore]
-    fn test_symbol_matches_spatial_criteria_combined() {
-        // Test combined X, Y, Z filtering
-        // TODO: Implement once geometric backend is fixed
-    }
-
-    #[test]
-    #[ignore]
-    fn test_symbol_matches_spatial_criteria_no_filter() {
-        // Test that when no spatial criteria specified, all symbols match
-        // TODO: Implement once geometric backend is fixed
-    }
-
-    #[test]
-    #[ignore]
-    fn test_search_symbols_with_spatial_filtering_integration() {
-        // Full integration test: search_symbols() with spatial options
-        // TODO: Implement once geometric backend is fixed
     }
 }

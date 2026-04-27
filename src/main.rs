@@ -60,6 +60,7 @@ struct SearchParams {
     condense: bool,
     paths_from: Option<String>,
     paths_to: Option<String>,
+    coverage_filter: Option<llmgrep::query::CoverageFilter>,
 }
 
 use llmgrep::ast::{expand_shorthand_with_language, expand_shorthands};
@@ -227,6 +228,12 @@ enum Command {
 
         #[arg(long, value_name = "SYMBOL")]
         paths_to: Option<String>,
+
+        #[arg(long)]
+        uncovered: bool,
+
+        #[arg(long)]
+        covered: bool,
     },
 
     #[command(after_help = AST_EXAMPLES)]
@@ -464,7 +471,7 @@ EXAMPLES:
   llmgrep --db code.db lookup --fqn "std::collections::HashMap::new"
 
   # JSON output for programmatic use
-  llmgrep --db code.v3 lookup --fqn "crate::backend::NativeV3Backend" --output json
+  llmgrep --db .magellan/llmgrep.db lookup --fqn "crate::backend::SqliteBackend" --output json
 
   # Get all symbol metadata in one query
   llmgrep --db code.db lookup --fqn "parse" --output pretty
@@ -565,12 +572,7 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
                 reason: e.to_string(),
             })?;
 
-        // Check file extension for V3 backend detection
-        let path_str = validated_db.to_string_lossy();
-        let is_v3 = path_str.ends_with(".v3");
-
         let backend_str = match format {
-            BackendFormat::Sqlite if is_v3 => "native-v3",
             BackendFormat::Sqlite => "sqlite",
         };
 
@@ -648,6 +650,8 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
                 condense,
                 paths_from,
                 paths_to,
+                uncovered,
+                covered,
             } => {
                 let params = SearchParams {
                     query: query.clone(),
@@ -690,6 +694,13 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
                     condense: *condense,
                     paths_from: paths_from.clone(),
                     paths_to: paths_to.clone(),
+                    coverage_filter: if *uncovered {
+                        Some(llmgrep::query::CoverageFilter::Uncovered)
+                    } else if *covered {
+                        Some(llmgrep::query::CoverageFilter::Covered)
+                    } else {
+                        None
+                    },
                 };
                 run_search(cli, &params)
             }
@@ -749,16 +760,13 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
         None
     };
 
-    // Normalize kind value (handles comma-separated values for future use)
-    // For now, we still pass single kind to SearchOptions but normalize it
+    // Normalize kind value (supports comma-separated values)
     let normalized_kind = params.kind.as_ref().map(|k| {
         let kinds = parse_kinds(k);
-        // For backward compatibility with current implementation,
-        // use the first kind. Future enhancement: support multiple kinds.
-        if !kinds.is_empty() {
-            kinds[0].clone()
-        } else {
+        if kinds.is_empty() {
             k.to_lowercase()
+        } else {
+            kinds.join(",")
         }
     });
 
@@ -780,6 +788,15 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
         });
     }
 
+    // Validate mutual exclusivity of --uncovered and --covered
+    if params.coverage_filter == Some(llmgrep::query::CoverageFilter::Uncovered)
+        && params.coverage_filter == Some(llmgrep::query::CoverageFilter::Covered)
+    {
+        return Err(LlmError::InvalidQuery {
+            query: "--uncovered and --covered are mutually exclusive. Use only one.".to_string(),
+        });
+    }
+
     // Warn if both --query and --symbol-id are provided (symbol_id takes precedence)
     if params.symbol_id.is_some() {
         eprintln!(
@@ -797,22 +814,20 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
     }
 
     // Validate database path before any operations
-    let validated_db = if let Some(db_path) = &cli.db {
-        Some(validate_path(db_path, true)?)
+    let db_path = if let Some(db_path) = &cli.db {
+        validate_path(db_path, true)?
     } else {
         return Err(LlmError::DatabaseNotFound {
             path: "none".to_string(),
         });
     };
 
-    let db_path = validated_db.as_ref().expect("validated db path missing");
-
     // Start total timing
     let total_start = std::time::Instant::now();
 
-    // Detect and open backend automatically (SQLite or Native-V2)
+    // Detect and open backend automatically
     let detect_start = std::time::Instant::now();
-    let backend = Backend::detect_and_open(db_path)?;
+    let backend = Backend::detect_and_open(&db_path)?;
     let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
 
     // Validate path filter if provided
@@ -857,7 +872,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
     match params.mode {
         SearchMode::Symbols => {
             let options = SearchOptions {
-                db_path,
+                db_path: &db_path,
                 query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: normalized_kind.as_deref(),
@@ -910,6 +925,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 symbol_id: params.symbol_id.as_ref().map(|s| s.as_str()),
                 fqn_pattern: params.fqn.as_ref().map(|s| s.as_str()),
                 exact_fqn: params.exact_fqn.as_ref().map(|s| s.as_str()),
+                coverage_filter: None,
             };
 
             // Time query execution
@@ -976,7 +992,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
         }
         SearchMode::References => {
             let options = SearchOptions {
-                db_path,
+                db_path: &db_path,
                 query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
@@ -1003,6 +1019,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
+                coverage_filter: None,
             };
 
             // Time query execution
@@ -1039,7 +1056,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
         }
         SearchMode::Calls => {
             let options = SearchOptions {
-                db_path,
+                db_path: &db_path,
                 query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
@@ -1066,6 +1083,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
+                coverage_filter: None,
             };
 
             // Time query execution
@@ -1112,7 +1130,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
             };
 
             let (symbols, symbols_partial, _) = backend.search_symbols(SearchOptions {
-                db_path,
+                db_path: &db_path,
                 query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: normalized_kind.as_deref(),
@@ -1155,9 +1173,10 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 symbol_id: params.symbol_id.as_ref().map(|s| s.as_str()),
                 fqn_pattern: params.fqn.as_ref().map(|s| s.as_str()),
                 exact_fqn: params.exact_fqn.as_ref().map(|s| s.as_str()),
+                coverage_filter: None,
             })?;
             let (references, refs_partial) = backend.search_references(SearchOptions {
-                db_path,
+                db_path: &db_path,
                 query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
@@ -1184,9 +1203,10 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
+                coverage_filter: None,
             })?;
             let (calls, calls_partial) = backend.search_calls(SearchOptions {
-                db_path,
+                db_path: &db_path,
                 query: &params.query,
                 path_filter: validated_path.as_ref(),
                 kind_filter: None,
@@ -1213,6 +1233,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 symbol_id: None,
                 fqn_pattern: None,
                 exact_fqn: None,
+                coverage_filter: None,
             })?;
             let total_count = symbols.total_count + references.total_count + calls.total_count;
             let combined = CombinedSearchResponse {
@@ -1335,7 +1356,7 @@ fn run_ast(cli: &Cli, file: &Path, position: Option<usize>, limit: usize) -> Res
     // Start total timing
     let total_start = std::time::Instant::now();
 
-    // Detect and open backend automatically (SQLite or Native-V2)
+    // Detect and open backend automatically
     let detect_start = std::time::Instant::now();
     let backend = Backend::detect_and_open(&db_path)?;
     let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
@@ -1404,7 +1425,7 @@ fn run_find_ast(cli: &Cli, kind: &str) -> Result<(), LlmError> {
     // Start total timing
     let total_start = std::time::Instant::now();
 
-    // Detect and open backend automatically (SQLite or Native-V2)
+    // Detect and open backend automatically
     let detect_start = std::time::Instant::now();
     let backend = Backend::detect_and_open(&db_path)?;
     let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
@@ -1473,13 +1494,10 @@ fn run_complete(cli: &Cli, prefix: String, limit: usize) -> Result<(), LlmError>
     // Start total timing
     let total_start = std::time::Instant::now();
 
-    // Detect and open backend automatically (SQLite or Native-V2)
+    // Detect and open backend automatically
     let detect_start = std::time::Instant::now();
     let backend = Backend::detect_and_open(&db_path)?;
     let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
-
-    // Check if backend supports complete command (native-v3 only)
-    require_native_v3(&backend, "complete", &db_path)?;
 
     // Get completions via backend
     let query_start = std::time::Instant::now();
@@ -1544,13 +1562,10 @@ fn run_lookup(cli: &Cli, fqn: &str) -> Result<(), LlmError> {
     // Start total timing
     let total_start = std::time::Instant::now();
 
-    // Detect and open backend automatically (SQLite or Native-V2)
+    // Detect and open backend automatically
     let detect_start = std::time::Instant::now();
     let backend = Backend::detect_and_open(&db_path)?;
     let backend_detection_ms = detect_start.elapsed().as_millis() as u64;
-
-    // Check if backend supports lookup command (native-v3 only)
-    require_native_v3(&backend, "lookup", &db_path)?;
 
     // Lookup symbol by FQN via backend
     let query_start = std::time::Instant::now();
@@ -1694,6 +1709,7 @@ fn run_watch(
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     // Create shutdown flag for signal handling
@@ -1751,14 +1767,25 @@ fn output_symbols(
             }
             println!("{}", format_total_header(response.total_count));
             for item in response.results {
+                let coverage_str = item
+                    .coverage
+                    .as_ref()
+                    .map(|c| {
+                        format!(
+                            " [{}/{} blocks {:.1}%]",
+                            c.covered_blocks, c.total_blocks, c.block_percentage
+                        )
+                    })
+                    .unwrap_or_default();
                 println!(
-                    "{}:{}:{} {} {} score={}",
+                    "{}:{}:{} {} {} score={}{}",
                     item.span.file_path,
                     item.span.start_line,
                     item.span.start_col,
                     item.name,
                     item.kind,
-                    item.score.unwrap_or(0)
+                    item.score.unwrap_or(0),
+                    coverage_str
                 );
             }
             if partial {
@@ -1953,7 +1980,7 @@ fn normalize_kind(kind: &str) -> String {
     match kind.to_lowercase().as_str() {
         "function" | "fn" | "func" => "fn".to_string(),
         "method" => "method".to_string(),
-        "struct" | "class" => "struct".to_string(), // Map class to struct for now
+        "struct" | "class" => "struct".to_string(), // Magellan normalizes Class to struct
         "enum" | "enumeration" => "enum".to_string(),
         "interface" => "interface".to_string(),
         "module" | "namespace" | "package" => "module".to_string(),
@@ -2046,32 +2073,6 @@ fn emit_error(cli: &Cli, err: &LlmError) {
                 Err(ser_err) => eprintln!("ERROR: {}", ser_err),
             }
         }
-    }
-}
-
-/// Check if backend is native-v3, return error if SQLite
-///
-/// This helper function is used by commands that require native-v3 storage.
-/// Check if the backend supports native-v3 specific commands.
-///
-/// Note: Geometric backend now supports most commands that were previously
-/// native-v3 only (like complete). This function should be updated as
-/// geometric backend gains more capabilities.
-fn require_native_v3(backend: &Backend, command: &str, db_path: &Path) -> Result<(), LlmError> {
-    match backend {
-        #[cfg(feature = "native-v3")]
-        Backend::NativeV3(_) => Ok(()),
-        #[cfg(feature = "geometric-backend")]
-        Backend::Geometric(_) => {
-            // Geometric backend now supports most commands
-            // If a specific command isn't supported, the backend will return
-            // an appropriate error
-            Ok(())
-        }
-        Backend::Sqlite(_) => Err(LlmError::RequiresNativeV3Backend {
-            command: command.to_string(),
-            path: db_path.display().to_string(),
-        }),
     }
 }
 

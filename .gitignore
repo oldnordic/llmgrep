@@ -6,6 +6,21 @@
 test_db/
 .cargo/
 
+# Local agent/tooling instructions and automation
+.claude/
+CLAUDE.md
+AGENTS.md
+
+# Internal notes and planning artifacts
+.internal/
+INVARIANTS.md
+PLAN.md
+PLANS.md
+*_PLAN.md
+*_AUDIT.md
+*_REPORT.md
+*_ASSESSMENT.md
+
 # Database files
 *.db
 *.db-*

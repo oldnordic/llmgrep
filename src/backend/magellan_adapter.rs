@@ -60,7 +60,11 @@ impl SearchResult {
         if symbols.is_empty() {
             SearchResult::NotFound { query, path_filter }
         } else if symbols.len() == 1 {
-            SearchResult::Unique(symbols.into_iter().next().unwrap())
+            if let Some(sym) = symbols.into_iter().next() {
+                SearchResult::Unique(sym)
+            } else {
+                SearchResult::NotFound { query, path_filter }
+            }
         } else {
             SearchResult::Ambiguous {
                 query,

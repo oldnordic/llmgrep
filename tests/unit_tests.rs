@@ -252,6 +252,7 @@ fn test_api_metrics_filtering() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -302,6 +303,7 @@ fn test_api_metrics_sorting() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -351,6 +353,7 @@ fn test_api_fqn_field_population() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -411,6 +414,7 @@ fn test_api_language_filtering() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -469,6 +473,7 @@ fn test_api_position_mode_sorting() {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -549,6 +554,7 @@ fn test_api_symbol_id_lookup() {
         symbol_id: Some(known_symbol_id),
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");
@@ -650,6 +656,7 @@ fn test_api_fqn_pattern_filtering() {
         symbol_id: None,
         fqn_pattern: Some("%module_a%"), // LIKE pattern
         exact_fqn: None,
+        coverage_filter: None,
     };
 
     let response = search_symbols(options).expect("search should succeed");

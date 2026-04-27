@@ -9,8 +9,6 @@ use std::path::Path;
 pub enum BackendFormat {
     /// SQLite database format
     Sqlite,
-    /// Native V3 binary format
-    NativeV3,
     /// Unknown or invalid format
     Unknown,
 }
@@ -40,11 +38,6 @@ pub fn detect_backend_format(path: &Path) -> BackendFormat {
     // Check for SQLite magic bytes: "SQLite format 3\0"
     if header[0..16] == *b"SQLite format 3\0" {
         return BackendFormat::Sqlite;
-    }
-
-    // Check for V3 native format magic: "SQLTGF"
-    if header[0..6] == *b"SQLTGF" {
-        return BackendFormat::NativeV3;
     }
 
     BackendFormat::Unknown

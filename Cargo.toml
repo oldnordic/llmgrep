@@ -1,6 +1,6 @@
 [package]
 name = "llmgrep"
-version = "3.1.3"
+version = "3.1.6"
 edition = "2021"
 description = "Smart grep over Magellan code maps with schema-aligned JSON output"
 license = "GPL-3.0"
@@ -14,27 +14,18 @@ default = ["unix"]
 unix = []
 windows = []
 
-# Native-V3 backend support (reserved, currently disabled)
-# High-performance binary backend with KV store side tables
-# NOTE: Feature defined to silence cfg warnings, but intentionally disabled
-# Dependencies are commented out to avoid format conflicts
-native-v3 = []
-# native-v3 = ["magellan/native-v3", "sqlitegraph/native-v3"]
-
 # Unstable watch command (incomplete, requires unstable Mag APIs)
 unstable-watch = []
 
-# Geometric backend support for .geo files (requires unpublished geographdb-core)
-# This feature is disabled for crates.io publishing
-# geometric-backend = ["magellan/geometric-backend"]
-geometric-backend = []
+# Geometric backend support for .geo files (requires geographdb-core)
+geometric-backend = ["magellan/geometric-backend"]
 
 [dependencies]
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 hex = "0.4"
-magellan = { version = "3.1", path = "../magellan", features = ["sqlite-backend"] }
+magellan = { version = "3.1.7", features = ["sqlite-backend"] }
 regex = "1.10"
 rusqlite = "0.31"
 serde = { version = "1.0", features = ["derive"] }

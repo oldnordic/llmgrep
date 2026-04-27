@@ -3,6 +3,7 @@
 //! Tests interactions between units within the backend module.
 //! These tests verify that the Backend enum properly delegates to
 //! GeometricBackend implementations.
+#![cfg(feature = "geometric-backend")]
 
 use llmgrep::backend::{Backend, BackendTrait, GeometricBackend};
 use llmgrep::query::{
@@ -72,6 +73,7 @@ fn create_test_search_options(db_path: &std::path::Path) -> SearchOptions {
         symbol_id: None,
         fqn_pattern: None,
         exact_fqn: None,
+        coverage_filter: None,
     }
 }
 
@@ -247,10 +249,10 @@ fn test_backend_enum_delegates_search_by_label_to_geometric() {
     );
 
     match result {
-        Err(llmgrep::error::LlmError::RequiresNativeV3Backend { .. }) => {
+        Err(llmgrep::error::LlmError::FeatureNotAvailable { .. }) => {
             // Expected error
         }
-        _ => panic!("Layer 2: Expected RequiresNativeV3Backend error"),
+        _ => panic!("Layer 2: Expected FeatureNotAvailable error"),
     }
 }
 

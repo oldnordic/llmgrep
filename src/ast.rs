@@ -467,22 +467,30 @@ pub fn get_ast_context_for_symbol_with_preference(
     // Overlap formula: intervals [s1, e1] and [s2, e2] overlap when: s1 < e2 AND s2 < e1
     let (ast_id, parent_id, kind, ast_byte_start, ast_byte_end) = if !preferred_kinds.is_empty() {
         // First try to find a node matching one of the preferred kinds
-        // Use direct SQL construction to avoid rusqlite parameter binding issues
-        let kind_list = preferred_kinds
+        let placeholders = preferred_kinds
             .iter()
-            .map(|k| format!("'{}'", k.replace('\'', "''")))
+            .map(|_| "?")
             .collect::<Vec<_>>()
             .join(",");
         let sql = format!(
             "SELECT id, parent_id, kind, byte_start, byte_end
                  FROM ast_nodes
-                 WHERE byte_start <= {} AND byte_end >= {} AND kind IN ({})
-                 ORDER BY ABS(byte_start - {}) + ABS(byte_end - {})
+                 WHERE byte_start <= ? AND byte_end >= ? AND kind IN ({})
+                 ORDER BY ABS(byte_start - ?) + ABS(byte_end - ?)
                  LIMIT 1",
-            byte_end, byte_start, kind_list, byte_start, byte_end
+            placeholders
         );
 
-        match conn.query_row(&sql, [], |row| {
+        let byte_end_i64 = byte_end as i64;
+        let byte_start_i64 = byte_start as i64;
+        let mut params: Vec<&dyn rusqlite::ToSql> = vec![&byte_end_i64, &byte_start_i64];
+        for kind in preferred_kinds {
+            params.push(kind);
+        }
+        params.push(&byte_start_i64);
+        params.push(&byte_end_i64);
+
+        match conn.query_row(&sql, params.as_slice(), |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, Option<i64>>(1)?,
@@ -529,25 +537,33 @@ pub fn get_ast_context_for_symbol_with_preference(
     } else {
         // No preference, find the closest containing node
         // Prefer nodes that fully contain the symbol span, ordered by smallest containing span first
-        let sql = format!(
-            "SELECT id, parent_id, kind, byte_start, byte_end
-                 FROM ast_nodes
-                 WHERE byte_start <= {} AND byte_end >= {}
-                 ORDER BY
-                     CASE WHEN byte_start <= {} AND byte_end >= {} THEN 0 ELSE 1 END ASC,
-                     (byte_end - byte_start) ASC
-                 LIMIT 1",
-            byte_end, byte_start, byte_start, byte_end
-        );
-        match conn.query_row(&sql, [], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, Option<i64>>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, u64>(3)?,
-                row.get::<_, u64>(4)?,
-            ))
-        }) {
+        let sql = r#"
+            SELECT id, parent_id, kind, byte_start, byte_end
+            FROM ast_nodes
+            WHERE byte_start <= ? AND byte_end >= ?
+            ORDER BY
+                CASE WHEN byte_start <= ? AND byte_end >= ? THEN 0 ELSE 1 END ASC,
+                (byte_end - byte_start) ASC
+            LIMIT 1
+        "#;
+        match conn.query_row(
+            sql,
+            [
+                byte_end as i64,
+                byte_start as i64,
+                byte_start as i64,
+                byte_end as i64,
+            ],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<i64>>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, u64>(3)?,
+                    row.get::<_, u64>(4)?,
+                ))
+            },
+        ) {
             Ok(result) => result,
             Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
             Err(e) => return Err(e.into()),

@@ -1,7 +1,5 @@
 use super::builder::{build_call_query, build_reference_query, build_search_query};
-use super::util::{
-    like_pattern, like_prefix, load_file, normalize_kind_label, score_match, FileCache,
-};
+use super::util::{like_pattern, like_prefix, load_file, normalize_kind_label, score_match};
 use super::*;
 use crate::algorithm::AlgorithmOptions;
 use crate::error::LlmError;
@@ -196,7 +194,9 @@ fn test_build_search_query_basic() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should have LIKE clauses for name, display_fqn, fqn
@@ -233,7 +233,9 @@ fn test_build_search_query_with_kind_filter() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should add kind filter
@@ -266,7 +268,9 @@ fn test_build_search_query_with_path_filter() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should add file path filter
@@ -298,7 +302,9 @@ fn test_build_search_query_regex_mode() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should NOT have LIKE clauses in regex mode
@@ -333,7 +339,9 @@ fn test_build_search_query_count_only() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should start with COUNT
@@ -368,7 +376,9 @@ fn test_build_search_query_regular_query() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should have ORDER BY
@@ -402,7 +412,9 @@ fn test_build_search_query_with_metrics_fan_in_sort() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should ORDER BY fan_in DESC
@@ -433,7 +445,9 @@ fn test_build_search_query_with_metrics_fan_out_sort() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should ORDER BY fan_out DESC
@@ -464,7 +478,9 @@ fn test_build_search_query_with_metrics_complexity_sort() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should ORDER BY cyclomatic_complexity DESC
@@ -499,7 +515,9 @@ fn test_build_search_query_with_min_complexity_filter() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should filter by min_complexity
@@ -535,7 +553,9 @@ fn test_build_search_query_with_max_complexity_filter() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should filter by max_complexity
@@ -571,7 +591,9 @@ fn test_build_search_query_with_min_fan_in_filter() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should filter by min_fan_in
@@ -603,7 +625,9 @@ fn test_build_search_query_with_metrics_join() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should LEFT JOIN symbol_metrics
@@ -640,7 +664,9 @@ fn test_build_search_query_combined_filters() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should have all filter clauses
@@ -836,7 +862,9 @@ fn test_build_search_query_combined_filters_path_kind() {
         None,  // max_depth
         None,  // inside_kind
         None,  // contains_kind
-        None,  // symbol_set_filter
+        None,  // symbol_set_filter,
+        false,
+        None,
     );
 
     // Should have all filters
@@ -978,6 +1006,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1016,6 +1045,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1050,6 +1080,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1088,6 +1119,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1123,6 +1155,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1162,6 +1195,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1200,6 +1234,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1239,6 +1274,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1273,6 +1309,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1312,6 +1349,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1368,6 +1406,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1402,6 +1441,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1436,6 +1476,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1489,6 +1530,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1532,6 +1574,7 @@ mod pub_api_tests_symbols {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -1607,6 +1650,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -1647,6 +1691,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -1686,6 +1731,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -1720,6 +1766,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -1759,6 +1806,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -1793,6 +1841,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -1833,6 +1882,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -1873,6 +1923,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -1908,6 +1959,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -1942,6 +1994,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -1979,6 +2032,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -2015,6 +2069,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial) = search_calls(options).expect("search_calls should succeed");
@@ -2165,6 +2220,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (result, _partial) =
@@ -2203,6 +2259,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (result, _partial) =
@@ -2239,6 +2296,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (result, _partial) =
@@ -2276,6 +2334,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (result, _partial) =
@@ -2313,6 +2372,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (result, _partial) =
@@ -2349,6 +2409,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (result, _partial) =
@@ -2386,6 +2447,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (result, _partial) =
@@ -2422,6 +2484,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (result, _partial) =
@@ -2455,6 +2518,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (result, _partial) =
@@ -2492,6 +2556,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (result, _partial) =
@@ -2528,6 +2593,7 @@ mod pub_api_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (result, _partial) =
@@ -2610,6 +2676,7 @@ fn test_search_symbols_corrupted_database() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     });
 
     match result {
@@ -2930,6 +2997,7 @@ mod metrics_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -2988,6 +3056,7 @@ mod metrics_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -3033,6 +3102,7 @@ mod metrics_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -3078,6 +3148,7 @@ mod metrics_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -3128,6 +3199,7 @@ mod metrics_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -3173,6 +3245,7 @@ mod metrics_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -3224,6 +3297,7 @@ mod metrics_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -3275,6 +3349,7 @@ mod metrics_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -3326,6 +3401,7 @@ mod metrics_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -3442,6 +3518,7 @@ mod metrics_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial, _) =
@@ -3506,6 +3583,7 @@ mod metrics_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response_filter, _, _) =
@@ -3550,6 +3628,7 @@ mod symbol_id_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, partial, _) =
@@ -3591,6 +3670,7 @@ mod symbol_id_tests {
             fqn_pattern: Some("/test/file.rs%"),
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial, _) =
@@ -3633,6 +3713,7 @@ mod symbol_id_tests {
             fqn_pattern: None,
             exact_fqn: Some("/test/file.rs::test_func"),
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial, _) =
@@ -3679,6 +3760,7 @@ mod symbol_id_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial, _) =
@@ -3790,6 +3872,7 @@ mod symbol_id_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         // Capture stderr to check for warning
@@ -3897,6 +3980,7 @@ mod symbol_id_tests {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
 
         let (response, _partial, _) =
@@ -3970,7 +4054,9 @@ mod symbol_id_tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
-            None,  // symbol_set_filter
+            None,  // symbol_set_filter,
+            false,
+            None,
         );
 
         // Should filter by .rs extension
@@ -4002,7 +4088,9 @@ mod symbol_id_tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
-            None,  // symbol_set_filter
+            None,  // symbol_set_filter,
+            false,
+            None,
         );
 
         // Should NOT add language filter for unknown language
@@ -4032,7 +4120,9 @@ mod symbol_id_tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
-            None,  // symbol_set_filter
+            None,  // symbol_set_filter,
+            false,
+            None,
         );
 
         // Should have both path, kind, and language filters
@@ -4066,7 +4156,9 @@ mod symbol_id_tests {
             None,  // max_depth
             None,  // inside_kind
             None,  // contains_kind
-            None,  // symbol_set_filter
+            None,  // symbol_set_filter,
+            false,
+            None,
         );
 
         // Should filter by .cpp extension

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 fn main() {
-    let db_path = Path::new(".codemcp/codegraph.db");
+    let db_path = Path::new(".magellan/llmgrep.db");
 
     // Read header directly
     match std::fs::read(db_path) {
@@ -11,14 +11,5 @@ fn main() {
             println!("Header as string: {:?}", String::from_utf8_lossy(header));
         }
         Err(e) => println!("Cannot read file: {}", e),
-    }
-
-    // Try magellan detection
-    #[cfg(feature = "native-v3")]
-    {
-        match magellan::migrate_backend_cmd::detect_backend_format(db_path) {
-            Ok(format) => println!("Magellan detected: {:?}", format),
-            Err(e) => println!("Magellan detection error: {}", e),
-        }
     }
 }

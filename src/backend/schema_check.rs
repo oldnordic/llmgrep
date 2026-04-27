@@ -20,9 +20,7 @@ pub fn check_schema_version(conn: &Connection) -> Result<(), String> {
     ) {
         Ok(v) => Some(v),
         Err(rusqlite::Error::QueryReturnedNoRows) => None,
-        Err(rusqlite::Error::SqliteFailure(_, Some(msg)))
-            if msg.contains("no such table") =>
-        {
+        Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if msg.contains("no such table") => {
             eprintln!(
                 "Warning: Could not determine Magellan schema version (magellan_meta table missing). \
                  Queries may fail if the database was created by an incompatible Magellan version."
@@ -57,6 +55,31 @@ pub fn check_schema_version(conn: &Connection) -> Result<(), String> {
     }
 }
 
+/// Check if coverage tables exist in the database.
+///
+/// Returns true if `cfg_block_coverage`, `cfg_edge_coverage`, and `cfg_coverage_meta`
+/// all exist. Returns false if any are missing.
+pub fn check_coverage_tables_exist(conn: &Connection) -> bool {
+    let tables = [
+        "cfg_block_coverage",
+        "cfg_edge_coverage",
+        "cfg_coverage_meta",
+    ];
+    for table in &tables {
+        let exists = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?1 LIMIT 1",
+                [table],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        if !exists {
+            return false;
+        }
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,7 +95,8 @@ mod tests {
                 created_at INTEGER NOT NULL
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO magellan_meta (id, magellan_schema_version, sqlitegraph_schema_version, created_at)
              VALUES (1, ?, 3, 0)",
@@ -99,8 +123,16 @@ mod tests {
         let result = check_schema_version(&conn);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.contains("99"), "Error should mention version 99: {}", err);
-        assert!(err.contains("upgrade llmgrep"), "Error should suggest upgrading: {}", err);
+        assert!(
+            err.contains("99"),
+            "Error should mention version 99: {}",
+            err
+        );
+        assert!(
+            err.contains("upgrade llmgrep"),
+            "Error should suggest upgrading: {}",
+            err
+        );
     }
 
     #[test]

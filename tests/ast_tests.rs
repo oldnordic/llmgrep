@@ -215,6 +215,7 @@ fn test_ast_kind_filter() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -312,6 +313,7 @@ fn test_backward_compat_no_ast_table() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -360,6 +362,7 @@ fn test_ast_context_population() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -421,6 +424,7 @@ fn test_multiple_ast_kinds() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -456,6 +460,7 @@ fn test_multiple_ast_kinds() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -718,6 +723,7 @@ fn test_with_ast_context_flag() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -820,6 +826,7 @@ fn test_ast_context_without_flag() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -922,6 +929,7 @@ fn test_sort_by_ast_complexity() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -1026,6 +1034,7 @@ fn test_min_depth_filter() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -1099,6 +1108,7 @@ fn test_max_depth_filter() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -1192,6 +1202,7 @@ fn test_min_max_depth_range() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -1276,6 +1287,7 @@ fn test_inside_function_item() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -1359,6 +1371,7 @@ fn test_inside_block() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -1450,6 +1463,7 @@ fn test_contains_if_expression() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -1539,6 +1553,7 @@ fn test_contains_multiple_children() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -1648,6 +1663,7 @@ fn test_combined_depth_and_inside() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");
@@ -1714,6 +1730,7 @@ fn test_backward_compat_no_depth_filter() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
 
     let (response, _partial, _) = search_symbols(options).expect("search should succeed");

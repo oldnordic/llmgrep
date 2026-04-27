@@ -1,14 +1,14 @@
 # llmgrep Manual
 
-**v3.1.1** (shipped 2026-03-15)
+**v3.1.4** (shipped 2026-04-23)
 
 llmgrep is a read-only query tool for Magellan's code map. Part of the sqlitegraph toolset alongside Magellan (indexing), Mirage (CFG analysis), and Splice (precision editing).
 
 llmgrep only works in conjunction with Magellan — it does not build or modify databases. Magellan owns indexing and freshness.
 
 **Toolset:**
-- [Magellan](https://crates.io/crates/magellan) v3.1.2 — Code indexing and algorithm execution
-- [llmgrep](https://crates.io/crates/llmgrep) v3.1.1 — This tool (query only)
+- [Magellan](https://crates.io/crates/magellan) v3.1.7 — Code indexing and algorithm execution
+- [llmgrep](https://crates.io/crates/llmgrep) v3.1.4 — This tool (query only)
 - [Mirage](https://crates.io/crates/mirage-analyzer) v1.2.1 — CFG analysis (Rust)
 - [Splice](https://crates.io/crates/splice) — Precision code editing
 - [sqlitegraph](https://crates.io/crates/sqlitegraph) v2.0.7 — Graph database with 35+ algorithms
@@ -81,7 +81,7 @@ llmgrep find-ast --db <FILE> --kind <KIND> [OPTIONS]
 
 **Sorting:**
 - `--sort-by <MODE>` — Sort mode (default: `relevance`)
-  - `relevance` — Intelligent scoring (LLM-friendly)
+  - `relevance` — Text relevance scoring with configurable weight factors
   - `position` — Fast SQL-only sorting
   - `fan-in` — Most referenced symbols first
   - `fan-out` — Symbols with most calls first
@@ -314,7 +314,6 @@ Formatted JSON with indentation for readability.
 | **LLM-E106** | Ambiguous symbol name | Add `--path` or `--kind` filter to disambiguate |
 | **LLM-E107** | Magellan version mismatch | Update Magellan: `cargo install magellan --force` |
 | **LLM-E108** | Magellan execution failed | Check Magellan logs, verify database integrity |
-| **LLM-E111** | Requires native-v2 backend | Reindex with `--storage native-v2` |
 | **LLM-E112** | Database file not found | Verify database path, run `magellan watch` |
 | **LLM-E113** | Database table missing | Reindex database with `--scan-initial` |
 | **LLM-E114** | Invalid regex pattern | Check regex syntax, escape special characters |
@@ -324,9 +323,9 @@ Formatted JSON with indentation for readability.
 
 ## Best Practices
 
-### For LLM Integration
+### For Programmatic Use
 
-1. **Always use `--output json`** for LLM consumption
+1. **Always use `--output json`** for structured output
 2. **Use specific `--mode`** instead of `auto` (3x faster)
 3. **Request only needed fields** with `--fields`
 4. **Combine filters** to reduce result set early
@@ -343,7 +342,6 @@ Formatted JSON with indentation for readability.
 1. **Use `--output json`** with `jq` for processing
 2. **Prefer exact match** over regex when possible
 3. **Cache algorithm results** (expensive Magelliand subprocess calls)
-4. **Use Native-V2 features** when available (`complete`, `lookup`)
 
 ## Performance Tips
 
@@ -352,7 +350,6 @@ Formatted JSON with indentation for readability.
 | Use `--mode symbols` instead of `auto` | 3x faster |
 | Remove `--with-ast-context` unless needed | 2-3x faster |
 | Use `--limit` on wildcard queries | Prevents large outputs |
-| Use Native-V2 backend | 2-5x faster for lookups |
 | Cache algorithm filter results | Avoid subprocess overhead |
 
 See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for detailed benchmarks.

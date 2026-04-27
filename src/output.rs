@@ -41,7 +41,7 @@ impl fmt::Display for OutputFormat {
 /// Used internally for debugging and performance analysis.
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct PerformanceMetrics {
-    /// Time taken to detect backend format (SQLite vs Native-V2) in milliseconds
+    /// Time taken to detect backend format (SQLite vs Geometric) in milliseconds
     pub backend_detection_ms: u64,
     /// Time taken to execute the core search query in milliseconds
     pub query_execution_ms: u64,
@@ -228,6 +228,33 @@ pub struct SymbolMatch {
     /// Supernode ID for strongly-connected component members
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supernode_id: Option<String>,
+    /// Coverage information for CFG-backed symbols (functions/methods)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coverage: Option<CoverageInfo>,
+}
+
+/// Coverage information for a symbol.
+///
+/// Aggregated from Magellan's `cfg_block_coverage` and `cfg_edge_coverage`
+/// side tables. Only populated for symbols backed by CFG data (functions,
+/// methods) when coverage was recorded during test execution.
+#[derive(Serialize, Clone, Debug)]
+pub struct CoverageInfo {
+    /// Total number of CFG basic blocks for this symbol
+    pub total_blocks: u64,
+    /// Number of blocks executed at least once
+    pub covered_blocks: u64,
+    /// Block coverage as a percentage (0.0–100.0)
+    pub block_percentage: f64,
+    /// Total number of CFG edges for this symbol
+    pub total_edges: u64,
+    /// Number of edges traversed at least once
+    pub covered_edges: u64,
+    /// Edge coverage as a percentage (0.0–100.0)
+    pub edge_percentage: f64,
+    /// Coverage timestamp from `cfg_coverage_meta`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recorded_at: Option<String>,
 }
 
 /// A reference match from a reference search operation.

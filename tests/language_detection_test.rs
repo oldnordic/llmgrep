@@ -234,36 +234,21 @@ fn test_language_detection_edge_cases() {
     assert_eq!(llmgrep::query::infer_language(".hidden"), None); // Hidden file
 }
 
-// Test 15: Verify native-v3 backend doesn't output debug info (code inspection)
+// Test 15: Verify no debug statements in backend source files
 #[test]
 fn test_no_debug_strings_in_code() {
-    // Verify that debug output was removed from native_v3.rs
-    // This is a compile-time check by examining the source
+    // Verify that debug output was removed from backend source files
     use std::fs;
     use std::path::Path;
 
-    let native_v3_path = Path::new("src/backend/native_v3.rs");
-    if native_v3_path.exists() {
-        let content = fs::read_to_string(native_v3_path).expect("failed to read test file");
+    let sqlite_path = Path::new("src/backend/sqlite.rs");
+    if sqlite_path.exists() {
+        let content = fs::read_to_string(sqlite_path).expect("failed to read test file");
 
         // Check that no DEBUG: eprintln statements exist
         assert!(
             !content.contains("eprintln!(\"DEBUG:"),
-            "native_v3.rs should not contain eprintln DEBUG statements"
-        );
-
-        // Check that no bare DEBUG comments exist (from removed code)
-        let debug_lines: Vec<&str> = content
-            .lines()
-            .filter(|line| {
-                line.trim().starts_with("// DEBUG:") || line.trim().starts_with("/* DEBUG:")
-            })
-            .collect();
-
-        assert!(
-            debug_lines.is_empty(),
-            "native_v3.rs should not contain DEBUG comment lines: {:?}",
-            debug_lines
+            "sqlite.rs should not contain eprintln DEBUG statements"
         );
     }
 }

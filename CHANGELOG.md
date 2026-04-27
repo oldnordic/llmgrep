@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.6] - 2026-04-27
+
+### Changed
+- Updated Magellan dependency to `3.1.7`.
+- Geometric backend builds against published `geographdb-core`.
+- Removed active native-v2/native-v3 backend wiring from public configuration.
+
+### Fixed
+- SQLite backend lookup and completion paths now use implemented queries instead of stubs.
+- Search scoring now uses query-aware scoring in geometric paths.
+- Multi-kind and class alias filters work across supported languages.
+
+## [3.1.4] - 2026-04-23
+
+### Security
+- **Parameterized SQL queries in AST context retrieval**
+  - Replaced string-interpolated SQL with `rusqlite` parameterized queries in `src/ast.rs`
+  - All `byte_start`, `byte_end`, and `preferred_kinds` values are now bound as parameters
+  - Eliminates SQL injection risk from user-provided `--ast-kind` values
+  - Location: `src/ast.rs`
+
+### Fixed
+- **Eliminated panic vectors in production code**
+  - Removed `.expect()` in CLI path validation (`src/main.rs:808`)
+  - Removed `.unwrap()` in `SearchResult::from_symbols` (`src/backend/magellan_adapter.rs:63`)
+  - Replaced silent `.unwrap_or_default()` on JSON serialization with proper error propagation (`src/watch_cmd.rs:240,295,301`)
+  - Fixed negative `i64` to `u64` cast that produced huge values on corrupted data (`src/backend/native_v3.rs:345-347`)
+  - Fixed `.unwrap_or(false)` masking database errors in table existence checks (`src/backend/sqlite.rs:75,149`)
+
+### Changed
+- **Watch mode delta computation is now O(n+m)**
+  - Replaced nested O(n×m) loops with `HashSet` lookups in `format_delta`
+  - Significantly faster for large result sets in watch mode
+  - Location: `src/watch_cmd.rs:254-265`
+
+### Added
+- **Compile-time `Send` assertion for `RetiredBinaryBackendBackend`**
+  - Added `const _: ()` assertion verifying `CodeGraph: Send` before `unsafe impl Send`
+  - Fails at compile time if the invariant is violated
+  - Location: `src/backend/native_v3.rs:179`
+- **`is_geometric_extension()` helper**
+  - Extracted duplicated extension check logic into shared helper
+  - Eliminates drift between `cfg(feature)` and `cfg(not(feature))` blocks
+  - Location: `src/backend/mod.rs`
+
 ## [3.1.3] - 2026-03-20
 
 ### Fixed
@@ -45,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Magellan integration:**
   - Updated to Magellan v3.0.0+ with Geometric (.geo) backend support
   - Fixed `debug_print!` macro compatibility with Rust 1.83+ (removed trailing semicolon)
-  - Added `native-v3` feature definition to silence cfg warnings (feature reserved, currently disabled)
+  - Added `retired-binary-backend` feature definition to silence cfg warnings (feature reserved, currently disabled)
 
 ### Fixed
 - **Zero compile warnings:**
@@ -120,7 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Both methods now use `get_symbol_by_entity_id()` to fetch full symbol details from entity IDs
 
 ### Improved
-- **Documentation:** Updated README with accurate Native-V3 feature descriptions
+- **Documentation:** Updated README with accurate retired binary backend feature descriptions
 - **Repository:** Removed `.planning/` folder from git tracking (development docs only)
 
 ## [3.0.6] - 2026-02-14
@@ -143,20 +188,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - sqlitegraph: 2.0.1 → 2.0.3 (kv_prefix_scan_v3 support)
 
 ### Fixed
-- **Test Suite:** Updated test references from native-v2 to native-v3 feature
+- **Test Suite:** Updated test references from native-v2 to retired-binary-backend feature
   - Fixed backend detection tests with proper 16-byte headers
-  - Renamed test files to reflect native-v3 naming
+  - Renamed test files to reflect retired-binary-backend naming
 
 ## [3.0.2] - 2026-02-14
 
 ### Changed
 
-- **Native-V3 Backend Support:**
-  - Migrated from native-v2 to native-v3 backend (magellan 2.3.0)
+- **retired binary backend Backend Support:**
+  - Migrated from native-v2 to retired-binary-backend backend (magellan 2.3.0)
   - V3 uses high-performance binary format with KV store side tables
-  - Single `.v3` file contains all data (graph + side tables)
+  - Single `.db` file contains all data (graph + side tables)
   - Zero SQLite dependency when using V3 backend
-  - Feature flag changed from `native-v2` to `native-v3`
+  - Feature flag changed from `native-v2` to `retired-binary-backend`
 
 - **Dependencies:**
   - magellan: 2.2.1 → 2.3.0

@@ -5,6 +5,7 @@
 
 use crate::algorithm::{apply_algorithm_filters, create_symbol_set_temp_table, SymbolSetStrategy};
 use crate::ast::check_ast_table_exists;
+use crate::backend::schema_check::check_coverage_tables_exist;
 use crate::error::LlmError;
 use crate::output::{SearchResponse, SymbolMatch};
 use crate::query::builder::build_search_query;
@@ -18,7 +19,7 @@ use crate::safe_extraction::extract_symbol_content_safe;
 use crate::SortMode;
 use regex::RegexBuilder;
 use rusqlite::{params_from_iter, Connection, ErrorCode, OpenFlags};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 
 /// Internal implementation of search_symbols that takes an explicit Connection.
@@ -45,6 +46,13 @@ pub(crate) fn search_symbols_impl(
         Some(&algorithm_symbol_ids)
     };
 
+    let has_coverage = check_coverage_tables_exist(conn);
+
+    // Warn if coverage filter requested but tables don't exist
+    if options.coverage_filter.is_some() && !has_coverage {
+        eprintln!("Warning: --uncovered/--covered requested but coverage tables not found. Filter ignored.");
+    }
+
     let (sql, params, symbol_set_strategy) = build_search_query(
         options.query,
         options.path_filter,
@@ -65,6 +73,8 @@ pub(crate) fn search_symbols_impl(
         None,  // inside_kind
         None,  // contains_kind
         symbol_set_filter,
+        has_coverage,
+        options.coverage_filter,
     );
 
     // Check if ast_nodes table exists for AST filtering
@@ -100,6 +110,8 @@ pub(crate) fn search_symbols_impl(
             options.depth.inside,
             options.depth.contains,
             symbol_set_filter,
+            has_coverage,
+            options.coverage_filter,
         )
     } else {
         (sql, params, symbol_set_strategy)
@@ -149,6 +161,28 @@ pub(crate) fn search_symbols_impl(
         let cyclomatic_complexity: Option<i64> = row.get(4).ok();
         // Read symbol_id column (may be NULL)
         let symbol_id_from_query: Option<String> = row.get(5).ok();
+
+        // Read coverage columns (only present when has_coverage is true)
+        let total_blocks: Option<i64> = if has_coverage {
+            row.get("total_blocks").ok()
+        } else {
+            None
+        };
+        let covered_blocks: Option<i64> = if has_coverage {
+            row.get("covered_blocks").ok()
+        } else {
+            None
+        };
+        let total_edges: Option<i64> = if has_coverage {
+            row.get("total_edges").ok()
+        } else {
+            None
+        };
+        let covered_edges: Option<i64> = if has_coverage {
+            row.get("covered_edges").ok()
+        } else {
+            None
+        };
 
         // Read AST columns (may be NULL if ast_nodes table doesn't exist)
         // Basic AST context is populated from the LEFT JOIN with ast_nodes
@@ -487,6 +521,33 @@ pub(crate) fn search_symbols_impl(
             supernode_id: symbol_id
                 .as_ref()
                 .and_then(|id| supernode_map.get(id).cloned()),
+            coverage: if let (Some(total), Some(covered)) = (total_blocks, covered_blocks) {
+                let total = total as u64;
+                let covered = covered as u64;
+                let block_percentage = if total > 0 {
+                    (covered as f64 / total as f64) * 100.0
+                } else {
+                    0.0
+                };
+                let total_e = total_edges.unwrap_or(0) as u64;
+                let covered_e = covered_edges.unwrap_or(0) as u64;
+                let edge_percentage = if total_e > 0 {
+                    (covered_e as f64 / total_e as f64) * 100.0
+                } else {
+                    0.0
+                };
+                Some(crate::output::CoverageInfo {
+                    total_blocks: total,
+                    covered_blocks: covered,
+                    block_percentage,
+                    total_edges: total_e,
+                    covered_edges: covered_e,
+                    edge_percentage,
+                    recorded_at: None,
+                })
+            } else {
+                None
+            },
         });
     }
 
@@ -519,10 +580,6 @@ pub(crate) fn search_symbols_impl(
         });
     }
 
-    // Deduplicate by match_id to handle duplicate AST nodes from LEFT JOIN
-    let mut seen_ids = HashSet::new();
-    results.retain(|r| seen_ids.insert(r.match_id.clone()));
-
     let mut partial = false;
     let total_count = if options.use_regex {
         if results.len() >= options.candidates {
@@ -550,6 +607,8 @@ pub(crate) fn search_symbols_impl(
             options.depth.inside,
             options.depth.contains,
             None, // symbol_set_filter - will be populated in Plan 11-04
+            has_coverage,
+            options.coverage_filter,
         );
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {
@@ -569,6 +628,69 @@ pub(crate) fn search_symbols_impl(
                 .then_with(|| a.span.byte_start.cmp(&b.span.byte_start))
         });
     }
+
+    // Sort by nesting depth when requested (requires batch depth calculation)
+    if options.sort_by == SortMode::NestingDepth {
+        let ast_ids: Vec<i64> = results
+            .iter()
+            .filter_map(|r| r.ast_context.as_ref().map(|ctx| ctx.ast_id))
+            .collect();
+
+        if !ast_ids.is_empty() {
+            let placeholders = ast_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            let depth_sql = format!(
+                "WITH RECURSIVE node_ancestry AS (
+                    SELECT id, parent_id, 0 as depth
+                    FROM ast_nodes
+                    WHERE parent_id IS NULL
+                    UNION ALL
+                    SELECT a.id, a.parent_id, na.depth + 1
+                    FROM ast_nodes a
+                    JOIN node_ancestry na ON a.parent_id = na.id
+                )
+                SELECT id, depth FROM node_ancestry WHERE id IN ({})",
+                placeholders
+            );
+            let depth_params: Vec<Box<dyn rusqlite::ToSql>> = ast_ids
+                .iter()
+                .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
+                .collect();
+
+            let mut depth_map = std::collections::HashMap::new();
+            if let Ok(mut stmt) = conn.prepare(&depth_sql) {
+                let rows = stmt.query_map(
+                    rusqlite::params_from_iter(depth_params.iter().map(|p| p.as_ref())),
+                    |row| Ok((row.get::<_, i64>(0)?, row.get::<_, u64>(1)?)),
+                );
+                if let Ok(rows) = rows {
+                    for row in rows {
+                        if let Ok((id, depth)) = row {
+                            depth_map.insert(id, depth);
+                        }
+                    }
+                }
+            }
+
+            results.sort_by(|a, b| {
+                let depth_a = a
+                    .ast_context
+                    .as_ref()
+                    .and_then(|ctx| depth_map.get(&ctx.ast_id).copied())
+                    .unwrap_or(0);
+                let depth_b = b
+                    .ast_context
+                    .as_ref()
+                    .and_then(|ctx| depth_map.get(&ctx.ast_id).copied())
+                    .unwrap_or(0);
+                depth_b
+                    .cmp(&depth_a)
+                    .then_with(|| a.span.start_line.cmp(&b.span.start_line))
+                    .then_with(|| a.span.start_col.cmp(&b.span.start_col))
+                    .then_with(|| a.span.byte_start.cmp(&b.span.byte_start))
+            });
+        }
+    }
+
     results.truncate(options.limit);
 
     // Ambiguity detection: warn if multiple symbols have the same name

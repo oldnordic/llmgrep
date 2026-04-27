@@ -197,6 +197,7 @@ fn test_search_symbols_with_path_filter() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -250,6 +251,7 @@ fn test_search_symbols_with_kind_filter() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -302,6 +304,7 @@ fn test_search_symbols_rank_exact_match_first() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -353,6 +356,7 @@ fn test_search_symbols_regex_filters() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -406,6 +410,7 @@ fn test_search_symbols_with_context_and_snippet() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -461,6 +466,7 @@ fn test_search_symbols_context_truncated_at_file_edges() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -518,6 +524,7 @@ fn test_search_symbols_context_truncated_by_cap() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
     let response = search_symbols(options).expect("search");
 
@@ -571,6 +578,7 @@ fn test_search_symbols_with_fqn_toggle() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
     let response = search_symbols(options).expect("search");
     let result = &response.0.results[0];
@@ -610,6 +618,7 @@ fn test_search_symbols_with_fqn_toggle() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
     let response = search_symbols(options).expect("search");
     let result = &response.0.results[0];
@@ -657,6 +666,7 @@ fn test_search_references_basic() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
     let response = search_references(options).expect("search");
 
@@ -701,6 +711,7 @@ fn test_search_calls_basic() {
         fqn_pattern: None,
         exact_fqn: None,
         language_filter: None,
+        coverage_filter: None,
     };
     let response = search_calls(options).expect("search");
 
@@ -757,6 +768,7 @@ fn test_combined_response_counts_match() {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
         search_symbols(options).expect("symbols")
     };
@@ -790,6 +802,7 @@ fn test_combined_response_counts_match() {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
         search_references(options).expect("refs")
     };
@@ -823,6 +836,7 @@ fn test_combined_response_counts_match() {
             fqn_pattern: None,
             exact_fqn: None,
             language_filter: None,
+            coverage_filter: None,
         };
         search_calls(options).expect("calls")
     };

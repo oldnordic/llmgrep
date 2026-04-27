@@ -4,11 +4,88 @@
 //! filtering options.
 
 use crate::algorithm::{symbol_set_filter_strategy, SymbolSetStrategy};
-use crate::query::options::MetricsOptions;
+use crate::query::options::{CoverageFilter, MetricsOptions};
 use crate::query::util::{like_pattern, like_prefix};
 use crate::SortMode;
 use rusqlite::ToSql;
+use std::collections::HashSet;
 use std::path::PathBuf;
+
+/// Expand a normalized kind into all equivalent AST kind strings for
+/// cross-language search. Magellan normalizes `Class` to `struct`, but
+/// raw tree-sitter kinds vary by language (e.g., `class_definition`,
+/// `struct_item`). This mapping ensures `--kind class` finds symbols
+/// regardless of which language they were indexed from.
+fn expand_kind_aliases(kind: &str) -> Vec<String> {
+    let mut result = HashSet::new();
+    result.insert(kind.to_string());
+    match kind {
+        "class" | "struct" => {
+            result.insert("class".to_string());
+            result.insert("struct".to_string());
+            result.insert("class_definition".to_string());
+            result.insert("class_declaration".to_string());
+            result.insert("class_expression".to_string());
+            result.insert("class_specifier".to_string());
+            result.insert("struct_item".to_string());
+            result.insert("struct_specifier".to_string());
+        }
+        "fn" | "function" | "method" => {
+            result.insert("fn".to_string());
+            result.insert("function".to_string());
+            result.insert("function_item".to_string());
+            result.insert("function_definition".to_string());
+            result.insert("method_definition".to_string());
+            result.insert("arrow_function".to_string());
+            result.insert("method".to_string());
+        }
+        "enum" => {
+            result.insert("enum".to_string());
+            result.insert("enum_item".to_string());
+            result.insert("enum_definition".to_string());
+            result.insert("enum_declaration".to_string());
+            result.insert("enum_specifier".to_string());
+        }
+        "trait" | "interface" => {
+            result.insert("trait".to_string());
+            result.insert("interface".to_string());
+            result.insert("trait_item".to_string());
+            result.insert("interface_declaration".to_string());
+            result.insert("interface_definition".to_string());
+        }
+        "module" | "namespace" | "package" => {
+            result.insert("module".to_string());
+            result.insert("namespace".to_string());
+            result.insert("package".to_string());
+            result.insert("module_item".to_string());
+            result.insert("namespace_definition".to_string());
+        }
+        "typealias" | "type_alias" | "type" => {
+            result.insert("typealias".to_string());
+            result.insert("type_alias".to_string());
+            result.insert("type".to_string());
+            result.insert("type_alias_item".to_string());
+            result.insert("type_definition".to_string());
+            result.insert("type_declaration".to_string());
+        }
+        "constant" | "const" => {
+            result.insert("constant".to_string());
+            result.insert("const".to_string());
+            result.insert("const_item".to_string());
+        }
+        "variable" | "var" | "field" | "property" => {
+            result.insert("variable".to_string());
+            result.insert("var".to_string());
+            result.insert("field".to_string());
+            result.insert("property".to_string());
+            result.insert("field_declaration".to_string());
+            result.insert("property_definition".to_string());
+            result.insert("variable_declaration".to_string());
+        }
+        _ => {}
+    }
+    result.into_iter().collect()
+}
 
 #[allow(clippy::too_many_arguments)] // All parameters are needed for flexible query building
 pub(crate) fn build_search_query(
@@ -31,6 +108,8 @@ pub(crate) fn build_search_query(
     inside_kind: Option<&str>,
     contains_kind: Option<&str>,
     symbol_set_filter: Option<&Vec<String>>,
+    has_coverage: bool,
+    coverage_filter: Option<CoverageFilter>,
 ) -> (String, Vec<Box<dyn ToSql>>, SymbolSetStrategy) {
     let mut params: Vec<Box<dyn ToSql>> = Vec::new();
     let mut where_clauses = Vec::new();
@@ -70,9 +149,35 @@ pub(crate) fn build_search_query(
     }
 
     if let Some(kind) = kind_filter {
-        where_clauses.push("(s.kind_normalized = ? OR s.kind = ?)".to_string());
-        params.push(Box::new(kind.to_string()));
-        params.push(Box::new(kind.to_string()));
+        let raw_kinds: Vec<&str> = kind
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let mut all_kinds = HashSet::new();
+        for k in &raw_kinds {
+            for alias in expand_kind_aliases(k) {
+                all_kinds.insert(alias);
+            }
+        }
+        let kinds: Vec<String> = all_kinds.into_iter().collect();
+        if kinds.len() == 1 {
+            where_clauses.push("(s.kind_normalized = ? OR s.kind = ?)".to_string());
+            params.push(Box::new(kinds[0].clone()));
+            params.push(Box::new(kinds[0].clone()));
+        } else if !kinds.is_empty() {
+            let placeholders = kinds.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            where_clauses.push(format!(
+                "(s.kind_normalized IN ({}) OR s.kind IN ({}))",
+                placeholders, placeholders
+            ));
+            for k in &kinds {
+                params.push(Box::new(k.clone()));
+            }
+            for k in &kinds {
+                params.push(Box::new(k.clone()));
+            }
+        }
     }
 
     // Language filter: Filter by inferred language from file extension
@@ -188,6 +293,22 @@ pub(crate) fn build_search_query(
         }
     }
 
+    // Coverage filter WHERE clauses
+    if has_coverage {
+        if let Some(filter) = coverage_filter {
+            match filter {
+                CoverageFilter::Uncovered => {
+                    where_clauses
+                        .push("cov.function_id IS NOT NULL AND cov.covered_blocks = 0".to_string());
+                }
+                CoverageFilter::Covered => {
+                    where_clauses
+                        .push("cov.function_id IS NOT NULL AND cov.covered_blocks > 0".to_string());
+                }
+            }
+        }
+    }
+
     // Note: Depth filtering (min_depth, max_depth) is handled post-query
     // due to SQLite recursive CTE limitations in WHERE clauses.
     // See Task 6 for post-query filtering implementation.
@@ -219,15 +340,42 @@ pub(crate) fn build_search_query(
         SymbolSetStrategy::None
     };
 
-    let select_clause = if count_only {
-        "SELECT COUNT(*)"
+    let mut select_cols: Vec<&str> = if has_ast_table {
+        vec![
+            "s.data",
+            "f.file_path",
+            "sm.fan_in",
+            "sm.fan_out",
+            "sm.cyclomatic_complexity",
+            "json_extract(s.data, '$.symbol_id') AS symbol_id",
+            "an.id AS ast_id",
+            "an.kind AS ast_kind",
+            "an.parent_id AS ast_parent_id",
+            "an.byte_start AS ast_byte_start",
+            "an.byte_end AS ast_byte_end",
+        ]
     } else {
-        // Include AST columns when ast_nodes table exists
-        if has_ast_table {
-            "SELECT s.data, f.file_path, sm.fan_in, sm.fan_out, sm.cyclomatic_complexity, json_extract(s.data, '$.symbol_id') AS symbol_id, an.id AS ast_id, an.kind AS ast_kind, an.parent_id AS ast_parent_id, an.byte_start AS ast_byte_start, an.byte_end AS ast_byte_end"
-        } else {
-            "SELECT s.data, f.file_path, sm.fan_in, sm.fan_out, sm.cyclomatic_complexity, json_extract(s.data, '$.symbol_id') AS symbol_id"
-        }
+        vec![
+            "s.data",
+            "f.file_path",
+            "sm.fan_in",
+            "sm.fan_out",
+            "sm.cyclomatic_complexity",
+            "json_extract(s.data, '$.symbol_id') AS symbol_id",
+        ]
+    };
+
+    if has_coverage {
+        select_cols.push("cov.total_blocks");
+        select_cols.push("cov.covered_blocks");
+        select_cols.push("edge_cov.total_edges");
+        select_cols.push("edge_cov.covered_edges");
+    }
+
+    let select_clause = if count_only {
+        "SELECT COUNT(*)".to_string()
+    } else {
+        format!("SELECT {}", select_cols.join(", "))
     };
 
     let mut sql = format!(
@@ -256,12 +404,24 @@ JOIN (
 ) f ON f.id = e.from_id
 LEFT JOIN symbol_metrics sm ON s.id = sm.symbol_id
 {ast_join}
+{coverage_join}
+{edge_coverage_join}
 WHERE {where_clause}",
         select_clause = select_clause,
         ast_join = if has_ast_table {
-            // Exact match on byte span - this is the correct approach for Magellan
-            // The get_ast_context_for_symbol() function handles overlap matching when needed
-            "LEFT JOIN ast_nodes an ON json_extract(s.data, '$.byte_start') = an.byte_start AND json_extract(s.data, '$.byte_end') = an.byte_end".to_string()
+            // Use a correlated subquery to pick exactly one ast_node per symbol byte span.
+            // This avoids duplicate rows when multiple AST nodes overlap the same span.
+            "LEFT JOIN ast_nodes an ON an.id = (\n            SELECT id FROM ast_nodes\n            WHERE byte_start = json_extract(s.data, '$.byte_start')\n              AND byte_end = json_extract(s.data, '$.byte_end')\n            ORDER BY id LIMIT 1\n        )".to_string()
+        } else {
+            "".to_string()
+        },
+        coverage_join = if has_coverage {
+            "LEFT JOIN (\n            SELECT b.function_id,\n                   COUNT(b.id) as total_blocks,\n                   COUNT(CASE WHEN COALESCE(bc.hit_count, 0) > 0 THEN 1 END) as covered_blocks\n            FROM cfg_blocks b\n            LEFT JOIN cfg_block_coverage bc ON b.id = bc.block_id\n            GROUP BY b.function_id\n        ) cov ON cov.function_id = s.id".to_string()
+        } else {
+            "".to_string()
+        },
+        edge_coverage_join = if has_coverage {
+            "LEFT JOIN (\n            SELECT e.function_id,\n                   COUNT(e.id) as total_edges,\n                   COUNT(CASE WHEN COALESCE(ec.hit_count, 0) > 0 THEN 1 END) as covered_edges\n            FROM cfg_edges e\n            LEFT JOIN cfg_edge_coverage ec ON e.id = ec.edge_id\n            GROUP BY e.function_id\n        ) edge_cov ON edge_cov.function_id = s.id".to_string()
         } else {
             "".to_string()
         },
@@ -292,9 +452,7 @@ WHERE {where_clause}",
                 "COALESCE(sm.cyclomatic_complexity, 0) DESC, s.start_line, s.start_col, s.byte_start, s.byte_end, s.id"
             }
             SortMode::NestingDepth => {
-                // Nesting depth requires post-query calculation
-                // Fall back to position ordering for now
-                // Future: batch depth calculation then in-memory sort
+                // Nesting depth is calculated post-query via batch CTE and sorted in-memory
                 "s.start_line, s.start_col, s.byte_start, s.byte_end, s.id"
             }
             SortMode::Position => {

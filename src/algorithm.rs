@@ -287,7 +287,7 @@ fn parse_magellan_version(output: &str) -> Result<(u32, u32, u32), LlmError> {
 /// use llmgrep::algorithm::run_magellan_algorithm;
 /// use std::path::Path;
 ///
-/// let db_path = Path::new(".codemcp/codegraph.db");
+/// let db_path = Path::new(".magellan/llmgrep.db");
 /// let symbol_set = run_magellan_algorithm(
 ///     db_path,
 ///     "reachable",
@@ -997,7 +997,7 @@ pub enum SymbolSetStrategy {
 /// use llmgrep::algorithm::resolve_fqn_to_symbol_id;
 /// use std::path::Path;
 ///
-/// let db_path = Path::new(".codemcp/codegraph.db");
+/// let db_path = Path::new(".magellan/llmgrep.db");
 /// let symbol_id = resolve_fqn_to_symbol_id(db_path, "main")?;
 /// println!("Resolved to: {}", symbol_id);
 /// # Ok::<(), llmgrep::error::LlmError>(())
