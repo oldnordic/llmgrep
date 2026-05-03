@@ -462,6 +462,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Stable CLI
 
-**Initial release with comprehensive error handling, security hardening, code quality improvements, test coverage, developer experience enhancements, and LLM-optimized performance.**
+**Initial release with comprehensive error handling, security hardening, code quality improvements, test coverage, and developer experience enhancements.**
 
 [Unreleased]: Initial llmgrep CLI with Magellan DB search
