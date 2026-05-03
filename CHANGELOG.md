@@ -246,7 +246,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Human output (one FQN per line) and JSON formats
 - `llmgrep lookup --db <DB> --fqn <FQN>` — O(1) exact symbol lookup
   - Two-phase lookup: KV store for SymbolId, SQL for full metadata
-  - Returns `SymbolNotFound` error (LLM-E112) with helpful hints
+  - Returns `SymbolNotFound` error (SPL-E112) with helpful hints
 
 **New search features:**
 - `--mode label` flag — Purpose-based label search
@@ -263,14 +263,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Backend architecture:**
 - **Dual backend support:** SQLite (rusqlite) + Native-V2 (Magellan CodeGraph API)
 - **Runtime detection:** Automatic backend format detection (no `--backend` flag needed)
-- **Graceful fallback:** Native-v2 commands return `RequiresNativeV2Backend` error (LLM-E111) on SQLite databases
+- **Graceful fallback:** Native-v2 commands return `RequiresNativeV2Backend` error (SPL-E111) on SQLite databases
 - **Feature flag:** Native-v2 support requires `--features native-v2` at compile time
 
 **New error codes:**
-- `LLM-E109`: NativeV2BackendNotSupported — native-v2 database detected but llmgrep built without native-v2 feature
-- `LLM-E110`: BackendDetectionFailed — unable to determine database format
-- `LLM-E111`: RequiresNativeV2Backend — native-v2-only command run on SQLite database
-- `LLM-E112`: SymbolNotFound — exact FQN lookup failed with suggestions
+- `SPL-E109`: NativeV2BackendNotSupported — native-v2 database detected but llmgrep built without native-v2 feature
+- `SPL-E110`: BackendDetectionFailed — unable to determine database format
+- `SPL-E111`: RequiresNativeV2Backend — native-v2-only command run on SQLite database
+- `SPL-E112`: SymbolNotFound — exact FQN lookup failed with suggestions
 
 **Test coverage:**
 - 30 new integration tests for native-v2 exclusive features
@@ -388,11 +388,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Temporary table JOIN strategy for large SymbolSets
 - `apply_algorithm_filters()` — Orchestrates pre-computed and one-shot filters
 
-**Error codes (LLM-E1xx series):**
-- `LLM-E105`: Magellan CLI not found
-- `LLM-E106`: Ambiguous symbol name
-- `LLM-E107`: Magellan version mismatch
-- `LLM-E108`: Magellan algorithm execution failed
+**Error codes (SPL-E1xx series):**
+- `SPL-E105`: Magellan CLI not found
+- `SPL-E106`: Ambiguous symbol name
+- `SPL-E107`: Magellan version mismatch
+- `SPL-E108`: Magellan algorithm execution failed
 
 **New tests:**
 - 33 new algorithm integration tests (561 lines) covering all algorithm types
@@ -460,7 +460,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2026-01-25
 
-### Production-Ready CLI
+### Stable CLI
 
 **Initial release with comprehensive error handling, security hardening, code quality improvements, test coverage, developer experience enhancements, and LLM-optimized performance.**
 
