@@ -284,10 +284,10 @@ Backward slice: code affecting target. Forward slice: code affected by target.
 
 ## Error Codes
 
-- **LLM-E105**: Magellan CLI not found. Install magellan to use algorithm features.
-- **LLM-E106**: Ambiguous symbol name. Multiple symbols match.
-- **LLM-E107**: Magellan version mismatch. Required version not available.
-- **LLM-E108**: Magellan execution failed. The algorithm command exited with an error.
+- **SPL-E105**: Magellan CLI not found. Install magellan to use algorithm features.
+- **SPL-E106**: Ambiguous symbol name. Multiple symbols match.
+- **SPL-E107**: Magellan version mismatch. Required version not available.
+- **SPL-E108**: Magellan execution failed. The algorithm command exited with an error.
 
 ## Database compatibility
 
@@ -310,16 +310,16 @@ Formatted JSON with indentation for readability.
 
 | Code | Description | Solution |
 |------|-------------|----------|
-| **LLM-E105** | Magellan CLI not found | Install Magellan: `cargo install magellan` |
-| **LLM-E106** | Ambiguous symbol name | Add `--path` or `--kind` filter to disambiguate |
-| **LLM-E107** | Magellan version mismatch | Update Magellan: `cargo install magellan --force` |
-| **LLM-E108** | Magellan execution failed | Check Magellan logs, verify database integrity |
-| **LLM-E112** | Database file not found | Verify database path, run `magellan watch` |
-| **LLM-E113** | Database table missing | Reindex database with `--scan-initial` |
-| **LLM-E114** | Invalid regex pattern | Check regex syntax, escape special characters |
-| **LLM-E115** | Invalid FQN format | Use valid FQN format: `crate::module::symbol` |
-| **LLM-E116** | Symbol not found | Verify symbol exists, check spelling, use `--ambiguous` flag |
-| **LLM-E117** | Timeout executing algorithm | Reduce search scope, use `--limit` |
+| **SPL-E105** | Magellan CLI not found | Install Magellan: `cargo install magellan` |
+| **SPL-E106** | Ambiguous symbol name | Add `--path` or `--kind` filter to disambiguate |
+| **SPL-E107** | Magellan version mismatch | Update Magellan: `cargo install magellan --force` |
+| **SPL-E108** | Magellan execution failed | Check Magellan logs, verify database integrity |
+| **SPL-E112** | Database file not found | Verify database path, run `magellan watch` |
+| **SPL-E113** | Database table missing | Reindex database with `--scan-initial` |
+| **SPL-E114** | Invalid regex pattern | Check regex syntax, escape special characters |
+| **SPL-E115** | Invalid FQN format | Use valid FQN format: `crate::module::symbol` |
+| **SPL-E116** | Symbol not found | Verify symbol exists, check spelling, use `--ambiguous` flag |
+| **SPL-E117** | Timeout executing algorithm | Reduce search scope, use `--limit` |
 
 ## Best Practices
 
