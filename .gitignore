@@ -25,3 +25,4 @@ PLANS.md
 *.db
 *.db-*
 *.context.json
+.magellan/
