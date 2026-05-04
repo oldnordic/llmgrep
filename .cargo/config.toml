@@ -1,6 +1,0 @@
-[build]
-# Disable sccache due to missing binary
-target-dir = "target"
-
-[patch.crates-io]
-magellan = { path = "../magellan" }
