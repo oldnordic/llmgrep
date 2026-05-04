@@ -1,9 +1,10 @@
 use rusqlite::Connection;
 
-/// The maximum Magellan schema version that llmgrep v3.1.3 is known to support.
+/// The maximum Magellan schema version that llmgrep v3.1.7 is known to support.
+/// Magellan v12 is supported (FTS5 full-text search index).
 /// Magellan v11 is supported (4D coordinates, cfg_edges table, xxHash64 hashes).
 /// If the database has a newer version, warn the user.
-pub const SUPPORTED_MAGELLAN_SCHEMA_VERSION: i64 = 11;
+pub const SUPPORTED_MAGELLAN_SCHEMA_VERSION: i64 = 12;
 
 /// Check the Magellan database schema version.
 ///

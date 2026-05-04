@@ -4,7 +4,7 @@
 /.codemcp/
 /scripts/
 test_db/
-.cargo/
+.cargo-home/
 
 # Local agent/tooling instructions and automation
 .claude/
