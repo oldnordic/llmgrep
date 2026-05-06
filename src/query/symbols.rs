@@ -8,7 +8,7 @@ use crate::ast::check_ast_table_exists;
 use crate::backend::schema_check::check_coverage_tables_exist;
 use crate::error::LlmError;
 use crate::output::{SearchResponse, SymbolMatch};
-use crate::query::builder::build_search_query;
+use crate::query::builder::{build_search_query, check_symbol_fts_exists};
 use crate::query::chunks::search_chunks_by_span;
 use crate::query::options::SearchOptions;
 use crate::query::util::{
@@ -47,6 +47,7 @@ pub(crate) fn search_symbols_impl(
     };
 
     let has_coverage = check_coverage_tables_exist(conn);
+    let has_symbol_fts = check_symbol_fts_exists(conn).unwrap_or(false);
 
     // Warn if coverage filter requested but tables don't exist
     if options.coverage_filter.is_some() && !has_coverage {
@@ -75,6 +76,7 @@ pub(crate) fn search_symbols_impl(
         symbol_set_filter,
         has_coverage,
         options.coverage_filter,
+        has_symbol_fts,
     );
 
     // Check if ast_nodes table exists for AST filtering
@@ -112,6 +114,7 @@ pub(crate) fn search_symbols_impl(
             symbol_set_filter,
             has_coverage,
             options.coverage_filter,
+            has_symbol_fts,
         )
     } else {
         (sql, params, symbol_set_strategy)
@@ -609,6 +612,7 @@ pub(crate) fn search_symbols_impl(
             None, // symbol_set_filter - will be populated in Plan 11-04
             has_coverage,
             options.coverage_filter,
+            has_symbol_fts,
         );
         let count = conn.query_row(&count_sql, params_from_iter(count_params), |row| row.get(0))?;
         if options.candidates < count as usize {

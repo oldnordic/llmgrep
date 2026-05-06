@@ -197,6 +197,7 @@ fn test_build_search_query_basic() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should have LIKE clauses for name, display_fqn, fqn
@@ -210,6 +211,70 @@ fn test_build_search_query_basic() {
     // Should have 3 LIKE params + 1 LIMIT param
     assert_eq!(params.len(), 4);
     assert_eq!(count_params(&sql), 4);
+}
+
+#[test]
+fn test_build_search_query_with_fts5() {
+    use crate::query::builder::build_search_query;
+
+    let (sql, params, _strategy) = build_search_query(
+        "Mutex RwLock",
+        None,
+        None,
+        None,
+        false,
+        false,
+        100,
+        MetricsOptions::default(),
+        SortMode::default(),
+        None,
+        None,
+        None,
+        false, // has_ast_table
+        &[],   // ast_kinds
+        None,  // min_depth
+        None,  // max_depth
+        None,  // inside_kind
+        None,  // contains_kind
+        None,  // symbol_set_filter,
+        false,
+        None,
+        true, // use_fts5
+    );
+
+    // Should use FTS5 MATCH with OR semantics instead of LIKE
+    assert!(sql.contains("symbol_fts MATCH ?"));
+    assert!(!sql.contains("s.name LIKE ?"));
+
+    // Should have 1 FTS5 param + 1 LIMIT param
+    assert_eq!(params.len(), 2);
+    assert_eq!(count_params(&sql), 2);
+}
+
+#[test]
+fn test_fts5_or_query_single_word() {
+    use crate::query::builder::fts5_or_query;
+    assert_eq!(fts5_or_query("test"), "\"test\"");
+}
+
+#[test]
+fn test_fts5_or_query_multi_word() {
+    use crate::query::builder::fts5_or_query;
+    assert_eq!(fts5_or_query("Mutex RwLock"), "\"Mutex\" OR \"RwLock\"");
+}
+
+#[test]
+fn test_fts5_or_query_empty() {
+    use crate::query::builder::fts5_or_query;
+    assert_eq!(fts5_or_query(""), "");
+    assert_eq!(fts5_or_query("   "), "");
+}
+
+#[test]
+fn test_fts5_or_query_quotes() {
+    use crate::query::builder::fts5_or_query;
+    // Double quotes inside tokens should be doubled (FTS5 escaping)
+    assert_eq!(fts5_or_query("foo\"bar"), "\"foo\"\"bar\"");
 }
 
 #[test]
@@ -236,6 +301,7 @@ fn test_build_search_query_with_kind_filter() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should add kind filter
@@ -271,6 +337,7 @@ fn test_build_search_query_with_path_filter() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should add file path filter
@@ -305,6 +372,7 @@ fn test_build_search_query_regex_mode() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should NOT have LIKE clauses in regex mode
@@ -342,6 +410,7 @@ fn test_build_search_query_count_only() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should start with COUNT
@@ -379,6 +448,7 @@ fn test_build_search_query_regular_query() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should have ORDER BY
@@ -415,6 +485,7 @@ fn test_build_search_query_with_metrics_fan_in_sort() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should ORDER BY fan_in DESC
@@ -448,6 +519,7 @@ fn test_build_search_query_with_metrics_fan_out_sort() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should ORDER BY fan_out DESC
@@ -481,6 +553,7 @@ fn test_build_search_query_with_metrics_complexity_sort() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should ORDER BY cyclomatic_complexity DESC
@@ -518,6 +591,7 @@ fn test_build_search_query_with_min_complexity_filter() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should filter by min_complexity
@@ -556,6 +630,7 @@ fn test_build_search_query_with_max_complexity_filter() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should filter by max_complexity
@@ -594,6 +669,7 @@ fn test_build_search_query_with_min_fan_in_filter() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should filter by min_fan_in
@@ -628,6 +704,7 @@ fn test_build_search_query_with_metrics_join() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should LEFT JOIN symbol_metrics
@@ -667,6 +744,7 @@ fn test_build_search_query_combined_filters() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should have all filter clauses
@@ -865,6 +943,7 @@ fn test_build_search_query_combined_filters_path_kind() {
         None,  // symbol_set_filter,
         false,
         None,
+        false,
     );
 
     // Should have all filters
@@ -4057,6 +4136,7 @@ mod symbol_id_tests {
             None,  // symbol_set_filter,
             false,
             None,
+            false,
         );
 
         // Should filter by .rs extension
@@ -4091,6 +4171,7 @@ mod symbol_id_tests {
             None,  // symbol_set_filter,
             false,
             None,
+            false,
         );
 
         // Should NOT add language filter for unknown language
@@ -4123,6 +4204,7 @@ mod symbol_id_tests {
             None,  // symbol_set_filter,
             false,
             None,
+            false,
         );
 
         // Should have both path, kind, and language filters
@@ -4159,6 +4241,7 @@ mod symbol_id_tests {
             None,  // symbol_set_filter,
             false,
             None,
+            false,
         );
 
         // Should filter by .cpp extension

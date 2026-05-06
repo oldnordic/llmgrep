@@ -7,9 +7,45 @@ use crate::algorithm::{symbol_set_filter_strategy, SymbolSetStrategy};
 use crate::query::options::{CoverageFilter, MetricsOptions};
 use crate::query::util::{like_pattern, like_prefix};
 use crate::SortMode;
-use rusqlite::ToSql;
+use rusqlite::{Connection, ToSql};
 use std::collections::HashSet;
 use std::path::PathBuf;
+
+/// Check if the `symbol_fts` FTS5 virtual table exists in the database.
+pub(crate) fn check_symbol_fts_exists(conn: &Connection) -> Result<bool, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='symbol_fts'",
+    )?;
+    Ok(stmt.exists([])?)
+}
+
+/// Convert a user search query into an FTS5 MATCH expression with OR semantics.
+///
+/// FTS5 defaults to AND for space-separated terms, which causes multi-word
+/// queries like "Mutex RwLock" to require all words. This function splits
+/// the query into tokens and joins them with `OR`, so any matching token
+/// returns results.
+///
+/// Each token is double-quoted to prevent FTS5 from interpreting special
+/// characters (e.g. `*`, `-`, `OR`) as query operators.
+pub(crate) fn fts5_or_query(query: &str) -> String {
+    let tokens: Vec<&str> = query.split_whitespace().filter(|t| !t.is_empty()).collect();
+    match tokens.len() {
+        0 => String::new(),
+        1 => {
+            let token = tokens[0].replace('"', "\"\"");
+            format!("\"{}\"", token)
+        }
+        _ => tokens
+            .into_iter()
+            .map(|t| {
+                let escaped = t.replace('"', "\"\"");
+                format!("\"{}\"", escaped)
+            })
+            .collect::<Vec<_>>()
+            .join(" OR "),
+    }
+}
 
 /// Expand a normalized kind into all equivalent AST kind strings for
 /// cross-language search. Magellan normalizes `Class` to `struct`, but
@@ -110,6 +146,7 @@ pub(crate) fn build_search_query(
     symbol_set_filter: Option<&Vec<String>>,
     has_coverage: bool,
     coverage_filter: Option<CoverageFilter>,
+    use_fts5: bool,
 ) -> (String, Vec<Box<dyn ToSql>>, SymbolSetStrategy) {
     let mut params: Vec<Box<dyn ToSql>> = Vec::new();
     let mut where_clauses = Vec::new();
@@ -120,14 +157,24 @@ pub(crate) fn build_search_query(
         params.push(Box::new(sid.to_string()));
     } else if !use_regex {
         // Standard name-based search (only if not using symbol_id)
-        let like_query = like_pattern(query);
-        where_clauses.push(
-            "(s.name LIKE ? ESCAPE '\\' OR s.display_fqn LIKE ? ESCAPE '\\' OR s.fqn LIKE ? ESCAPE '\\')"
-                .to_string(),
-        );
-        params.push(Box::new(like_query.clone()));
-        params.push(Box::new(like_query.clone()));
-        params.push(Box::new(like_query));
+        if use_fts5 && !query.trim().is_empty() {
+            // FTS5 with OR semantics for multi-word queries
+            let fts_query = fts5_or_query(query);
+            where_clauses.push(
+                "s.id IN (SELECT rowid FROM symbol_fts WHERE symbol_fts MATCH ?)".to_string(),
+            );
+            params.push(Box::new(fts_query));
+        } else {
+            // Fallback to LIKE when FTS5 is unavailable or query is empty
+            let like_query = like_pattern(query);
+            where_clauses.push(
+                "(s.name LIKE ? ESCAPE '\\' OR s.display_fqn LIKE ? ESCAPE '\\' OR s.fqn LIKE ? ESCAPE '\\')"
+                    .to_string(),
+            );
+            params.push(Box::new(like_query.clone()));
+            params.push(Box::new(like_query.clone()));
+            params.push(Box::new(like_query));
+        }
     }
 
     // FQN pattern filter (LIKE match on canonical_fqn)
