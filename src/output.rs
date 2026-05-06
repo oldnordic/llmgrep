@@ -379,6 +379,57 @@ pub struct CallSearchResponse {
     pub total_count: u64,
 }
 
+/// An implements match from an implements search operation.
+///
+/// Represents a type implementing a trait relationship.
+/// Used by the `--mode implements` search mode.
+#[derive(Serialize)]
+pub struct ImplementsMatch {
+    /// Unique match identifier
+    pub match_id: String,
+    /// Source code location of the type (from side of the edge)
+    pub span: Span,
+    /// Name of the implementing type
+    pub type_name: String,
+    /// Name of the implemented trait
+    pub trait_name: String,
+    /// Symbol ID of the type
+    pub type_symbol_id: Option<String>,
+    /// Symbol ID of the trait
+    pub trait_symbol_id: Option<String>,
+    /// Relevance score
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<u64>,
+    /// SHA-256 hash of the content
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
+    /// Symbol kind from code_chunks table (legacy field)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol_kind_from_chunk: Option<String>,
+    /// Source code snippet showing the impl block
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snippet: Option<String>,
+    /// Whether the snippet was truncated
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snippet_truncated: Option<bool>,
+}
+
+/// Response from an implements search operation.
+///
+/// Contains all type-trait implementation relationships.
+#[derive(Serialize)]
+pub struct ImplementsSearchResponse {
+    /// List of implementation relationships
+    pub results: Vec<ImplementsMatch>,
+    /// The search query string
+    pub query: String,
+    /// Path filter that was applied (if any)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path_filter: Option<String>,
+    /// Total number of implements matches
+    pub total_count: u64,
+}
+
 /// Combined response for searches that include symbols, references, and calls.
 ///
 /// Used when `--mode combined` is specified, providing all three types of

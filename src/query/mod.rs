@@ -24,6 +24,7 @@ mod backend;
 mod builder;
 mod calls;
 mod chunks;
+mod implements;
 mod options;
 mod references;
 mod symbols;
@@ -44,11 +45,13 @@ pub use chunks::{search_chunks_by_span, search_chunks_by_symbol_name, CodeChunk}
 
 // Search functions (public wrappers)
 pub use calls::search_calls;
+pub use implements::search_implements;
 pub use references::search_references;
 pub use symbols::search_symbols;
 
 // Internal implementations (pub(crate) for use within the crate)
 pub(crate) use calls::search_calls_impl;
+pub(crate) use implements::search_implements_impl;
 pub(crate) use references::search_references_impl;
 pub(crate) use symbols::search_symbols_impl;
 

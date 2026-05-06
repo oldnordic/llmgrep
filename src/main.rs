@@ -5,7 +5,7 @@ use llmgrep::backend::Backend;
 use llmgrep::error::LlmError;
 use llmgrep::output::{
     json_response, json_response_with_partial_and_performance, CallSearchResponse,
-    CombinedSearchResponse, ErrorResponse, OutputFormat, PerformanceMetrics,
+    CombinedSearchResponse, ErrorResponse, ImplementsSearchResponse, OutputFormat, PerformanceMetrics,
     ReferenceSearchResponse, SearchResponse,
 };
 use llmgrep::output_common::{format_partial_footer, format_total_header};
@@ -299,6 +299,7 @@ enum SearchMode {
     Symbols,
     References,
     Calls,
+    Implements,
     Auto,
     Labels,
 }
@@ -328,6 +329,10 @@ EXAMPLES:
 
   # Calls search
   llmgrep --db code.db search --query "parse" --mode calls
+
+  # Implements search (type-trait relationships)
+  llmgrep --db code.db search --query "SideTables" --mode implements
+  llmgrep --db code.db search --query "AmbiguityOps" --mode implements --output json
 
   # Auto mode (all search modes combined, requires JSON output)
   llmgrep --db code.db search --query "parse" --mode auto --output json
@@ -1327,6 +1332,67 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 eprintln!("  Total: {}ms", total_ms);
             }
         }
+        SearchMode::Implements => {
+            let options = SearchOptions {
+                db_path: &db_path,
+                query: &params.query,
+                path_filter: validated_path.as_ref(),
+                kind_filter: None,
+                language_filter: None,
+                limit: params.limit,
+                use_regex,
+                candidates,
+                context: ContextOptions {
+                    include: include_context,
+                    lines: params.context_lines,
+                    max_lines: params.max_context_lines,
+                },
+                snippet: SnippetOptions {
+                    include: include_snippet,
+                    max_bytes: params.max_snippet_bytes,
+                },
+                fqn: FqnOptions::default(),
+                include_score,
+                sort_by: params.sort_by,
+                metrics,
+                ast: AstOptions::default(),
+                depth: DepthOptions::default(),
+                algorithm: AlgorithmOptions::default(),
+                symbol_id: None,
+                fqn_pattern: None,
+                exact_fqn: None,
+                coverage_filter: None,
+            };
+
+            let query_start = std::time::Instant::now();
+            let (response, partial) = backend.search_implements(options)?;
+            let query_execution_ms = query_start.elapsed().as_millis() as u64;
+
+            let format_start = std::time::Instant::now();
+            let metrics = if cli.show_metrics {
+                Some(PerformanceMetrics {
+                    backend_detection_ms,
+                    query_execution_ms,
+                    output_formatting_ms: 0,
+                    total_ms: 0,
+                })
+            } else {
+                None
+            };
+
+            output_implements(cli, response, partial, metrics.as_ref())?;
+
+            let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+            let total_ms = total_start.elapsed().as_millis() as u64;
+
+            if cli.show_metrics {
+                eprintln!("Performance metrics:");
+                eprintln!("  Backend detection: {}ms", backend_detection_ms);
+                eprintln!("  Query execution: {}ms", query_execution_ms);
+                eprintln!("  Output formatting: {}ms", output_formatting_ms);
+                eprintln!("  Total: {}ms", total_ms);
+            }
+        }
     }
 
     Ok(())
@@ -1860,6 +1926,44 @@ fn output_calls(
                     item.span.start_col,
                     item.caller,
                     item.callee,
+                    item.score.unwrap_or(0)
+                );
+            }
+            if partial {
+                println!("{}", format_partial_footer());
+            }
+        }
+        OutputFormat::Json | OutputFormat::Pretty => {
+            let json_response =
+                json_response_with_partial_and_performance(response, partial, metrics.cloned());
+            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
+                serde_json::to_string_pretty(&json_response)?
+            } else {
+                serde_json::to_string(&json_response)?
+            };
+            println!("{}", rendered);
+        }
+    }
+    Ok(())
+}
+
+fn output_implements(
+    cli: &Cli,
+    response: ImplementsSearchResponse,
+    partial: bool,
+    metrics: Option<&PerformanceMetrics>,
+) -> Result<(), LlmError> {
+    match cli.output {
+        OutputFormat::Human => {
+            println!("{}", format_total_header(response.total_count));
+            for item in response.results {
+                println!(
+                    "{}:{}:{} {} impl {} score={}",
+                    item.span.file_path,
+                    item.span.start_line,
+                    item.span.start_col,
+                    item.type_name,
+                    item.trait_name,
                     item.score.unwrap_or(0)
                 );
             }

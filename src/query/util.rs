@@ -231,6 +231,14 @@ pub(crate) fn span_id(file_path: &str, byte_start: u64, byte_end: u64) -> String
     hex::encode(&digest[..8])
 }
 
+/// Extract a value from JSON string using serde_json.
+pub(crate) fn json_extract<T: serde::de::DeserializeOwned>(json: &str, key: &str) -> Option<T> {
+    serde_json::from_str::<serde_json::Value>(json)
+        .ok()?
+        .get(key)
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+}
+
 /// Generate a match ID from symbol information
 pub(crate) fn match_id(file_path: &str, byte_start: u64, byte_end: u64, name: &str) -> String {
     let mut hasher = Sha256::new();

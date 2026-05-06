@@ -9,8 +9,8 @@
 use crate::backend::magellan_adapter::normalize_path_for_query;
 use crate::error::LlmError;
 use crate::output::{
-    CallMatch, CallSearchResponse, ReferenceMatch, ReferenceSearchResponse, SearchResponse, Span,
-    SymbolMatch,
+    CallMatch, CallSearchResponse, ImplementsSearchResponse, ReferenceMatch, ReferenceSearchResponse,
+    SearchResponse, Span, SymbolMatch,
 };
 use crate::query::util::score_match;
 use crate::query::SearchOptions;
@@ -455,6 +455,23 @@ impl crate::backend::BackendTrait for GeometricBackend {
                 path_filter: options.path_filter.map(|p| p.to_string_lossy().to_string()),
             },
             truncated || partial,
+        ))
+    }
+
+    fn search_implements(
+        &self,
+        _options: SearchOptions,
+    ) -> Result<(ImplementsSearchResponse, bool), LlmError> {
+        // Geometric backend does not store IMPLEMENTS edges in the same format.
+        // Return empty results for .geo databases.
+        Ok((
+            ImplementsSearchResponse {
+                query: String::new(),
+                total_count: 0,
+                results: Vec::new(),
+                path_filter: None,
+            },
+            false,
         ))
     }
 

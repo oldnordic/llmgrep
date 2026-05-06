@@ -616,3 +616,59 @@ WHERE {where_clause}",
 
     (sql, params)
 }
+
+pub(crate) fn build_implements_query(
+    query: &str,
+    path_filter: Option<&PathBuf>,
+    use_regex: bool,
+    count_only: bool,
+    limit: usize,
+) -> (String, Vec<Box<dyn ToSql>>) {
+    let mut params: Vec<Box<dyn ToSql>> = Vec::new();
+    let mut where_clauses = vec!["e.edge_type = 'IMPLEMENTS'".to_string()];
+
+    if !use_regex {
+        let like_query = like_pattern(query);
+        where_clauses.push(
+            "(t.name LIKE ? ESCAPE '\\' OR tr.name LIKE ? ESCAPE '\\')".to_string(),
+        );
+        params.push(Box::new(like_query.clone()));
+        params.push(Box::new(like_query));
+    }
+
+    if let Some(path) = path_filter {
+        let path_like = like_prefix(path);
+        where_clauses.push(
+            "(t.file_path LIKE ? ESCAPE '\\' OR tr.file_path LIKE ? ESCAPE '\\')"
+                .to_string(),
+        );
+        params.push(Box::new(path_like.clone()));
+        params.push(Box::new(path_like));
+    }
+
+    let select_clause = if count_only {
+        "SELECT COUNT(*)".to_string()
+    } else {
+        "SELECT t.data AS type_data, t.name AS type_name, t.file_path AS type_file_path, tr.name AS trait_name, tr.file_path AS trait_file_path, tr.data AS trait_data".to_string()
+    };
+
+    let mut sql = format!(
+        "{select_clause}
+FROM graph_edges e
+JOIN graph_entities t ON t.id = e.from_id
+JOIN graph_entities tr ON tr.id = e.to_id
+WHERE {where_clause}",
+        select_clause = select_clause,
+        where_clause = where_clauses.join(" AND "),
+    );
+
+    if !count_only {
+        sql.push_str(
+            "\nORDER BY json_extract(t.data, '$.start_line'), json_extract(t.data, '$.start_col'), json_extract(t.data, '$.byte_start'), e.id\n",
+        );
+        sql.push_str("LIMIT ?");
+        params.push(Box::new(limit as u64));
+    }
+
+    (sql, params)
+}

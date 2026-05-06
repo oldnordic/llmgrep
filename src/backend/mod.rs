@@ -5,7 +5,9 @@
 //! and zero breaking changes to existing functionality.
 
 use crate::error::LlmError;
-use crate::output::{CallSearchResponse, ReferenceSearchResponse, SearchResponse};
+use crate::output::{
+    CallSearchResponse, ImplementsSearchResponse, ReferenceSearchResponse, SearchResponse,
+};
 use crate::query::SearchOptions;
 use std::path::Path;
 
@@ -58,6 +60,12 @@ pub trait BackendTrait {
 
     /// Search for function calls (outgoing edges) from symbols.
     fn search_calls(&self, options: SearchOptions) -> Result<(CallSearchResponse, bool), LlmError>;
+
+    /// Search for type-trait implementation relationships.
+    fn search_implements(
+        &self,
+        options: SearchOptions,
+    ) -> Result<(ImplementsSearchResponse, bool), LlmError>;
 
     /// Query AST nodes for a file.
     ///
@@ -260,6 +268,18 @@ impl Backend {
             Backend::Sqlite(b) => b.search_calls(options),
             #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.search_calls(options),
+        }
+    }
+
+    /// Delegate search_implements to inner backend.
+    pub fn search_implements(
+        &self,
+        options: SearchOptions,
+    ) -> Result<(ImplementsSearchResponse, bool), LlmError> {
+        match self {
+            Backend::Sqlite(b) => b.search_implements(options),
+            #[cfg(feature = "geometric-backend")]
+            Backend::Geometric(b) => b.search_implements(options),
         }
     }
 

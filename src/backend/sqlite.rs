@@ -6,9 +6,13 @@
 use crate::error::LlmError;
 use crate::infer_language;
 use crate::output::{
-    CallSearchResponse, ReferenceSearchResponse, SearchResponse, Span, SymbolMatch,
+    CallSearchResponse, ImplementsSearchResponse, ReferenceSearchResponse, SearchResponse, Span,
+    SymbolMatch,
 };
-use crate::query::{search_calls_impl, search_references_impl, search_symbols_impl, SearchOptions};
+use crate::query::{
+    search_calls_impl, search_implements_impl, search_references_impl, search_symbols_impl,
+    SearchOptions,
+};
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
 
@@ -55,6 +59,13 @@ impl super::BackendTrait for SqliteBackend {
 
     fn search_calls(&self, options: SearchOptions) -> Result<(CallSearchResponse, bool), LlmError> {
         search_calls_impl(&self.conn, &options)
+    }
+
+    fn search_implements(
+        &self,
+        options: SearchOptions,
+    ) -> Result<(ImplementsSearchResponse, bool), LlmError> {
+        search_implements_impl(&self.conn, &options)
     }
 
     fn ast(

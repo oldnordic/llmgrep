@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Implements search mode** (`--mode implements`) — Query type-trait implementation relationships:
+  - Searches `graph_edges` where `edge_type = 'IMPLEMENTS'`
+  - Bidirectional: query matches either type name or trait name
+  - Returns `type_name`, `trait_name`, `type_symbol_id`, `trait_symbol_id`, and source location
+  - Supports `--output json`, `--output pretty`, path filtering, and snippets
+  - Human output format: `type_name impl trait_name`
+
 ## [3.2.0] - 2026-05-06
 
 ### Added
