@@ -4,8 +4,22 @@ This document describes how llmgrep integrates with Magellan's APIs and contract
 
 ## Version Requirements
 
-- **Magellan:** 3.0.0+ (Geometric backend support)
+- **Magellan:** 3.3.3+ (schema 14 for graph memory tables)
 - **sqlitegraph:** 2.0.7+
+
+## Schema Compatibility
+
+llmgrep queries tables across Magellan schema versions:
+
+| Table | Schema Version | Query Mode |
+|-------|---------------|------------|
+| `graph_entities`, `graph_edges` | 1+ | `--mode symbols/references/calls` |
+| `ast_nodes` | 8+ | `--mode symbols` with `--ast-kind` |
+| `graph_edges` (IMPLEMENTS) | 10+ | `--mode implements` |
+| `source_documents` | 13+ | `--mode docs` |
+| `candidate_facts` | 14+ | `--mode facts` |
+
+All modes degrade gracefully: if the required table does not exist, results are empty.
 
 ## Backend Opening
 

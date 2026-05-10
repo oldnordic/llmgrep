@@ -254,13 +254,15 @@ fn test_build_search_query_with_fts5() {
 #[test]
 fn test_fts5_or_query_single_word() {
     use crate::query::builder::fts5_or_query;
-    assert_eq!(fts5_or_query("test"), "\"test\"");
+    // Prefix matching: "test" matches "test", "test_foo", "testing", etc.
+    assert_eq!(fts5_or_query("test"), "\"test\"*");
 }
 
 #[test]
 fn test_fts5_or_query_multi_word() {
     use crate::query::builder::fts5_or_query;
-    assert_eq!(fts5_or_query("Mutex RwLock"), "\"Mutex\" OR \"RwLock\"");
+    // OR + prefix: "Mutex" OR "RwLock", each with prefix matching
+    assert_eq!(fts5_or_query("Mutex RwLock"), "\"Mutex\"* OR \"RwLock\"*");
 }
 
 #[test]
@@ -274,7 +276,7 @@ fn test_fts5_or_query_empty() {
 fn test_fts5_or_query_quotes() {
     use crate::query::builder::fts5_or_query;
     // Double quotes inside tokens should be doubled (FTS5 escaping)
-    assert_eq!(fts5_or_query("foo\"bar"), "\"foo\"\"bar\"");
+    assert_eq!(fts5_or_query("foo\"bar"), "\"foo\"\"bar\"*");
 }
 
 #[test]

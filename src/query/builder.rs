@@ -19,28 +19,30 @@ pub(crate) fn check_symbol_fts_exists(conn: &Connection) -> Result<bool, rusqlit
     Ok(stmt.exists([])?)
 }
 
-/// Convert a user search query into an FTS5 MATCH expression with OR semantics.
+/// Convert a user search query into an FTS5 MATCH expression with OR + prefix semantics.
 ///
 /// FTS5 defaults to AND for space-separated terms, which causes multi-word
 /// queries like "Mutex RwLock" to require all words. This function splits
 /// the query into tokens and joins them with `OR`, so any matching token
 /// returns results.
 ///
-/// Each token is double-quoted to prevent FTS5 from interpreting special
-/// characters (e.g. `*`, `-`, `OR`) as query operators.
+/// Each token is double-quoted with a `*` suffix for prefix matching.
+/// This means "parse" matches "parse_required_arg", "parse_output_format", etc.
+/// Without prefix matching, agents get 0 results for partial names and fall
+/// back to raw file reads — the #1 cause of token waste.
 pub(crate) fn fts5_or_query(query: &str) -> String {
     let tokens: Vec<&str> = query.split_whitespace().filter(|t| !t.is_empty()).collect();
     match tokens.len() {
         0 => String::new(),
         1 => {
             let token = tokens[0].replace('"', "\"\"");
-            format!("\"{}\"", token)
+            format!("\"{}\"*", token)
         }
         _ => tokens
             .into_iter()
             .map(|t| {
                 let escaped = t.replace('"', "\"\"");
-                format!("\"{}\"", escaped)
+                format!("\"{}\"*", escaped)
             })
             .collect::<Vec<_>>()
             .join(" OR "),

@@ -1,15 +1,15 @@
 # llmgrep Manual
 
-**v3.1.4** (shipped 2026-04-23)
+**v3.3.1** (shipped 2026-05-10)
 
 llmgrep is a read-only query tool for Magellan's code map. Part of the sqlitegraph toolset alongside Magellan (indexing), Mirage (CFG analysis), and Splice (precision editing).
 
 llmgrep only works in conjunction with Magellan — it does not build or modify databases. Magellan owns indexing and freshness.
 
 **Toolset:**
-- [Magellan](https://crates.io/crates/magellan) v3.1.7 — Code indexing and algorithm execution
-- [llmgrep](https://crates.io/crates/llmgrep) v3.1.4 — This tool (query only)
-- [Mirage](https://crates.io/crates/mirage-analyzer) v1.2.1 — CFG analysis (Rust)
+- [Magellan](https://crates.io/crates/magellan) v3.3.3 — Code indexing and algorithm execution
+- [llmgrep](https://crates.io/crates/llmgrep) v3.3.1 — This tool (query only)
+- [Mirage](https://crates.io/crates/mirage-analyzer) v1.3.1 — CFG analysis (Rust)
 - [Splice](https://crates.io/crates/splice) — Precision code editing
 - [sqlitegraph](https://crates.io/crates/sqlitegraph) v2.0.7 — Graph database with 35+ algorithms
 
@@ -30,7 +30,10 @@ llmgrep find-ast --db <FILE> --kind <KIND> [OPTIONS]
 | `symbols` | Search symbol definitions (default) |
 | `references` | Search references to symbols |
 | `calls` | Search function calls |
-| `auto` | Run all three modes and combine results |
+| `implements` | Search type-trait implementations |
+| `docs` | Search source documents (wiki, specs, messages) |
+| `facts` | Search candidate knowledge triples |
+| `auto` | Run symbols, references, and calls modes combined |
 
 ### Options
 
@@ -39,7 +42,7 @@ llmgrep find-ast --db <FILE> --kind <KIND> [OPTIONS]
 - `--query <STRING>` — Search query string
 
 **Search mode:**
-- `--mode <MODE>` — Search mode: `symbols` (default), `references`, `calls`, `auto`
+- `--mode <MODE>` — Search mode: `symbols` (default), `references`, `calls`, `implements`, `docs`, `facts`, `auto`
 
 **Filters:**
 - `--path <PATH>` — Filter by file path prefix
@@ -108,6 +111,36 @@ llmgrep find-ast --db <FILE> --kind <KIND> [OPTIONS]
 
 **Snippet options:**
 - `--max-snippet-bytes <N>` — Max snippet size in bytes (default: 200)
+
+**Docs mode filters** (`--mode docs`):
+- `--tags <TAGS>` — Filter by tags (comma-separated, OR match)
+- `--wikilinks <LINKS>` — Filter by wikilinks
+- `--source-kind <KIND>` — Filter by source kind (wiki, code, message, etc.)
+- `--since <TIMESTAMP>` — Filter by timestamp (Unix epoch)
+- `--path <PATH>` — Filter by document path prefix
+
+**Facts mode filters** (`--mode facts`):
+- `--subject <SUBJECT>` — Filter by subject key (LIKE match)
+- `--predicate <PRED>` — Filter by predicate (exact match)
+- `--object <OBJECT>` — Filter by object key (LIKE match)
+- `--status <STATUS>` — Filter by status (pending, accepted, rejected, ambiguous)
+- `--subject-type <TYPE>` — Filter by subject type (Task, Agent, Event, etc.)
+
+### Docs and Facts examples
+
+```bash
+# Find wiki documents tagged "rust"
+llmgrep search --db code.db --mode docs --tags "rust"
+
+# Find documents about a specific topic via wikilinks
+llmgrep search --db code.db --mode docs --wikilinks "memory-system"
+
+# List all candidate facts assigned to an agent
+llmgrep search --db code.db --mode facts --predicate assigned_to --subject-type Task
+
+# Find rejected facts for review
+llmgrep search --db code.db --mode facts --status rejected --output json
+```
 
 ## ast command (v2.1)
 

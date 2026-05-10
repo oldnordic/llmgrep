@@ -3,11 +3,11 @@
 [![Crates.io](https://img.shields.io/crates/v/llmgrep)](https://crates.io/crates/llmgrep)
 [![Documentation](https://docs.rs/llmgrep/badge.svg)](https://docs.rs/llmgrep)
 
-**Version:** 3.1.6
+**Version:** 3.3.1
 
 Pattern-based code search for Magellan databases. Fast, deterministic symbol search with JSON output.
 
-**Positioning:** Read-only query tool for codebases indexed by Magellan. Use to find symbols, references, and call relationships. Emits structured JSON for code analysis.
+**Positioning:** Read-only query tool for codebases indexed by Magellan. Use to find symbols, references, call relationships, source documents, and knowledge triples. Emits structured JSON for code analysis.
 
 ## Purpose
 
@@ -22,6 +22,8 @@ Pattern-based code search for Magellan databases. Fast, deterministic symbol sea
 - **Symbol search** — Find functions, structs, traits by name or regex
 - **Reference lookup** — Find all callers/callees of a function
 - **Call graph traversal** — Navigate caller → callee relationships
+- **Source document search** — Query wiki pages, specs, messages by tags and wikilinks
+- **Knowledge triple search** — Query candidate facts by subject, predicate, object
 - **AST filtering** — Filter by node kind, nesting depth, complexity
 - **Geometric backend** — Native .geo file support with chunk retrieval
 - **Path normalization** — Consistent path handling across platforms

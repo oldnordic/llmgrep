@@ -6,9 +6,10 @@
 
 use crate::error::LlmError;
 use crate::output::{
-    CallSearchResponse, ImplementsSearchResponse, ReferenceSearchResponse, SearchResponse,
+    CallSearchResponse, DocsSearchResponse, FactsSearchResponse, ImplementsSearchResponse,
+    ReferenceSearchResponse, SearchResponse,
 };
-use crate::query::SearchOptions;
+use crate::query::{DocsSearchOptions, FactsSearchOptions, SearchOptions};
 use std::path::Path;
 
 // Backend implementation modules
@@ -66,6 +67,10 @@ pub trait BackendTrait {
         &self,
         options: SearchOptions,
     ) -> Result<(ImplementsSearchResponse, bool), LlmError>;
+
+    fn search_docs(&self, options: DocsSearchOptions) -> Result<DocsSearchResponse, LlmError>;
+
+    fn search_facts(&self, options: FactsSearchOptions) -> Result<FactsSearchResponse, LlmError>;
 
     /// Query AST nodes for a file.
     ///
@@ -280,6 +285,28 @@ impl Backend {
             Backend::Sqlite(b) => b.search_implements(options),
             #[cfg(feature = "geometric-backend")]
             Backend::Geometric(b) => b.search_implements(options),
+        }
+    }
+
+    pub fn search_docs(
+        &self,
+        options: DocsSearchOptions,
+    ) -> Result<DocsSearchResponse, LlmError> {
+        match self {
+            Backend::Sqlite(b) => b.search_docs(options),
+            #[cfg(feature = "geometric-backend")]
+            Backend::Geometric(b) => b.search_docs(options),
+        }
+    }
+
+    pub fn search_facts(
+        &self,
+        options: FactsSearchOptions,
+    ) -> Result<FactsSearchResponse, LlmError> {
+        match self {
+            Backend::Sqlite(b) => b.search_facts(options),
+            #[cfg(feature = "geometric-backend")]
+            Backend::Geometric(b) => b.search_facts(options),
         }
     }
 

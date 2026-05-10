@@ -61,6 +61,17 @@ struct SearchParams {
     paths_from: Option<String>,
     paths_to: Option<String>,
     coverage_filter: Option<llmgrep::query::CoverageFilter>,
+    // Docs mode filters
+    tags: Option<String>,
+    wikilinks: Option<String>,
+    source_kind: Option<String>,
+    since: Option<i64>,
+    // Facts mode filters
+    subject: Option<String>,
+    predicate: Option<String>,
+    object: Option<String>,
+    fact_status_filter: Option<String>,
+    subject_type: Option<String>,
 }
 
 use llmgrep::ast::{expand_shorthand_with_language, expand_shorthands};
@@ -102,7 +113,7 @@ struct Cli {
 enum Command {
     #[command(after_help = SEARCH_EXAMPLES)]
     Search {
-        #[arg(long)]
+        #[arg(long, default_value = ".*")]
         query: String,
 
         #[arg(long, value_enum, default_value = "symbols")]
@@ -234,6 +245,35 @@ enum Command {
 
         #[arg(long)]
         covered: bool,
+
+        // Docs mode filters
+        #[arg(long)]
+        tags: Option<String>,
+
+        #[arg(long)]
+        wikilinks: Option<String>,
+
+        #[arg(long)]
+        source_kind: Option<String>,
+
+        #[arg(long)]
+        since: Option<i64>,
+
+        // Facts mode filters
+        #[arg(long)]
+        subject: Option<String>,
+
+        #[arg(long)]
+        predicate: Option<String>,
+
+        #[arg(long)]
+        object: Option<String>,
+
+        #[arg(long)]
+        status: Option<String>,
+
+        #[arg(long, name = "subject-type")]
+        subject_type: Option<String>,
     },
 
     #[command(after_help = AST_EXAMPLES)]
@@ -302,6 +342,8 @@ enum SearchMode {
     Implements,
     Auto,
     Labels,
+    Docs,
+    Facts,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -657,6 +699,15 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
                 paths_to,
                 uncovered,
                 covered,
+                tags,
+                wikilinks,
+                source_kind,
+                since,
+                subject,
+                predicate,
+                object,
+                status,
+                subject_type,
             } => {
                 let params = SearchParams {
                     query: query.clone(),
@@ -706,6 +757,15 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
                     } else {
                         None
                     },
+                    tags: tags.clone(),
+                    wikilinks: wikilinks.clone(),
+                    source_kind: source_kind.clone(),
+                    since: *since,
+                    subject: subject.clone(),
+                    predicate: predicate.clone(),
+                    object: object.clone(),
+                    fact_status_filter: status.clone(),
+                    subject_type: subject_type.clone(),
                 };
                 run_search(cli, &params)
             }
@@ -814,6 +874,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
         && params.symbol_id.is_none()
         && !params.condense
         && params.paths_from.is_none()
+        && !matches!(params.mode, SearchMode::Docs | SearchMode::Facts)
     {
         return Err(LlmError::EmptyQuery);
     }
@@ -1381,6 +1442,86 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
             };
 
             output_implements(cli, response, partial, metrics.as_ref())?;
+
+            let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+            let total_ms = total_start.elapsed().as_millis() as u64;
+
+            if cli.show_metrics {
+                eprintln!("Performance metrics:");
+                eprintln!("  Backend detection: {}ms", backend_detection_ms);
+                eprintln!("  Query execution: {}ms", query_execution_ms);
+                eprintln!("  Output formatting: {}ms", output_formatting_ms);
+                eprintln!("  Total: {}ms", total_ms);
+            }
+        }
+        SearchMode::Docs => {
+            let docs_options = llmgrep::query::DocsSearchOptions {
+                db_path: &db_path,
+                limit: params.limit,
+                tags: params.tags.as_deref(),
+                wikilinks: params.wikilinks.as_deref(),
+                source_kind: params.source_kind.as_deref(),
+                since: params.since,
+                path: validated_path.as_ref().and_then(|p| p.to_str()),
+            };
+
+            let query_start = std::time::Instant::now();
+            let response = backend.search_docs(docs_options)?;
+            let query_execution_ms = query_start.elapsed().as_millis() as u64;
+
+            let format_start = std::time::Instant::now();
+            let metrics = if cli.show_metrics {
+                Some(PerformanceMetrics {
+                    backend_detection_ms,
+                    query_execution_ms,
+                    output_formatting_ms: 0,
+                    total_ms: 0,
+                })
+            } else {
+                None
+            };
+
+            output_docs(cli, response, metrics.as_ref())?;
+
+            let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+            let total_ms = total_start.elapsed().as_millis() as u64;
+
+            if cli.show_metrics {
+                eprintln!("Performance metrics:");
+                eprintln!("  Backend detection: {}ms", backend_detection_ms);
+                eprintln!("  Query execution: {}ms", query_execution_ms);
+                eprintln!("  Output formatting: {}ms", output_formatting_ms);
+                eprintln!("  Total: {}ms", total_ms);
+            }
+        }
+        SearchMode::Facts => {
+            let facts_options = llmgrep::query::FactsSearchOptions {
+                db_path: &db_path,
+                limit: params.limit,
+                subject: params.subject.as_deref(),
+                predicate: params.predicate.as_deref(),
+                object: params.object.as_deref(),
+                status: params.fact_status_filter.as_deref(),
+                subject_type: params.subject_type.as_deref(),
+            };
+
+            let query_start = std::time::Instant::now();
+            let response = backend.search_facts(facts_options)?;
+            let query_execution_ms = query_start.elapsed().as_millis() as u64;
+
+            let format_start = std::time::Instant::now();
+            let metrics = if cli.show_metrics {
+                Some(PerformanceMetrics {
+                    backend_detection_ms,
+                    query_execution_ms,
+                    output_formatting_ms: 0,
+                    total_ms: 0,
+                })
+            } else {
+                None
+            };
+
+            output_facts(cli, response, metrics.as_ref())?;
 
             let output_formatting_ms = format_start.elapsed().as_millis() as u64;
             let total_ms = total_start.elapsed().as_millis() as u64;
@@ -1974,6 +2115,76 @@ fn output_implements(
         OutputFormat::Json | OutputFormat::Pretty => {
             let json_response =
                 json_response_with_partial_and_performance(response, partial, metrics.cloned());
+            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
+                serde_json::to_string_pretty(&json_response)?
+            } else {
+                serde_json::to_string(&json_response)?
+            };
+            println!("{}", rendered);
+        }
+    }
+    Ok(())
+}
+
+fn output_docs(
+    cli: &Cli,
+    response: llmgrep::output::DocsSearchResponse,
+    metrics: Option<&PerformanceMetrics>,
+) -> Result<(), LlmError> {
+    match cli.output {
+        OutputFormat::Human => {
+            println!("{} documents", response.total_count);
+            for item in &response.results {
+                let kind = item.source_kind.as_deref().unwrap_or("unknown");
+                let title = item.title.as_deref().unwrap_or("<untitled>");
+                println!("{} [{}] {}", item.path_or_uri, kind, title);
+                if let Some(tags) = &item.tags {
+                    println!("  tags: {}", tags);
+                }
+                if let Some(links) = &item.wikilinks {
+                    println!("  wikilinks: {}", links);
+                }
+            }
+        }
+        OutputFormat::Json | OutputFormat::Pretty => {
+            let json_response =
+                json_response_with_partial_and_performance(response, false, metrics.cloned());
+            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
+                serde_json::to_string_pretty(&json_response)?
+            } else {
+                serde_json::to_string(&json_response)?
+            };
+            println!("{}", rendered);
+        }
+    }
+    Ok(())
+}
+
+fn output_facts(
+    cli: &Cli,
+    response: llmgrep::output::FactsSearchResponse,
+    metrics: Option<&PerformanceMetrics>,
+) -> Result<(), LlmError> {
+    match cli.output {
+        OutputFormat::Human => {
+            println!("{} facts", response.total_count);
+            for item in &response.results {
+                let subject = item.subject_key.as_deref().unwrap_or("?");
+                let pred = item.predicate.as_deref().unwrap_or("?");
+                let obj = item.object_key.as_deref().unwrap_or("?");
+                let status = item.status.as_deref().unwrap_or("unknown");
+                println!("[{}] {} --{}--> {}", status, subject, pred, obj);
+                if let Some(stype) = &item.subject_type {
+                    println!("  subject_type: {}", stype);
+                }
+                if let Some(otype) = &item.object_type {
+                    println!("  object_type: {}", otype);
+                }
+            }
+        }
+        OutputFormat::Json | OutputFormat::Pretty => {
+            let json_response =
+                json_response_with_partial_and_performance(response, false, metrics.cloned());
             let rendered = if matches!(cli.output, OutputFormat::Pretty) {
                 serde_json::to_string_pretty(&json_response)?
             } else {

@@ -9,8 +9,9 @@
 use crate::backend::magellan_adapter::normalize_path_for_query;
 use crate::error::LlmError;
 use crate::output::{
-    CallMatch, CallSearchResponse, ImplementsSearchResponse, ReferenceMatch, ReferenceSearchResponse,
-    SearchResponse, Span, SymbolMatch,
+    CallMatch, CallSearchResponse, DocsSearchResponse, FactsSearchResponse,
+    ImplementsSearchResponse, ReferenceMatch, ReferenceSearchResponse, SearchResponse, Span,
+    SymbolMatch,
 };
 use crate::query::util::score_match;
 use crate::query::SearchOptions;
@@ -473,6 +474,21 @@ impl crate::backend::BackendTrait for GeometricBackend {
             },
             false,
         ))
+    }
+
+    fn search_docs(&self, _options: crate::query::DocsSearchOptions) -> Result<DocsSearchResponse, LlmError> {
+        Ok(DocsSearchResponse {
+            results: Vec::new(),
+            total_count: 0,
+            path_filter: None,
+        })
+    }
+
+    fn search_facts(&self, _options: crate::query::FactsSearchOptions) -> Result<FactsSearchResponse, LlmError> {
+        Ok(FactsSearchResponse {
+            results: Vec::new(),
+            total_count: 0,
+        })
     }
 
     fn ast(

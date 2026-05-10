@@ -430,6 +430,71 @@ pub struct ImplementsSearchResponse {
     pub total_count: u64,
 }
 
+#[derive(Serialize, Debug)]
+pub struct DocsMatch {
+    pub id: i64,
+    pub path_or_uri: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observed_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_timestamp: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wikilinks: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct DocsSearchResponse {
+    pub results: Vec<DocsMatch>,
+    pub total_count: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path_filter: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct FactMatch {
+    pub id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_document_id: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subject_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subject_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub predicate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub properties_json: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rejection_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reviewed_at: Option<i64>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct FactsSearchResponse {
+    pub results: Vec<FactMatch>,
+    pub total_count: u64,
+}
+
 /// Combined response for searches that include symbols, references, and calls.
 ///
 /// Used when `--mode combined` is specified, providing all three types of

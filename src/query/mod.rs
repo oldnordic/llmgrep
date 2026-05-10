@@ -24,6 +24,8 @@ mod backend;
 mod builder;
 mod calls;
 mod chunks;
+mod docs;
+mod facts;
 mod implements;
 mod options;
 mod references;
@@ -51,6 +53,10 @@ pub use symbols::search_symbols;
 
 // Internal implementations (pub(crate) for use within the crate)
 pub(crate) use calls::search_calls_impl;
+pub(crate) use docs::search_docs_impl;
+pub use docs::DocsSearchOptions;
+pub(crate) use facts::search_facts_impl;
+pub use facts::FactsSearchOptions;
 pub(crate) use implements::search_implements_impl;
 pub(crate) use references::search_references_impl;
 pub(crate) use symbols::search_symbols_impl;

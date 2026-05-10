@@ -5,7 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.3.1] - 2026-05-10
+
+### Added
+- **Docs search mode** (`--mode docs`) — Query `source_documents` table from Magellan schema 13+:
+  - Filter by tags, wikilinks, source_kind, since timestamp, and path
+  - Returns document metadata: path, kind, title, author, tags, wikilinks
+  - Graceful degradation: empty results when `source_documents` table is missing
+  - Supports `--output json`, `--output pretty`
+
+- **Facts search mode** (`--mode facts`) — Query `candidate_facts` table from Magellan schema 14+:
+  - Filter by subject, predicate, object, status, and subject_type
+  - Returns fact metadata: candidate_id, subject, predicate, object, status
+  - Graceful degradation: empty results when `candidate_facts` table is missing
+  - Supports `--output json`, `--output pretty`
+
+### Changed
+- Updated `SUPPORTED_MAGELLAN_SCHEMA_VERSION` from 12 to 14.
+- Updated Magellan dependency to `3.3.3`.
+- `--query` now defaults to `".*"` so it is optional for docs/facts modes.
+
+## [3.3.0] - 2026-05-06
 
 ### Added
 - **Implements search mode** (`--mode implements`) — Query type-trait implementation relationships:
