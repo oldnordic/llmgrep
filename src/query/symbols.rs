@@ -667,10 +667,8 @@ pub(crate) fn search_symbols_impl(
                     |row| Ok((row.get::<_, i64>(0)?, row.get::<_, u64>(1)?)),
                 );
                 if let Ok(rows) = rows {
-                    for row in rows {
-                        if let Ok((id, depth)) = row {
-                            depth_map.insert(id, depth);
-                        }
+                    for (id, depth) in rows.flatten() {
+                        depth_map.insert(id, depth);
                     }
                 }
             }

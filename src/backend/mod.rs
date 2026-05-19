@@ -288,10 +288,7 @@ impl Backend {
         }
     }
 
-    pub fn search_docs(
-        &self,
-        options: DocsSearchOptions,
-    ) -> Result<DocsSearchResponse, LlmError> {
+    pub fn search_docs(&self, options: DocsSearchOptions) -> Result<DocsSearchResponse, LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_docs(options),
             #[cfg(feature = "geometric-backend")]
@@ -446,8 +443,7 @@ mod tests {
 
         // Layer 2: For a valid SQLite header, should attempt SQLite
         // Note: This may fail to open due to invalid SQLite content, but detection should work
-        if result.is_ok() {
-            let backend = result.unwrap();
+        if let Ok(backend) = result {
             assert!(
                 matches!(backend, Backend::Sqlite(_)),
                 "Layer 2: Expected Sqlite backend variant for SQLite header"

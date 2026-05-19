@@ -132,6 +132,7 @@ fn insert_code_chunk(
     .expect("insert chunk");
 }
 
+#[allow(clippy::too_many_arguments)]
 fn insert_metrics(
     conn: &Connection,
     symbol_row_id: i64,

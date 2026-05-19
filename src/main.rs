@@ -5,8 +5,8 @@ use llmgrep::backend::Backend;
 use llmgrep::error::LlmError;
 use llmgrep::output::{
     json_response, json_response_with_partial_and_performance, CallSearchResponse,
-    CombinedSearchResponse, ErrorResponse, ImplementsSearchResponse, OutputFormat, PerformanceMetrics,
-    ReferenceSearchResponse, SearchResponse,
+    CombinedSearchResponse, ErrorResponse, ImplementsSearchResponse, OutputFormat,
+    PerformanceMetrics, ReferenceSearchResponse, SearchResponse,
 };
 use llmgrep::output_common::{format_partial_footer, format_total_header};
 use llmgrep::query::{
@@ -791,7 +791,7 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
             regex::Regex::new(r"^[0-9a-f]{32}$").map_err(|_| LlmError::InvalidQuery {
                 query: "Failed to compile symbol_id validation regex".to_string(),
             })?;
-        if !hex_regex.is_match(&sid) {
+        if !hex_regex.is_match(sid) {
             return Err(LlmError::InvalidQuery {
                 query: format!(
                     "Invalid symbol_id format: '{}'. Expected 32 hex characters (0-9, a-f).",
@@ -811,10 +811,10 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
     let expanded_ast_kind = if let Some(kind_input) = &params.ast_kind {
         // Use language-aware expansion if language is specified
         let kinds = if normalized_language.is_some() {
-            expand_shorthand_with_language(&kind_input, normalized_language.as_deref())
+            expand_shorthand_with_language(kind_input, normalized_language.as_deref())
         } else {
             // Use Rust shorthands by default
-            expand_shorthands(&kind_input)
+            expand_shorthands(kind_input)
         };
         if !kinds.is_empty() {
             Some(kinds.join(","))
@@ -978,19 +978,19 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                     contains: params.contains.as_deref(),
                 },
                 algorithm: AlgorithmOptions {
-                    from_symbol_set: params.from_symbol_set.as_ref().map(|s| s.as_str()),
-                    reachable_from: params.reachable_from.as_ref().map(|s| s.as_str()),
-                    dead_code_in: params.dead_code_in.as_ref().map(|s| s.as_str()),
-                    in_cycle: params.in_cycle.as_ref().map(|s| s.as_str()),
-                    slice_backward_from: params.slice_backward_from.as_ref().map(|s| s.as_str()),
-                    slice_forward_from: params.slice_forward_from.as_ref().map(|s| s.as_str()),
+                    from_symbol_set: params.from_symbol_set.as_deref(),
+                    reachable_from: params.reachable_from.as_deref(),
+                    dead_code_in: params.dead_code_in.as_deref(),
+                    in_cycle: params.in_cycle.as_deref(),
+                    slice_backward_from: params.slice_backward_from.as_deref(),
+                    slice_forward_from: params.slice_forward_from.as_deref(),
                     condense: params.condense,
-                    paths_from: params.paths_from.as_ref().map(|s| s.as_str()),
-                    paths_to: params.paths_to.as_ref().map(|s| s.as_str()),
+                    paths_from: params.paths_from.as_deref(),
+                    paths_to: params.paths_to.as_deref(),
                 },
-                symbol_id: params.symbol_id.as_ref().map(|s| s.as_str()),
-                fqn_pattern: params.fqn.as_ref().map(|s| s.as_str()),
-                exact_fqn: params.exact_fqn.as_ref().map(|s| s.as_str()),
+                symbol_id: params.symbol_id.as_deref(),
+                fqn_pattern: params.fqn.as_deref(),
+                exact_fqn: params.exact_fqn.as_deref(),
                 coverage_filter: None,
             };
 
@@ -1236,9 +1236,9 @@ fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                     contains: params.contains.as_deref(),
                 },
                 algorithm: AlgorithmOptions::default(),
-                symbol_id: params.symbol_id.as_ref().map(|s| s.as_str()),
-                fqn_pattern: params.fqn.as_ref().map(|s| s.as_str()),
-                exact_fqn: params.exact_fqn.as_ref().map(|s| s.as_str()),
+                symbol_id: params.symbol_id.as_deref(),
+                fqn_pattern: params.fqn.as_deref(),
+                exact_fqn: params.exact_fqn.as_deref(),
                 coverage_filter: None,
             })?;
             let (references, refs_partial) = backend.search_references(SearchOptions {

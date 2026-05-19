@@ -111,6 +111,7 @@ fn insert_define_edge(conn: &Connection, file_id: i64, symbol_id: i64) {
     .expect("insert edge");
 }
 
+#[allow(clippy::too_many_arguments)]
 fn insert_metrics(
     conn: &Connection,
     symbol_row_id: i64,

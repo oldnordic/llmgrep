@@ -476,7 +476,10 @@ impl crate::backend::BackendTrait for GeometricBackend {
         ))
     }
 
-    fn search_docs(&self, _options: crate::query::DocsSearchOptions) -> Result<DocsSearchResponse, LlmError> {
+    fn search_docs(
+        &self,
+        _options: crate::query::DocsSearchOptions,
+    ) -> Result<DocsSearchResponse, LlmError> {
         Ok(DocsSearchResponse {
             results: Vec::new(),
             total_count: 0,
@@ -484,7 +487,10 @@ impl crate::backend::BackendTrait for GeometricBackend {
         })
     }
 
-    fn search_facts(&self, _options: crate::query::FactsSearchOptions) -> Result<FactsSearchResponse, LlmError> {
+    fn search_facts(
+        &self,
+        _options: crate::query::FactsSearchOptions,
+    ) -> Result<FactsSearchResponse, LlmError> {
         Ok(FactsSearchResponse {
             results: Vec::new(),
             total_count: 0,

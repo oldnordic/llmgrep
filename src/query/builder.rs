@@ -13,10 +13,9 @@ use std::path::PathBuf;
 
 /// Check if the `symbol_fts` FTS5 virtual table exists in the database.
 pub(crate) fn check_symbol_fts_exists(conn: &Connection) -> Result<bool, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='symbol_fts'",
-    )?;
-    Ok(stmt.exists([])?)
+    let mut stmt =
+        conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='symbol_fts'")?;
+    stmt.exists([])
 }
 
 /// Convert a user search query into an FTS5 MATCH expression with OR + prefix semantics.
@@ -631,9 +630,7 @@ pub(crate) fn build_implements_query(
 
     if !use_regex {
         let like_query = like_pattern(query);
-        where_clauses.push(
-            "(t.name LIKE ? ESCAPE '\\' OR tr.name LIKE ? ESCAPE '\\')".to_string(),
-        );
+        where_clauses.push("(t.name LIKE ? ESCAPE '\\' OR tr.name LIKE ? ESCAPE '\\')".to_string());
         params.push(Box::new(like_query.clone()));
         params.push(Box::new(like_query));
     }
@@ -641,8 +638,7 @@ pub(crate) fn build_implements_query(
     if let Some(path) = path_filter {
         let path_like = like_prefix(path);
         where_clauses.push(
-            "(t.file_path LIKE ? ESCAPE '\\' OR tr.file_path LIKE ? ESCAPE '\\')"
-                .to_string(),
+            "(t.file_path LIKE ? ESCAPE '\\' OR tr.file_path LIKE ? ESCAPE '\\')".to_string(),
         );
         params.push(Box::new(path_like.clone()));
         params.push(Box::new(path_like));

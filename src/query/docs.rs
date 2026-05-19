@@ -44,9 +44,16 @@ pub(crate) fn search_docs_impl(
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
     if let Some(tags) = options.tags {
-        let tag_list: Vec<&str> = tags.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()).collect();
+        let tag_list: Vec<&str> = tags
+            .split(',')
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+            .collect();
         if !tag_list.is_empty() {
-            let tag_conds: Vec<String> = tag_list.iter().map(|_| "(tags LIKE ?)".to_string()).collect();
+            let tag_conds: Vec<String> = tag_list
+                .iter()
+                .map(|_| "(tags LIKE ?)".to_string())
+                .collect();
             conditions.push(format!("({})", tag_conds.join(" OR ")));
             for tag in &tag_list {
                 params.push(Box::new(format!("%{}%", tag)));
@@ -97,7 +104,8 @@ pub(crate) fn search_docs_impl(
 
     let mut main_params = params;
     main_params.push(Box::new(options.limit as i64));
-    let main_refs: Vec<&dyn rusqlite::types::ToSql> = main_params.iter().map(|b| b.as_ref()).collect();
+    let main_refs: Vec<&dyn rusqlite::types::ToSql> =
+        main_params.iter().map(|b| b.as_ref()).collect();
 
     let mut stmt = conn.prepare(&sql)?;
     let mut rows = stmt.query(main_refs.as_slice())?;

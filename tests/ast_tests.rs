@@ -740,7 +740,7 @@ fn test_with_ast_context_flag() {
     // Check enriched fields (should be populated with --with-ast-context)
     assert_eq!(ast_ctx.depth, Some(1), "Depth should be populated");
     assert_eq!(
-        ast_ctx.parent_kind.as_ref().map(|s| s.as_str()),
+        ast_ctx.parent_kind.as_deref(),
         Some("mod_item"),
         "Parent kind should be populated"
     );
@@ -1379,7 +1379,7 @@ fn test_inside_block() {
     // Should find let_in_block (inside block)
     // Should NOT find let_at_func_level (direct child of function, not block)
     assert!(
-        response.results.len() >= 1,
+        !response.results.is_empty(),
         "Should find let_declaration inside block"
     );
 

@@ -91,7 +91,8 @@ pub(crate) fn search_facts_impl(
 
     let mut main_params = params;
     main_params.push(Box::new(options.limit as i64));
-    let main_refs: Vec<&dyn rusqlite::types::ToSql> = main_params.iter().map(|b| b.as_ref()).collect();
+    let main_refs: Vec<&dyn rusqlite::types::ToSql> =
+        main_params.iter().map(|b| b.as_ref()).collect();
 
     let mut stmt = conn.prepare(&sql)?;
     let mut rows = stmt.query(main_refs.as_slice())?;
