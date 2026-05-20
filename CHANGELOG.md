@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`explore` command** — Intent-based code search using graph metadata. Takes a natural language intent string (`--intent "database connection pooling"`), tokenizes it, searches symbols via FTS5 and LIKE, ranks candidates by name match score + fan-in, and clusters results by file/module. No embeddings required — pure graph traversal.
+  ```bash
+  llmgrep explore --db code.db --intent "error handling"
+  llmgrep explore --db code.db --intent "cfg" --output json
+  ```
+
 ## [3.4.4] - 2026-05-19
 
 ### Changed

@@ -25,6 +25,7 @@ mod builder;
 mod calls;
 mod chunks;
 mod docs;
+mod explore;
 mod facts;
 mod implements;
 mod options;
@@ -60,6 +61,9 @@ pub use facts::FactsSearchOptions;
 pub(crate) use implements::search_implements_impl;
 pub(crate) use references::search_references_impl;
 pub(crate) use symbols::search_symbols_impl;
+
+// Explore
+pub use explore::run_explore;
 
 // Utilities
 pub use util::infer_language;

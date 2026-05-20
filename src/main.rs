@@ -309,6 +309,14 @@ enum Command {
         fqn: String,
     },
 
+    Explore {
+        #[arg(long)]
+        intent: String,
+
+        #[arg(long, default_value_t = 10, value_parser = ranged_usize(1, 100))]
+        limit: usize,
+    },
+
     // Watch command is incomplete and requires unstable Mag APIs
     // Enable with: --features unstable-watch
     #[cfg(feature = "unstable-watch")]
@@ -655,6 +663,20 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
             Command::Complete { prefix, limit } => run_complete(cli, prefix.clone(), *limit),
 
             Command::Lookup { fqn } => run_lookup(cli, fqn),
+
+            Command::Explore { intent, limit } => {
+                let db_path = cli.db.as_ref().ok_or(LlmError::DatabaseNotFound {
+                    path: "none".to_string(),
+                })?;
+                let validated_db = validate_path(db_path, true)?;
+                let output = match cli.output {
+                    OutputFormat::Human => llmgrep::output::OutputFormat::Human,
+                    OutputFormat::Json => llmgrep::output::OutputFormat::Json,
+                    OutputFormat::Pretty => llmgrep::output::OutputFormat::Pretty,
+                };
+                llmgrep::query::run_explore(&validated_db, intent, *limit, output)
+                    .map_err(|e| LlmError::InvalidQuery { query: e.to_string() })
+            }
 
             Command::Search {
                 query,

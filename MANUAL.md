@@ -172,6 +172,58 @@ llmgrep find-ast --db <FILE> --kind <KIND>
 
 **Output:** JSON list of matching AST nodes.
 
+## explore command (v3.5)
+
+Intent-based code search using graph metadata — no embeddings needed.
+
+```bash
+llmgrep explore --db code.db --intent "database connection pooling"
+llmgrep explore --db code.db --intent "error handling" --output json
+llmgrep explore --db code.db --intent "cfg" --limit 5
+```
+
+### How it works
+
+1. Tokenizes the intent string (strips stop words, expands abbreviations like `db`→`database`)
+2. Searches symbols via FTS5 prefix match + LIKE fallback
+3. Ranks candidates by name match score + fan-in (heavily referenced symbols rank higher)
+4. Clusters results by file/module
+
+### Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--intent` | (required) | Natural language description of what you're looking for |
+| `--limit` | 10 | Max symbols to return |
+| `--output` | human | Output format: `human`, `json`, `pretty` |
+
+### Abbreviation expansion
+
+The tokenizer expands common abbreviations: `db`→`database`, `cfg`→`config`, `impl`→`implement`, `auth`→`authentication`, `fn`→`function`, `util`→`utility`, `conn`→`connection`, `err`→`error`, `svc`→`service`, `mgr`→`manager`, and more.
+
+### Example output
+
+```
+Exploring: "database connection pooling"
+
+Module: graph (score: 36)
+  File: src/graph/db_compat.rs
+  open_database (Function, fan-in: 12)
+  database_path (Function, fan-in: 5)
+
+Module: storage (score: 15)
+  File: src/storage/sqlite.rs
+  SqliteBackend::new (Function, fan-in: 3)
+
+2 modules, 3 symbols found
+```
+
+### When to use
+
+- **Instead of 3-5 separate `search` commands** when you know *what* you want but not the exact symbol name
+- **For codebase orientation** in an unfamiliar project
+- **For LLM agent integration** — single command replaces multi-query round trips
+
 ## AST filtering
 
 ### `--ast-kind` flag

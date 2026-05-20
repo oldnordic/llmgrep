@@ -18,6 +18,7 @@ llmgrep queries tables across Magellan schema versions:
 | `graph_edges` (IMPLEMENTS) | 10+ | `--mode implements` |
 | `source_documents` | 13+ | `--mode docs` |
 | `candidate_facts` | 14+ | `--mode facts` |
+| `symbol_fts`, `symbol_metrics`, `graph_entities`, `graph_edges` | 1+ | `explore` command |
 
 All modes degrade gracefully: if the required table does not exist, results are empty.
 
