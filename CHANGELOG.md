@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   llmgrep explore --db code.db --intent "cfg" --output json
   ```
 
+## [3.4.5] - 2026-05-21
+
+### Changed
+- **sqlitegraph 3.0.2 → 3.0.3** — Picks up AVX-512 SIMD performance improvements.
+
 ## [3.4.4] - 2026-05-19
 
 ### Changed

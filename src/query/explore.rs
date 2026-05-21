@@ -169,7 +169,7 @@ pub fn search_candidates(conn: &Connection, tokens: &[String], limit: usize) -> 
                 })
             });
 
-            if let Ok(rows) = rows {
+            if let Ok(_rows) = rows {
                 // Re-query with id for dedup
                 if let Ok(mut stmt2) = conn.prepare(
                     "SELECT e.id, e.name, e.file_path,
