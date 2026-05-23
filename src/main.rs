@@ -340,6 +340,35 @@ enum Command {
         #[arg(long)]
         regex: bool,
     },
+
+    /// Create a new HNSW vector index for semantic code search.
+    VectorCreate {
+        /// Index name (used as the identifier when searching).
+        #[arg(long)]
+        name: String,
+
+        /// Embedding dimension (must match your embedding model output size).
+        #[arg(long)]
+        dim: usize,
+    },
+
+    /// Search a HNSW vector index with a raw embedding vector.
+    ///
+    /// The query vector must be provided as a comma-separated list of floats.
+    /// Use an embedding provider to generate vectors from natural language first.
+    VectorSearch {
+        /// Comma-separated float values of the query vector.
+        #[arg(long)]
+        query: String,
+
+        /// Name of the index to search (created with vector-create).
+        #[arg(long)]
+        index: String,
+
+        /// Number of nearest neighbors to return.
+        #[arg(long, default_value_t = 10, value_parser = ranged_usize(1, 1000))]
+        limit: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -674,8 +703,11 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
                     OutputFormat::Json => llmgrep::output::OutputFormat::Json,
                     OutputFormat::Pretty => llmgrep::output::OutputFormat::Pretty,
                 };
-                llmgrep::query::run_explore(&validated_db, intent, *limit, output)
-                    .map_err(|e| LlmError::InvalidQuery { query: e.to_string() })
+                llmgrep::query::run_explore(&validated_db, intent, *limit, output).map_err(|e| {
+                    LlmError::InvalidQuery {
+                        query: e.to_string(),
+                    }
+                })
             }
 
             Command::Search {
@@ -801,8 +833,54 @@ fn dispatch(cli: &Cli) -> Result<(), LlmError> {
                 limit,
                 regex,
             } => run_watch(cli, query, *mode, path, kind, *limit, *regex),
+            Command::VectorCreate { name, dim } => run_vector_create(name, *dim),
+            Command::VectorSearch {
+                query,
+                index,
+                limit,
+            } => run_vector_search(query, index, *limit),
         },
     }
+}
+
+fn run_vector_create(name: &str, dim: usize) -> Result<(), LlmError> {
+    use llmgrep::backend::vector::VectorIndex;
+    let vi = VectorIndex::create(name, dim)?;
+    println!(
+        "{{\"status\":\"ok\",\"index\":{:?},\"dim\":{},\"vectors\":{}}}",
+        name,
+        vi.dimension(),
+        vi.len()
+    );
+    Ok(())
+}
+
+fn run_vector_search(query: &str, index: &str, limit: usize) -> Result<(), LlmError> {
+    use llmgrep::backend::vector::VectorIndex;
+    // Parse comma-separated floats
+    let vector: Result<Vec<f32>, _> = query.split(',').map(|s| s.trim().parse::<f32>()).collect();
+    let vector = vector.map_err(|_| LlmError::InvalidQuery {
+        query: format!(
+            "Failed to parse query vector: expected comma-separated floats, got: {query}"
+        ),
+    })?;
+    let dim = vector.len();
+    let vi = VectorIndex::create(index, dim)?;
+    let results = vi.search(&vector, limit)?;
+    let json_results: Vec<serde_json::Value> = results
+        .iter()
+        .map(|(id, dist)| serde_json::json!({"id": id, "distance": dist}))
+        .collect();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "index": index,
+            "query_dim": dim,
+            "results": json_results,
+        }))
+        .unwrap_or_default()
+    );
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

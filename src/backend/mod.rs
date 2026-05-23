@@ -19,6 +19,7 @@ pub mod geometric;
 pub mod magellan_adapter; // Contract-aware Magellan adapter layer
 pub mod schema_check;
 pub mod sqlite;
+pub mod vector;
 
 #[cfg(feature = "geometric-backend")]
 pub use geometric::GeometricBackend;
