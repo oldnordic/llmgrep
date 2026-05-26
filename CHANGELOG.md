@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - All subcommands (`search`, `ast`, `find-ast`, `complete`, `lookup`, `explore`, `stats`, `evolve`) now use unified `resolve_db_path()` — no more "Database not found: none" errors.
+- **CLI modularization** — `main.rs` split from 3436 LOC into modular dispatch (`dispatch.rs`, `cli.rs`). `algorithm.rs` split into 3 files, `ast.rs` into 3 files, `query/tests.rs` into 10 files.
+- **Production unwrap cleanup** — 2 `.unwrap()` replaced with `.expect("invariant: ...")` in `explore.rs` and `geometric.rs`.
 
 ## [Unreleased]
 
@@ -569,6 +571,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Stable CLI
 
-**Initial release with comprehensive error handling, security hardening, code quality improvements, test coverage, and developer experience enhancements.**
+**Initial release with error handling, security hardening, test coverage, and developer experience improvements.**
 
 [Unreleased]: Initial llmgrep CLI with Magellan DB search

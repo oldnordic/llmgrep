@@ -7,26 +7,45 @@ llmgrep is a read-only query tool for Magellan code graphs with multi-backend su
 ```
 llmgrep/
 ├── src/
-│   ├── main.rs              # CLI entry point, command parsing, DB path resolution
+│   ├── main.rs              # CLI entry point
 │   ├── lib.rs               # Library exports
+│   ├── cli.rs               # CLI argument parsing
+│   ├── dispatch.rs          # Command dispatch routing
+│   ├── commands/            # Command implementations (one file per command)
+│   │   ├── search.rs        #   Symbol/reference/call/docs/facts search
+│   │   ├── explore.rs       #   Intent-based search
+│   │   ├── stats.rs         #   Code health statistics
+│   │   ├── evolve.rs        #   Symbol evolution scoring
+│   │   ├── ast.rs           #   AST tree query
+│   │   ├── find_ast.rs      #   AST node search
+│   │   ├── complete.rs      #   FQN autocomplete
+│   │   ├── lookup.rs        #   Exact FQN lookup
+│   │   ├── watch.rs         #   Watch mode
+│   │   └── vector.rs        #   Vector search
+│   ├── query/               # Query building and execution
+│   │   ├── mod.rs           #   Search options
+│   │   ├── builder.rs       #   SQL query construction
+│   │   ├── symbols.rs       #   Symbol search queries
+│   │   ├── references.rs    #   Reference search queries
+│   │   ├── calls.rs         #   Call search queries
+│   │   ├── explore.rs       #   Intent-based search logic
+│   │   ├── stats.rs         #   Statistics computation
+│   │   ├── evolve.rs        #   Evolution scoring
+│   │   ├── telemetry.rs     #   Opt-in local telemetry
+│   │   └── tests/           #   10 test files for query logic
 │   ├── backend/
 │   │   ├── mod.rs           # Backend trait and dispatcher
-│   │   ├── geometric.rs     # Geometric (.geo) backend implementation
-│   │   ├── magellan_adapter.rs  # Contract-aware integration layer
-│   │   ├── sqlite.rs        # SQLite backend implementation
-│   │   └── native_v3.rs     # Native-V3 backend (reserved, disabled)
-│   ├── query/
-│   │   ├── mod.rs           # Search options and query building
-│   │   ├── evolve.rs        # Evolve subcommand: symbol evolution scoring
-│   │   ├── stats.rs         # Stats subcommand: code statistics
-│   │   └── telemetry.rs     # Opt-in local telemetry
-│   ├── output/
-│   │   ├── mod.rs           # Response types (JSON, human)
-│   │   └── json.rs          # JSON serialization
+│   │   ├── geometric.rs     # Geometric (.geo) backend
+│   │   ├── magellan_adapter.rs  # Contract-aware integration
+│   │   ├── sqlite.rs        # SQLite backend
+│   │   ├── schema_check.rs  # Schema version detection
+│   │   └── vector.rs        # Vector search backend
 │   ├── algorithm/
 │   │   └── mod.rs           # Magellan algorithm integration
 │   ├── ast/
-│   │   └── mod.rs           # AST filtering utilities
+│   │   ├── mod.rs           # AST filtering
+│   │   └── language.rs      # Language-aware kind expansion
+│   ├── output.rs            # Response formatting (JSON, human)
 │   └── error.rs             # Error types with codes
 ```
 
@@ -37,15 +56,13 @@ The `Backend` enum provides runtime backend detection and dispatch:
 ```rust
 pub enum Backend {
     Sqlite(SqliteBackend),
-    #[cfg(feature = "native-v3")]
-    NativeV3(NativeV3Backend),
     Geometric(GeometricBackend),
 }
 
 impl Backend {
     pub fn detect_and_open(db_path: &Path) -> Result<Self, LlmError> {
         // 1. Check .geo extension
-        // 2. Read header for magic bytes
+        // 2. Check SQLite header bytes
         // 3. Open appropriate backend
     }
 }
@@ -99,9 +116,13 @@ Backend::search_symbols(options)
     │       │
     │       └──► SQL query with JOINs
     │
-    └──► NativeV3Backend (reserved)
+    └──► GeometricBackend
             │
-            └──► CodeGraph API calls
+            ├──► normalize_path()
+            │
+            ├──► backend.find_symbols_by_name_info()
+            │
+            └──► filter by path/kind/language
 ```
 
 ## Magellan Adapter Layer

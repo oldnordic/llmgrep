@@ -1,6 +1,6 @@
 # llmgrep Manual
 
-**v3.3.1** (shipped 2026-05-10)
+**v3.5.0** (shipped 2026-05-26)
 
 llmgrep is a read-only query tool for Magellan's code map. Part of the sqlitegraph toolset alongside Magellan (indexing), Mirage (CFG analysis), and Splice (precision editing).
 
@@ -8,10 +8,10 @@ llmgrep only works in conjunction with Magellan — it does not build or modify 
 
 **Toolset:**
 - [Magellan](https://crates.io/crates/magellan) v3.3.3 — Code indexing and algorithm execution
-- [llmgrep](https://crates.io/crates/llmgrep) v3.3.1 — This tool (query only)
-- [Mirage](https://crates.io/crates/mirage-analyzer) v1.3.1 — CFG analysis (Rust)
+- [llmgrep](https://crates.io/crates/llmgrep) v3.5.0 — This tool (query only)
+- [Mirage](https://crates.io/crates/mirage-analyzer) v1.5.0 — CFG analysis (Rust)
 - [Splice](https://crates.io/crates/splice) — Precision code editing
-- [sqlitegraph](https://crates.io/crates/sqlitegraph) v2.0.7 — Graph database with 35+ algorithms
+- [sqlitegraph](https://crates.io/crates/sqlitegraph) v3.0 — Graph database with 35+ algorithms
 
 ## Commands
 
@@ -19,6 +19,9 @@ llmgrep only works in conjunction with Magellan — it does not build or modify 
 llmgrep search --db <FILE> --query <STRING> [OPTIONS]
 llmgrep ast --db <FILE> --file <PATH> [OPTIONS]
 llmgrep find-ast --db <FILE> --kind <KIND> [OPTIONS]
+llmgrep explore --db <FILE> --intent <STRING> [OPTIONS]
+llmgrep stats --db <FILE> [OPTIONS]
+llmgrep evolve --db <FILE> [OPTIONS]
 ```
 
 ## search command
@@ -224,6 +227,46 @@ Module: storage (score: 15)
 - **For codebase orientation** in an unfamiliar project
 - **For LLM agent integration** — single command replaces multi-query round trips
 
+## stats command (v3.5)
+
+Code health summary from the database. No arguments required.
+
+```bash
+llmgrep stats
+llmgrep stats --output json
+```
+
+### What it shows
+
+- Symbol counts by kind (function, struct, trait, etc.)
+- Dead code detection (symbols with zero fan-in and zero fan-out)
+- Top hotspots ranked by composite score (fan-in × complexity)
+- Coverage gaps (files in graph but not indexed)
+
+## evolve command (v3.5)
+
+Score symbols by `fan_in × cyclomatic_complexity` and optionally write high-impact candidates to `candidate_facts` table.
+
+```bash
+# Dry run — show scores without writing
+llmgrep evolve --dry-run --min-score 50
+
+# Write candidates to database
+llmgrep evolve --min-score 8 --limit 20
+
+# JSON output for scripting
+llmgrep evolve --output json
+```
+
+### Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--min-score` | 8 | Minimum composite score to include |
+| `--limit` | 50 | Max candidates to return |
+| `--dry-run` | false | Show scores without writing to database |
+| `--output` | human | Output format: `human`, `json`, `pretty` |
+
 ## AST filtering
 
 ### `--ast-kind` flag
@@ -420,7 +463,7 @@ Formatted JSON with indentation for readability.
 1. **Use `--output human`** for terminal display
 2. **Add `--show-metrics`** when debugging performance
 3. **Use `--limit`** to cap large result sets
-4. **Leverage `--sort-by`** for discovery (complexity, fan-in)
+4. **Use `--sort-by`** for discovery (complexity, fan-in)
 
 ### For Scripting
 
@@ -437,8 +480,6 @@ Formatted JSON with indentation for readability.
 | Use `--limit` on wildcard queries | Prevents large outputs |
 | Cache algorithm filter results | Avoid subprocess overhead |
 
-See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for detailed benchmarks.
-
 ## Version history
 
 See `CHANGELOG.md` for detailed version history.
@@ -447,6 +488,5 @@ See `CHANGELOG.md` for detailed version history.
 
 - **[README.md](README.md)** — Quick start and overview
 - **[CHANGELOG.md](CHANGELOG.md)** — Version history
-- **[docs/PERFORMANCE.md](docs/PERFORMANCE.md)** — Benchmarks and optimization
-- **[docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md)** — Recommended workflows
-- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — Common issues and solutions
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Component design
+- **[API_INTEGRATION.md](API_INTEGRATION.md)** — Magellan contract details

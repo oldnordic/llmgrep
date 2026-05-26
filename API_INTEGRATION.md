@@ -5,7 +5,7 @@ This document describes how llmgrep integrates with Magellan's APIs and contract
 ## Version Requirements
 
 - **Magellan:** 3.3.3+ (schema 14 for graph memory tables)
-- **sqlitegraph:** 2.0.7+
+- **sqlitegraph:** 3.0+
 
 ## Schema Compatibility
 

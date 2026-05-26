@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/llmgrep)](https://crates.io/crates/llmgrep)
 [![Documentation](https://docs.rs/llmgrep/badge.svg)](https://docs.rs/llmgrep)
 
-**Version:** 3.3.1
+**Version:** 3.5.0
 
 Pattern-based code search for Magellan databases. Fast, deterministic symbol search with JSON output.
 
@@ -61,7 +61,7 @@ cargo install llmgrep --features geometric-backend
 | Backend | File | Features | Status |
 |---------|------|----------|--------|
 | **Geometric** | `.geo` | Full search + chunk retrieval + path normalization | Requires `--features geometric-backend` |
-| | **SQLite** | `.db` | Full search | Default (always available) |
+| **SQLite** | `.db` | Full search | Default (always available) |
 
 **Geometric (.geo) features:**
 - Path normalization before queries
@@ -73,8 +73,8 @@ cargo install llmgrep --features geometric-backend
 
 ## Requirements
 
-- **[Magellan](https://github.com/oldnordic/magellan)** 3.1.7 — Required for indexing
-- **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 2.0.7+ — Included automatically
+- **[Magellan](https://github.com/oldnordic/magellan)** 3.3.3+ — Required for indexing
+- **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 3.0+ — Included automatically
 
 ## Documentation
 
