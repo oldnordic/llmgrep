@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-05-26
+
+### Added
+
+- **DB path auto-resolution** — `--db` flag is now optional. llmgrep resolves the database via a 3-step chain: `--db` flag → `.magellan/llmgrep.db` in CWD → `.magellan/llmgrep.db` at git root. Clear error if no database found.
+- **`evolve` subcommand** — Score symbols by `fan_in × cyclomatic_complexity`, write high-impact candidates to `candidate_facts` table. Supports `--min-score` (default 8), `--dry-run`, `--limit`, and JSON output.
+  ```bash
+  llmgrep evolve --dry-run --min-score 50
+  llmgrep evolve --query "search" --output json
+  ```
+- **`stats` subcommand** — Code health summary: symbol counts by kind, dead code detection (zero fan-in/fan-out), top hotspots by composite score, coverage gap analysis. JSON and human output.
+  ```bash
+  llmgrep stats
+  llmgrep stats --output json
+  ```
+- **Opt-in telemetry** — `--record` flag or `LLMGREP_TELEMETRY=1` environment variable records command invocations to `~/.magellan/llmgrep-telemetry.db`. No network calls. No data sent anywhere. Disabled by default.
+
+### Changed
+
+- All subcommands (`search`, `ast`, `find-ast`, `complete`, `lookup`, `explore`, `stats`, `evolve`) now use unified `resolve_db_path()` — no more "Database not found: none" errors.
+
 ## [Unreleased]
 
 ### Added

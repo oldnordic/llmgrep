@@ -7,7 +7,7 @@ llmgrep is a read-only query tool for Magellan code graphs with multi-backend su
 ```
 llmgrep/
 ├── src/
-│   ├── main.rs              # CLI entry point, command parsing
+│   ├── main.rs              # CLI entry point, command parsing, DB path resolution
 │   ├── lib.rs               # Library exports
 │   ├── backend/
 │   │   ├── mod.rs           # Backend trait and dispatcher
@@ -16,7 +16,10 @@ llmgrep/
 │   │   ├── sqlite.rs        # SQLite backend implementation
 │   │   └── native_v3.rs     # Native-V3 backend (reserved, disabled)
 │   ├── query/
-│   │   └── mod.rs           # Search options and query building
+│   │   ├── mod.rs           # Search options and query building
+│   │   ├── evolve.rs        # Evolve subcommand: symbol evolution scoring
+│   │   ├── stats.rs         # Stats subcommand: code statistics
+│   │   └── telemetry.rs     # Opt-in local telemetry
 │   ├── output/
 │   │   ├── mod.rs           # Response types (JSON, human)
 │   │   └── json.rs          # JSON serialization

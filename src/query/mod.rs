@@ -25,6 +25,7 @@ mod builder;
 mod calls;
 mod chunks;
 mod docs;
+mod evolve;
 mod explore;
 mod facts;
 mod implements;
@@ -52,10 +53,17 @@ pub use implements::search_implements;
 pub use references::search_references;
 pub use symbols::search_symbols;
 
+mod stats;
+pub use stats::{
+    run_stats, CoverageStats, DeadCodeStats, HotspotSymbol, StatsResponse, SymbolStats,
+};
+pub mod telemetry;
+
 // Internal implementations (pub(crate) for use within the crate)
 pub(crate) use calls::search_calls_impl;
 pub(crate) use docs::search_docs_impl;
 pub use docs::DocsSearchOptions;
+pub use evolve::{run_evolve, EvolveCandidate, EvolveOptions, EvolveResponse};
 pub(crate) use facts::search_facts_impl;
 pub use facts::FactsSearchOptions;
 pub(crate) use implements::search_implements_impl;

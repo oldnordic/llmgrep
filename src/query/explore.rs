@@ -83,8 +83,16 @@ pub fn tokenize_intent(intent: &str) -> Vec<String> {
     let mut current = String::new();
 
     for ch in lower.chars() {
-        if ch.is_whitespace() || ch == '_' || ch == '-' || ch == '.' || ch == '/' || ch == ':'
-            || ch == ',' || ch == ';' || ch == '(' || ch == ')'
+        if ch.is_whitespace()
+            || ch == '_'
+            || ch == '-'
+            || ch == '.'
+            || ch == '/'
+            || ch == ':'
+            || ch == ','
+            || ch == ';'
+            || ch == '('
+            || ch == ')'
         {
             if !current.is_empty() {
                 raw_tokens.push(current.clone());
@@ -281,7 +289,11 @@ pub fn rank_candidates(tokens: &[String], candidates: &mut [ExploreSymbol]) {
         sym.score = score;
     }
 
-    candidates.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    candidates.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 }
 
 /// Group candidates by file and find internal call relationships.
@@ -315,7 +327,7 @@ pub fn cluster_by_file(conn: &Connection, candidates: &[ExploreSymbol]) -> Vec<E
                  FROM graph_edges ge
                  JOIN graph_entities e_from ON e_from.id = ge.from_id
                  JOIN graph_entities e_to ON e_to.id = ge.to_id
-                 WHERE e_from.name = ? AND ge.edge_type = 'CALLS'"
+                 WHERE e_from.name = ? AND ge.edge_type = 'CALLS'",
             ) {
                 let rows = stmt.query_map(rusqlite::params![name], |row| row.get::<_, String>(0));
                 if let Ok(rows) = rows {
@@ -337,7 +349,11 @@ pub fn cluster_by_file(conn: &Connection, candidates: &[ExploreSymbol]) -> Vec<E
         });
     }
 
-    clusters.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    clusters.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     clusters
 }
 
@@ -407,10 +423,7 @@ pub fn run_explore(
                     println!("  File: {}", cluster.file);
                 }
                 for sym in &cluster.symbols {
-                    println!(
-                        "  {} ({}, fan-in: {})",
-                        sym.name, sym.kind, sym.fan_in
-                    );
+                    println!("  {} ({}, fan-in: {})", sym.name, sym.kind, sym.fan_in);
                 }
                 if !cluster.internal_calls.is_empty() {
                     println!("  → Internal calls: {}", cluster.internal_calls.join(", "));
@@ -443,7 +456,9 @@ mod tests {
     #[test]
     fn tokenize_strips_stop_words() {
         let tokens = tokenize_intent("how does the parser work");
-        assert!(!tokens.iter().any(|t| t == "how" || t == "does" || t == "the"));
+        assert!(!tokens
+            .iter()
+            .any(|t| t == "how" || t == "does" || t == "the"));
         assert!(tokens.contains(&"parser".to_string()));
         assert!(tokens.contains(&"work".to_string()));
     }
