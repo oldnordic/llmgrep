@@ -1,8 +1,9 @@
-//! Backend abstraction for SQLite and Geometric storage.
+//! Backend abstraction for SQLite storage.
 //!
-//! The Backend trait provides a unified interface for code graph queries
-//! across different storage backends. This enables runtime backend detection
-//! and zero breaking changes to existing functionality.
+//! The Backend trait provides a unified interface for code graph queries.
+//!
+//! Note: Geometric backend was removed in v3.5.1 — it was compile-gated
+//! behind geometric-backend feature and unused in production.
 
 use crate::error::LlmError;
 use crate::output::{
@@ -13,24 +14,13 @@ use crate::query::{DocsSearchOptions, FactsSearchOptions, SearchOptions};
 use std::path::Path;
 
 // Backend implementation modules
-#[cfg(feature = "geometric-backend")]
-pub mod geometric;
-#[cfg(feature = "geometric-backend")]
-pub mod magellan_adapter; // Contract-aware Magellan adapter layer
 pub mod schema_check;
 pub mod sqlite;
 pub mod vector;
 
-#[cfg(feature = "geometric-backend")]
-pub use geometric::GeometricBackend;
-#[cfg(feature = "geometric-backend")]
-pub use magellan_adapter::{
-    apply_path_filter, lookup_symbol_by_path_and_name, normalize_path_for_query, paths_equivalent,
-    SymbolLookupResult,
-};
 pub use sqlite::SqliteBackend;
 
-/// Backend trait for abstracting over SQLite and Geometric storage.
+/// Backend trait for abstracting over SQLite storage.
 ///
 /// All backend implementations must provide these core operations:
 /// - Symbol search with filtering and scoring
@@ -132,60 +122,27 @@ pub trait BackendTrait {
         limit: usize,
         db_path: &str,
     ) -> Result<(SearchResponse, bool, bool), LlmError>;
-
-    /// Get code chunks for a specific symbol.
-    ///
-    /// This method provides pre-extracted code snippets for a symbol,
-    /// avoiding expensive file I/O. Chunks are created during Magellan indexing.
-    ///
-    /// # Arguments
-    /// * `file_path` - Path to the source file
-    /// * `symbol_name` - Name of the symbol
-    ///
-    /// # Returns
-    /// * `Ok(Vec<CodeChunk>)` - List of chunks for the symbol
-    /// * `Err(LlmError::ChunksNotAvailable)` - If chunking was not performed
-    #[cfg(feature = "geometric-backend")]
-    fn get_chunks_for_symbol(
-        &self,
-        file_path: &str,
-        symbol_name: &str,
-    ) -> Result<Vec<crate::backend::magellan_adapter::CodeChunk>, LlmError>;
 }
 
 /// Runtime backend dispatcher.
 ///
-/// Wraps either SqliteBackend or GeometricBackend and delegates Backend trait methods
-/// to the appropriate implementation based on database format detection.
+/// Wraps SqliteBackend and delegates Backend trait methods.
 #[derive(Debug)]
 pub enum Backend {
     /// SQLite storage backend (traditional, always available)
     Sqlite(SqliteBackend),
-    /// Geometric storage backend (spatial/CGF optimized, requires geometric-backend feature)
-    #[cfg(feature = "geometric-backend")]
-    Geometric(GeometricBackend),
-}
-
-/// Check if a database file path has the geometric backend extension.
-fn is_geometric_extension(path: &std::path::Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e == "geo")
-        .unwrap_or(false)
 }
 
 impl Backend {
     /// Detect backend format from database file and open appropriate backend.
     ///
-    /// Checks file extension and header magic bytes to distinguish between:
-    /// - Geometric backend: ".geo" extension
-    /// - SQLite backend: "SQLite format 3\0" header
+    /// Checks file header magic bytes to detect SQLite format.
     ///
     /// # Arguments
     /// * `db_path` - Path to the database file
     ///
     /// # Returns
-    /// * `Ok(Backend)` - Appropriate backend variant based on file detection
+    /// * `Ok(Backend)` - SQLite backend
     /// * `Err(LlmError::BackendDetectionFailed)` - Detection failed
     pub fn detect_and_open(db_path: &Path) -> Result<Self, LlmError> {
         use std::fs::File;
@@ -196,25 +153,6 @@ impl Backend {
             return Err(LlmError::DatabaseNotFound {
                 path: db_path.display().to_string(),
             });
-        }
-
-        // First check file extension for geometric backend
-        #[cfg(feature = "geometric-backend")]
-        {
-            if is_geometric_extension(db_path) {
-                return GeometricBackend::open(db_path).map(Backend::Geometric);
-            }
-        }
-
-        #[cfg(not(feature = "geometric-backend"))]
-        {
-            if is_geometric_extension(db_path) {
-                return Err(LlmError::BackendDetectionFailed {
-                    path: db_path.display().to_string(),
-                    reason: "Geometric backend (.geo files) requires 'geometric-backend' feature"
-                        .to_string(),
-                });
-            }
         }
 
         // Read first 16 bytes to detect format
@@ -248,8 +186,6 @@ impl Backend {
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_symbols(options),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.search_symbols(options),
         }
     }
 
@@ -260,8 +196,6 @@ impl Backend {
     ) -> Result<(ReferenceSearchResponse, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_references(options),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.search_references(options),
         }
     }
 
@@ -272,8 +206,6 @@ impl Backend {
     ) -> Result<(CallSearchResponse, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_calls(options),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.search_calls(options),
         }
     }
 
@@ -284,16 +216,12 @@ impl Backend {
     ) -> Result<(ImplementsSearchResponse, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_implements(options),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.search_implements(options),
         }
     }
 
     pub fn search_docs(&self, options: DocsSearchOptions) -> Result<DocsSearchResponse, LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_docs(options),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.search_docs(options),
         }
     }
 
@@ -303,8 +231,6 @@ impl Backend {
     ) -> Result<FactsSearchResponse, LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_facts(options),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.search_facts(options),
         }
     }
 
@@ -317,8 +243,6 @@ impl Backend {
     ) -> Result<serde_json::Value, LlmError> {
         match self {
             Backend::Sqlite(b) => b.ast(file, position, limit),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.ast(file, position, limit),
         }
     }
 
@@ -326,8 +250,6 @@ impl Backend {
     pub fn find_ast(&self, kind: &str) -> Result<serde_json::Value, LlmError> {
         match self {
             Backend::Sqlite(b) => b.find_ast(kind),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.find_ast(kind),
         }
     }
 
@@ -335,8 +257,6 @@ impl Backend {
     pub fn complete(&self, prefix: &str, limit: usize) -> Result<Vec<String>, LlmError> {
         match self {
             Backend::Sqlite(b) => b.complete(prefix, limit),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.complete(prefix, limit),
         }
     }
 
@@ -344,8 +264,6 @@ impl Backend {
     pub fn lookup(&self, fqn: &str, db_path: &str) -> Result<crate::output::SymbolMatch, LlmError> {
         match self {
             Backend::Sqlite(b) => b.lookup(fqn, db_path),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.lookup(fqn, db_path),
         }
     }
 
@@ -358,31 +276,6 @@ impl Backend {
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
         match self {
             Backend::Sqlite(b) => b.search_by_label(label, limit, db_path),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.search_by_label(label, limit, db_path),
-        }
-    }
-
-    /// Get code chunks for a specific symbol.
-    ///
-    /// This method provides pre-extracted code snippets for a symbol.
-    /// Geometric backend supports chunks from .geo files.
-    /// SQLite backend returns ChunksNotAvailable error.
-    #[cfg(feature = "geometric-backend")]
-    pub fn get_chunks_for_symbol(
-        &self,
-        file_path: &str,
-        symbol_name: &str,
-    ) -> Result<Vec<crate::backend::magellan_adapter::CodeChunk>, LlmError> {
-        match self {
-            Backend::Sqlite(_) => Err(LlmError::ChunksNotAvailable {
-                backend: "SQLite".to_string(),
-                message:
-                    "SQLite backend does not support chunk retrieval. Use Geometric (.geo) backend."
-                        .to_string(),
-            }),
-            #[cfg(feature = "geometric-backend")]
-            Backend::Geometric(b) => b.get_chunks_for_symbol(file_path, symbol_name),
         }
     }
 }
@@ -392,43 +285,6 @@ mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::NamedTempFile;
-
-    #[cfg(feature = "geometric-backend")]
-    fn create_test_geo_db() -> (tempfile::TempDir, std::path::PathBuf) {
-        let temp_dir = tempfile::TempDir::new().unwrap();
-        let geo_path = temp_dir.path().join("test.geo");
-
-        // Create a valid geometric database using Magellan's API
-        // We need to use magellan directly since GeometricBackend::inner is private
-        let _backend = magellan::graph::geometric_backend::GeometricBackend::create(&geo_path)
-            .expect("Failed to create test geo database");
-
-        (temp_dir, geo_path)
-    }
-
-    #[test]
-    #[cfg(feature = "geometric-backend")]
-    fn test_detect_and_open_geometric_backend() {
-        // Layer 1: Test geometric backend detection by extension
-        let (_temp_dir, geo_path) = create_test_geo_db();
-
-        let result = Backend::detect_and_open(&geo_path);
-
-        // Layer 1: Should succeed
-        assert!(
-            result.is_ok(),
-            "Layer 1: Should detect and open .geo file: {:?}",
-            result.err()
-        );
-
-        // Layer 2: Should be Geometric variant
-        match result.unwrap() {
-            Backend::Geometric(_) => {
-                // Success - correct backend type
-            }
-            _ => panic!("Layer 2: Expected Geometric backend variant"),
-        }
-    }
 
     #[test]
     fn test_detect_and_open_sqlite_backend() {

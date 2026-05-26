@@ -186,10 +186,6 @@ fn test_backend_detection_sqlite_format() {
         llmgrep::backend::Backend::Sqlite(_) => {
             // Expected: SQLite backend detected
         }
-        #[cfg(feature = "geometric-backend")]
-        llmgrep::backend::Backend::Geometric(_) => {
-            panic!("Unexpected: Geometric backend detected for SQLite format");
-        }
     }
 }
 

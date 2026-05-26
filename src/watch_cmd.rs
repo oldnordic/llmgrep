@@ -42,11 +42,6 @@ pub fn run_watch<'a>(
         Backend::Sqlite(inner) => {
             run_watch_with_filesystem(&inner, db_path, options, output_format, shutdown)
         }
-        #[cfg(feature = "geometric-backend")]
-        Backend::Geometric(_) => Err(LlmError::SearchFailed {
-            reason: "Watch command not supported for geometric backend".to_string(),
-        }
-        .into()),
     }
 }
 

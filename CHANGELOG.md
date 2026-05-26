@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.1] - 2026-05-26
+
+### Changed
+- **Magellan dependency**: Updated to `4.1.0` (geometric-backend removed from defaults).
+- **Geometric backend removed**: `geometric-backend` feature deleted; `.geo` file support dropped. All code was compile-gated and unused in production.
+
+### Removed
+- `src/backend/geometric.rs` (936 LOC) and `src/backend/magellan_adapter.rs` (396 LOC)
+- `geometric-backend` feature flag in `Cargo.toml`
+- `Backend::Geometric` variant and all geometric match arms
+- 3 geometric test files
+
 ## [3.5.0] - 2026-05-26
 
 ### Added

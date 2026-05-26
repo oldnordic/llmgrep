@@ -324,7 +324,7 @@ impl super::BackendTrait for SqliteBackend {
         _limit: usize,
         _db_path: &str,
     ) -> Result<(SearchResponse, bool, bool), LlmError> {
-        // Labels are stored in the geometric backend's binary format, not in SQLite tables.
+        // Labels are stored in a separate binary format, not in SQLite tables.
         // Return empty results for SQLite-backed databases.
         Ok((
             SearchResponse {
@@ -338,52 +338,6 @@ impl super::BackendTrait for SqliteBackend {
             false,
             false,
         ))
-    }
-
-    #[cfg(feature = "geometric-backend")]
-    fn get_chunks_for_symbol(
-        &self,
-        file_path: &str,
-        symbol_name: &str,
-    ) -> Result<Vec<crate::backend::magellan_adapter::CodeChunk>, LlmError> {
-        // Check if code_chunks table exists
-        let table_exists: bool = self
-            .conn
-            .query_row(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='code_chunks'",
-                [],
-                |_| Ok(true),
-            )
-            .unwrap_or(false);
-
-        if !table_exists {
-            return Err(LlmError::ChunksNotAvailable {
-                backend: "SQLite".to_string(),
-                message: "code_chunks table not found. Chunking was not enabled during indexing."
-                    .to_string(),
-            });
-        }
-
-        let mut stmt = self.conn.prepare(
-            "SELECT id, file_path, byte_start, byte_end, content, content_hash, symbol_name, symbol_kind
-             FROM code_chunks
-             WHERE file_path = ?1 AND symbol_name = ?2",
-        )?;
-        let rows = stmt.query_map(params![file_path, symbol_name], |row| {
-            Ok(crate::backend::magellan_adapter::CodeChunk {
-                id: row.get(0)?,
-                file_path: row.get(1)?,
-                byte_start: row.get::<_, i64>(2)? as usize,
-                byte_end: row.get::<_, i64>(3)? as usize,
-                content: row.get(4)?,
-                symbol_name: row.get(6)?,
-                symbol_kind: row.get(7)?,
-            })
-        })?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| LlmError::SearchFailed {
-                reason: format!("Failed to get chunks: {}", e),
-            })
     }
 }
 
