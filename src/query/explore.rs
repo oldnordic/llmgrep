@@ -99,7 +99,7 @@ pub fn tokenize_intent(intent: &str) -> Vec<String> {
                 current.clear();
             }
         } else if !current.is_empty() {
-            let prev = current.chars().last().unwrap();
+            let prev = current.chars().last().expect("invariant: current is non-empty");
             if prev.is_lowercase() && ch.is_uppercase() {
                 // camelCase boundary
                 raw_tokens.push(current.clone());
