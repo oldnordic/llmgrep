@@ -225,7 +225,7 @@ Module: storage (score: 15)
 
 - **Instead of 3-5 separate `search` commands** when you know *what* you want but not the exact symbol name
 - **For codebase orientation** in an unfamiliar project
-- **For LLM agent integration** — single command replaces multi-query round trips
+- **For agent integration** — single command replaces multi-query round trips
 
 ## stats command (v3.5)
 
