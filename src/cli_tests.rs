@@ -3,6 +3,9 @@ use clap::Parser;
 use llmgrep::error::LlmError;
 use llmgrep::output::OutputFormat;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+static CWD_MUTEX: Mutex<()> = Mutex::new(());
 
 fn create_temp_db() -> std::io::Result<PathBuf> {
     let temp_file = std::env::temp_dir().join(format!("llmgrep_test_{}.db", std::process::id()));
@@ -672,6 +675,7 @@ fn test_resolve_db_path_explicit_flag() {
 
 #[test]
 fn test_resolve_db_path_missing_flag_no_fallback() {
+    let _guard = CWD_MUTEX.lock().expect("cwd mutex");
     let temp_dir = std::env::temp_dir().join(format!("llmgrep_no_db_test_{}", std::process::id()));
     std::fs::create_dir_all(&temp_dir).expect("create temp dir");
     let orig_cwd = std::env::current_dir().expect("get cwd");
@@ -690,6 +694,7 @@ fn test_resolve_db_path_missing_flag_no_fallback() {
 
 #[test]
 fn test_resolve_db_path_fallback_from_cwd() {
+    let _guard = CWD_MUTEX.lock().expect("cwd mutex");
     let temp_dir =
         std::env::temp_dir().join(format!("llmgrep_resolve_test_{}", std::process::id()));
     let magellan_dir = temp_dir.join(".magellan");

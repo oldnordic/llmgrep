@@ -628,7 +628,11 @@ impl crate::backend::BackendTrait for GeometricBackend {
             None => Err(LlmError::SymbolNotFound {
                 fqn: fqn.to_string(),
                 db: db_path.to_string(),
-                partial: fqn.split("::").last().expect("invariant: split always yields >=1 element").to_string(),
+                partial: fqn
+                    .split("::")
+                    .last()
+                    .expect("invariant: split always yields >=1 element")
+                    .to_string(),
             }),
         }
     }
