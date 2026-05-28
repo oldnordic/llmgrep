@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] - 2026-05-28
+
+### Added
+
+- **`navigate` command** — Stepable graph traversal using magellan's `SymbolNavigator`. Resolve symbols by name or entity ID, then traverse callers/callees with configurable depth. Returns JSON with depth-aware node lists and edge information.
+  ```bash
+  llmgrep navigate --db code.db --symbol "function_name" --callees --depth 2
+  llmgrep navigate --db code.db --symbol "function_name" --callers --depth 1 --output json
+  llmgrep navigate --db code.db --id 42 --edges
+  ```
+
+### Changed
+
+- **`resolve_fqn_to_symbol_id()`** now uses magellan's `SymbolNavigator` library API directly instead of shelling out to `magellan find`. Eliminates subprocess overhead and CLI version dependency.
+- **`SUPPORTED_MAGELLAN_SCHEMA_VERSION`** bumped from 16 to 17 (additive: `telemetry_events` table compatibility).
+- **magellan dependency** updated to `4.2.0` with `SymbolNavigator` support.
+
 ## [3.5.1] - 2026-05-26
 
 ### Changed

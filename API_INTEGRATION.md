@@ -4,7 +4,7 @@ This document describes how llmgrep integrates with Magellan's APIs and contract
 
 ## Version Requirements
 
-- **Magellan:** 3.3.3+ (schema 14 for graph memory tables)
+- **Magellan:** 4.2.0+ (schema 17 for navigate command, telemetry_events table)
 - **sqlitegraph:** 3.0+
 
 ## Schema Compatibility
@@ -143,6 +143,60 @@ match backend.find_symbol_id_by_path_and_name(path, name) {
 | `AmbiguityError` | `AmbiguousSymbolName` | LLM-E106 |
 | Symbol not found | `SymbolNotFound` | LLM-E112 |
 | Chunk not available | `ChunksNotAvailable` | LLM-E113 |
+
+## Navigate API
+
+The `navigate` command uses magellan's `CodeGraph::navigator()` (magellan 4.2.0+) instead of raw SQL. It resolves a starting symbol, then performs depth-aware BFS over the call graph.
+
+### JSON Response Shape
+
+```json
+{
+  "node": {
+    "id": 42,
+    "name": "func",
+    "kind": "fn",
+    "file": "src/lib.rs",
+    "line": 10
+  },
+  "resolve": [
+    { "id": 42, "name": "func", "kind": "fn", "file": "src/lib.rs", "line": 10 }
+  ],
+  "edges": [
+    { "from": 42, "to": 17, "edge_type": "CALLS" }
+  ],
+  "callers": [
+    { "depth": 1, "node": { "id": 7, "name": "caller_fn", "kind": "fn", "file": "src/main.rs", "line": 5 } }
+  ],
+  "callees": [
+    { "depth": 1, "node": { "id": 17, "name": "helper", "kind": "fn", "file": "src/lib.rs", "line": 20 } },
+    { "depth": 2, "node": { "id": 23, "name": "inner", "kind": "fn", "file": "src/lib.rs", "line": 25 } }
+  ]
+}
+```
+
+### Magellan API Usage
+
+```rust
+let graph = CodeGraph::open(db_path)?;
+let navigator = graph.navigator();
+
+// Resolve by name
+let entity_id = navigator.resolve("function_name")?;
+
+// Traverse callers with depth
+let callers = navigator.callers(entity_id, depth)?;
+
+// Traverse callees with depth
+let callees = navigator.callees(entity_id, depth)?;
+
+// Get connected edges
+let edges = navigator.edges(entity_id)?;
+```
+
+### Schema Requirement
+
+`navigate` requires Magellan schema 17+ (`telemetry_events` table). The command degrades gracefully on older schemas with a version mismatch error.
 
 ## Delegated Operations
 

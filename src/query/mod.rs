@@ -29,6 +29,7 @@ mod evolve;
 mod explore;
 mod facts;
 mod implements;
+pub mod navigate;
 mod options;
 mod references;
 mod symbols;

@@ -13,6 +13,7 @@ pub fn command_name(cli: &Cli) -> &str {
             Command::Complete { .. } => "complete",
             Command::Lookup { .. } => "lookup",
             Command::Explore { .. } => "explore",
+            Command::Navigate { .. } => "navigate",
             Command::Stats => "stats",
             Command::Evolve { .. } => "evolve",
             #[cfg(feature = "unstable-watch")]
@@ -81,6 +82,35 @@ pub fn dispatch(cli: &Cli) -> Result<(), LlmError> {
                     LlmError::InvalidQuery {
                         query: e.to_string(),
                     }
+                })
+            }
+
+            Command::Navigate {
+                symbol,
+                id,
+                edges,
+                callers,
+                callees,
+                depth,
+            } => {
+                let validated_db = resolve_db_path(cli)?;
+                let output = match cli.output {
+                    OutputFormat::Human => llmgrep::output::OutputFormat::Human,
+                    OutputFormat::Json => llmgrep::output::OutputFormat::Json,
+                    OutputFormat::Pretty => llmgrep::output::OutputFormat::Pretty,
+                };
+                llmgrep::query::navigate::run_navigate(
+                    &validated_db,
+                    symbol,
+                    *id,
+                    *edges,
+                    *callers,
+                    *callees,
+                    *depth,
+                    output,
+                )
+                .map_err(|e| LlmError::InvalidQuery {
+                    query: e.to_string(),
                 })
             }
 

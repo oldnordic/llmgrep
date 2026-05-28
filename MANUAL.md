@@ -1,6 +1,6 @@
 # llmgrep Manual
 
-**v3.5.0** (shipped 2026-05-26)
+**v3.6.0** (shipped 2026-05-28)
 
 llmgrep is a read-only query tool for Magellan's code map. Part of the sqlitegraph toolset alongside Magellan (indexing), Mirage (CFG analysis), and Splice (precision editing).
 
@@ -8,7 +8,7 @@ llmgrep only works in conjunction with Magellan — it does not build or modify 
 
 **Toolset:**
 - [Magellan](https://crates.io/crates/magellan) v3.3.3 — Code indexing and algorithm execution
-- [llmgrep](https://crates.io/crates/llmgrep) v3.5.0 — This tool (query only)
+- [llmgrep](https://crates.io/crates/llmgrep) v3.6.0 — This tool (query only)
 - [Mirage](https://crates.io/crates/mirage-analyzer) v1.5.0 — CFG analysis (Rust)
 - [Splice](https://crates.io/crates/splice) — Precision code editing
 - [sqlitegraph](https://crates.io/crates/sqlitegraph) v3.0 — Graph database with 35+ algorithms
@@ -20,6 +20,7 @@ llmgrep search --db <FILE> --query <STRING> [OPTIONS]
 llmgrep ast --db <FILE> --file <PATH> [OPTIONS]
 llmgrep find-ast --db <FILE> --kind <KIND> [OPTIONS]
 llmgrep explore --db <FILE> --intent <STRING> [OPTIONS]
+llmgrep navigate --db <FILE> --symbol <NAME> [OPTIONS]
 llmgrep stats --db <FILE> [OPTIONS]
 llmgrep evolve --db <FILE> [OPTIONS]
 ```
@@ -226,6 +227,47 @@ Module: storage (score: 15)
 - **Instead of 3-5 separate `search` commands** when you know *what* you want but not the exact symbol name
 - **For codebase orientation** in an unfamiliar project
 - **For agent integration** — single command replaces multi-query round trips
+
+## navigate command (v3.6)
+
+Stepable graph navigation using magellan's `SymbolNavigator`. Resolve a symbol, then traverse its call graph with configurable depth.
+
+```bash
+llmgrep navigate --db code.db --symbol "function_name" --callees --depth 2
+llmgrep navigate --db code.db --symbol "function_name" --callers --depth 1 --output json
+llmgrep navigate --db code.db --id 42 --edges
+```
+
+### How it works
+
+1. Resolves the starting symbol by name (`--symbol`) or entity ID (`--id`)
+2. Traverses the call graph in the requested direction(s) up to `--depth` hops
+3. Returns depth-tagged node lists, edges, and optional resolve information
+
+### Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--symbol` | — | Symbol name to resolve (mutually exclusive with `--id`) |
+| `--id` | — | Entity ID to use directly (mutually exclusive with `--symbol`) |
+| `--callers` | false | Traverse callers (incoming calls) |
+| `--callees` | false | Traverse callees (outgoing calls) |
+| `--edges` | false | Include connected entity edges in output |
+| `--depth` | 1 | Maximum traversal depth |
+| `--output` | human | Output format: `human`, `json`, `pretty` |
+
+### Examples
+
+```bash
+# Show all functions called by parse_config, 2 levels deep
+llmgrep navigate --db code.db --symbol "parse_config" --callees --depth 2
+
+# Show who calls parse_config (1 level)
+llmgrep navigate --db code.db --symbol "parse_config" --callers --depth 1 --output json
+
+# Show all edges connected to entity 42
+llmgrep navigate --db code.db --id 42 --edges
+```
 
 ## stats command (v3.5)
 

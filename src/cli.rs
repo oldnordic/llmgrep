@@ -290,6 +290,26 @@ pub enum Command {
         limit: usize,
     },
 
+    Navigate {
+        #[arg(long)]
+        symbol: String,
+
+        #[arg(long)]
+        id: Option<i64>,
+
+        #[arg(long)]
+        edges: bool,
+
+        #[arg(long)]
+        callers: bool,
+
+        #[arg(long)]
+        callees: bool,
+
+        #[arg(long, default_value_t = 1)]
+        depth: usize,
+    },
+
     Stats,
 
     Evolve {

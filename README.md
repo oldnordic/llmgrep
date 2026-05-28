@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/llmgrep)](https://crates.io/crates/llmgrep)
 [![Documentation](https://docs.rs/llmgrep/badge.svg)](https://docs.rs/llmgrep)
 
-**Version:** 3.5.0
+**Version:** 3.6.0
 
 Pattern-based code search for Magellan databases. Fast, deterministic symbol search with JSON output.
 
@@ -22,6 +22,7 @@ Pattern-based code search for Magellan databases. Fast, deterministic symbol sea
 - **Symbol search** — Find functions, structs, traits by name or regex
 - **Reference lookup** — Find all callers/callees of a function
 - **Call graph traversal** — Navigate caller → callee relationships
+- **Graph navigation** — Stepable depth-aware traversal via `navigate` command
 - **Source document search** — Query wiki pages, specs, messages by tags and wikilinks
 - **Knowledge triple search** — Query candidate facts by subject, predicate, object
 - **AST filtering** — Filter by node kind, nesting depth, complexity

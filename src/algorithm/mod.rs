@@ -1,20 +1,21 @@
 //! Algorithm integration module for Magellan 2.0 graph algorithms.
 //!
 //! This module provides integration with Magellan's executable graph algorithms
-//! through a shell-out pattern. It supports:
+//! through a shell-out pattern, and symbol resolution via the library API.
+//! It supports:
 //!
 //! - Loading pre-computed SymbolSet files from JSON
 //! - Running Magellan algorithms (reachable, dead-code, slice, cycles) and extracting SymbolIds
-//! - Resolving simple symbol names to SymbolIds via `magellan find`
+//! - Resolving simple symbol names to SymbolIds via magellan's `SymbolNavigator`
 //!
 //! The SymbolSet type is the core abstraction for algorithm-based filtering.
 //! It represents a collection of SymbolIds (32-char BLAKE3 hashes) that can be
 //! used to filter search results.
 
 use crate::error::LlmError;
+use magellan::CodeGraph;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
@@ -473,10 +474,9 @@ pub enum SymbolSetStrategy {
 ///
 /// # Errors
 ///
-/// Returns `LlmError::MagellanNotFound` if magellan CLI is not available.
 /// Returns `LlmError::AmbiguousSymbolName` if multiple symbols match the name.
 /// Returns `LlmError::InvalidQuery` (LLM-E011) if no symbols match.
-/// Returns `LlmError::SearchFailed` if the `magellan find` command fails.
+/// Returns `LlmError::SearchFailed` if the database cannot be opened.
 ///
 /// # Example
 ///
@@ -490,72 +490,29 @@ pub enum SymbolSetStrategy {
 /// # Ok::<(), llmgrep::error::LlmError>(())
 /// ```
 pub fn resolve_fqn_to_symbol_id(db_path: &Path, name: &str) -> Result<String, LlmError> {
-    // Check Magellan availability and version
-    magellan_bridge::check_magellan_available()?;
+    let graph = CodeGraph::open(db_path).map_err(|e| LlmError::SearchFailed {
+        reason: format!("Failed to open database: {}", e),
+    })?;
+    let nav = graph.navigator();
 
-    // Run magellan find
-    let output = Command::new("magellan")
-        .args([
-            "find",
-            "--db",
-            &db_path.to_string_lossy(),
-            "--name",
-            name,
-            "--output",
-            "json",
-        ])
-        .output()
-        .map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotFound => LlmError::MagellanNotFound,
-            _ => LlmError::SearchFailed {
-                reason: format!("Failed to execute magellan find: {}", e),
-            },
-        })?;
+    let resolved = nav.resolve(name).map_err(|e| LlmError::SearchFailed {
+        reason: format!("Symbol resolution failed: {}", e),
+    })?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(LlmError::SearchFailed {
-            reason: format!("magellan find failed: {}", stderr),
-        });
-    }
-
-    // Parse JSON response
-    let json: Value = serde_json::from_slice(&output.stdout).map_err(LlmError::JsonError)?;
-
-    // Check for matches array - it new format wraps matches in "data" object
-    let matches = json
-        .get("data")
-        .and_then(|d| d.get("matches"))
-        .and_then(|m| m.as_array())
-        .ok_or_else(|| LlmError::InvalidQuery {
-            query: "Invalid magellan find output: missing 'data.matches' array".to_string(),
-        })?;
-
-    // Handle ambiguity
-    if matches.len() > 1 {
-        return Err(LlmError::AmbiguousSymbolName {
-            name: name.to_string(),
-            count: matches.len(),
-        });
-    }
-
-    // Handle not found
-    if matches.is_empty() {
+    if resolved.is_empty() {
         return Err(LlmError::InvalidQuery {
             query: format!("Symbol '{}' not found in database", name),
         });
     }
 
-    // Extract symbol_id from first match
-    matches[0]["symbol_id"]
-        .as_str()
-        .map(|id| id.to_string())
-        .ok_or_else(|| LlmError::InvalidQuery {
-            query: format!(
-                "Symbol '{}' found but missing symbol_id in magellan output",
-                name
-            ),
-        })
+    if resolved.len() > 1 {
+        return Err(LlmError::AmbiguousSymbolName {
+            name: name.to_string(),
+            count: resolved.len(),
+        });
+    }
+
+    Ok(resolved[0].id.to_string())
 }
 
 pub use magellan_bridge::{

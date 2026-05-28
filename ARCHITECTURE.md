@@ -14,6 +14,7 @@ llmgrep/
 │   ├── commands/            # Command implementations (one file per command)
 │   │   ├── search.rs        #   Symbol/reference/call/docs/facts search
 │   │   ├── explore.rs       #   Intent-based search
+│   │   ├── navigate.rs      #   Stepable graph traversal (CodeGraph::navigator)
 │   │   ├── stats.rs         #   Code health statistics
 │   │   ├── evolve.rs        #   Symbol evolution scoring
 │   │   ├── ast.rs           #   AST tree query
@@ -223,6 +224,22 @@ llmgrep uses sqlitegraph for:
 - SQL query construction helpers
 - Graph entity/edge schema constants
 - Algorithm execution (when Mag CLI unavailable)
+
+## Navigate Command
+
+The `navigate` command differs from other commands: instead of constructing raw SQL queries, it uses magellan's `CodeGraph::navigator()` API for graph traversal. This provides depth-aware BFS over the call graph with structured node/edge results.
+
+```
+navigate --symbol X --callers --depth 2
+    │
+    ▼
+CodeGraph::navigator()
+    │
+    ├──► resolve(name) → entity_id
+    ├──► callers(entity_id, depth=2) → Vec<(depth, Node)>
+    ├──► callees(entity_id, depth=2) → Vec<(depth, Node)>
+    └──► edges(entity_id) → Vec<Edge>
+```
 
 ## Data Flow Summary
 
