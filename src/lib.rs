@@ -4,6 +4,8 @@
 //! code graph database. It supports symbol search, reference search, call search,
 //! AST-based filtering, and algorithm-based analysis.
 //!
+//! For high-level convenience functions, see the [`forge`] module.
+//!
 //! # Features
 //!
 //! - **Symbol Search**: Find symbols by name with fuzzy matching
@@ -35,6 +37,7 @@
 //! - [`ast`] - AST node queries and context
 //! - [`backend`] - Backend abstraction (SQLite, Geometric)
 //! - [`error`] - Error types
+//! - [`forge`] - High-level API for external consumers
 //! - [`output`] - Response types and formatting
 //! - [`query`] - Search functions and options
 //! - [`safe_extraction`] - Safe UTF-8 extraction
@@ -43,6 +46,7 @@ pub mod algorithm;
 pub mod ast;
 pub mod backend;
 pub mod error;
+pub mod forge;
 pub mod output;
 pub mod output_common;
 pub mod platform;
@@ -78,6 +82,12 @@ pub use backend::Backend;
 
 // Re-export output types for external use
 pub use output::PerformanceMetrics;
+
+// Re-export forge convenience functions for external use
+pub use forge::{
+    lookup_symbol, search_calls, search_references, search_symbols, search_symbols_by_language,
+    search_symbols_regex,
+};
 
 // Re-export coverage types for external use
 pub use query::CoverageFilter;

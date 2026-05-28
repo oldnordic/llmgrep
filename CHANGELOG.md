@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] - 2026-05-29
+
+### Added
+
+- **`forge` module** — High-level library API for external consumers (forge SDK, agents, tool integrations):
+  - `search_symbols(query, db, limit)` — search for symbols by name with default options.
+  - `search_symbols_regex(pattern, db, limit)` — regex-based symbol search.
+  - `search_symbols_by_language(query, language, db, limit)` — language-filtered symbol search.
+  - `search_references(symbol, db, limit)` — find all incoming references to a symbol.
+  - `search_calls(symbol, db, limit)` — find all call relationships for a symbol.
+  - `lookup_symbol(fqn, db)` — precise FQN-based symbol resolution.
+- **Re-exports** in `lib.rs`: all forge convenience functions are re-exported at the crate root.
+
 ## [3.6.0] - 2026-05-28
 
 ### Added
