@@ -35,6 +35,3 @@ thiserror = "1.0"
 
 [dev-dependencies]
 rusqlite = "0.31"
-
-[patch.crates-io]
-magellan = { path = "../magellan" }

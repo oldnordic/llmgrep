@@ -1077,6 +1077,8 @@ dependencies = [
 [[package]]
 name = "magellan"
 version = "4.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94aca9b602b4f9c2d8407eaad2d28b8dc3fb97170cb6f52e85d8303116623e2b"
 dependencies = [
  "ahash",
  "anyhow",
