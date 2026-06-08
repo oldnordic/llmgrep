@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`semantic` search mode** (`--mode semantic`) — Natural-language code search via HNSW vector similarity:
+  - Embeds the query via Ollama at search time using `~/.config/magellan/config.toml`
+  - Loads the persisted HNSW index (`symbols`) from the Magellan database
+  - Resolves vector hits back to `graph_entities` with file paths, kinds, and FQNs
+  - Returns cosine distance + 0-100 similarity score
+  - Supports `--path` filtering and all output formats (`human`, `json`, `pretty`)
+  - Graceful error when no HNSW index exists: suggests `magellan embed --db <db>`
+  - llmgrep only **searches** embeddings; Magellan owns embedding generation
+  ```bash
+  llmgrep search --db code.db --query "parse command line arguments" --mode semantic
+  llmgrep search --db code.db --query "error handling" --mode semantic --output json
+  ```
+
 ## [3.7.0] - 2026-05-29
 
 ### Added

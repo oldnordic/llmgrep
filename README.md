@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/llmgrep)](https://crates.io/crates/llmgrep)
 [![Documentation](https://docs.rs/llmgrep/badge.svg)](https://docs.rs/llmgrep)
 
-**Version:** 3.6.0
+**Version:** 3.8.0
 
 Pattern-based code search for Magellan databases. Fast, deterministic symbol search with JSON output.
 
@@ -20,13 +20,13 @@ Pattern-based code search for Magellan databases. Fast, deterministic symbol sea
 ## Features
 
 - **Symbol search** — Find functions, structs, traits by name or regex
+- **Semantic search** — Natural-language code search via HNSW vector similarity (requires Magellan embeddings)
 - **Reference lookup** — Find all callers/callees of a function
 - **Call graph traversal** — Navigate caller → callee relationships
 - **Graph navigation** — Stepable depth-aware traversal via `navigate` command
 - **Source document search** — Query wiki pages, specs, messages by tags and wikilinks
 - **Knowledge triple search** — Query candidate facts by subject, predicate, object
 - **AST filtering** — Filter by node kind, nesting depth, complexity
-- **Geometric backend** — Native .geo file support with chunk retrieval
 - **Path normalization** — Consistent path handling across platforms
 - **Explicit ambiguity handling** — Structured results for disambiguation
 - **Parameterized SQL** — All database queries use bound parameters (no string interpolation)
@@ -45,6 +45,9 @@ llmgrep --db code.geo search --query "parse"
 
 # Find references
 llmgrep --db code.geo search --query "MyType" --mode references
+
+# Semantic search (requires `magellan embed` first)
+llmgrep --db code.geo search --query "parse command line arguments" --mode semantic
 ```
 
 ## Installation
@@ -87,6 +90,7 @@ cargo install llmgrep --features geometric-backend
 ## What llmgrep Does NOT Do
 
 - ❌ Index code (use [Magellan](https://github.com/oldnordic/magellan))
+- ❌ Generate embeddings (use `magellan embed --db <db>`)
 - ❌ Type checking or semantic analysis
 - ❌ Background file watching
 - ❌ Code editing (use [splice](https://github.com/oldnordic/splice))

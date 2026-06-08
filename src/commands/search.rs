@@ -3,7 +3,8 @@ use crate::cli::{
     split_auto_limit, validate_path, AutoLimitMode, Cli, Command, SearchMode, SearchParams,
 };
 use crate::display::{
-    output_calls, output_docs, output_facts, output_implements, output_references, output_symbols,
+    output_calls, output_docs, output_facts, output_implements, output_references, output_semantic,
+    output_symbols,
 };
 use llmgrep::algorithm::AlgorithmOptions;
 use llmgrep::ast::{expand_shorthand_with_language, expand_shorthands};
@@ -835,6 +836,43 @@ pub fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
             };
 
             output_facts(cli, response, metrics.as_ref())?;
+
+            let output_formatting_ms = format_start.elapsed().as_millis() as u64;
+            let total_ms = total_start.elapsed().as_millis() as u64;
+
+            if cli.show_metrics {
+                eprintln!("Performance metrics:");
+                eprintln!("  Backend detection: {}ms", backend_detection_ms);
+                eprintln!("  Query execution: {}ms", query_execution_ms);
+                eprintln!("  Output formatting: {}ms", output_formatting_ms);
+                eprintln!("  Total: {}ms", total_ms);
+            }
+        }
+        SearchMode::Semantic => {
+            let semantic_options = llmgrep::query::SemanticSearchOptions {
+                db_path: &db_path,
+                query: &params.query,
+                limit: params.limit,
+                path_filter: validated_path.as_ref().and_then(|p| p.to_str()),
+            };
+
+            let query_start = std::time::Instant::now();
+            let response = llmgrep::query::search_semantic(semantic_options)?;
+            let query_execution_ms = query_start.elapsed().as_millis() as u64;
+
+            let format_start = std::time::Instant::now();
+            let metrics = if cli.show_metrics {
+                Some(PerformanceMetrics {
+                    backend_detection_ms,
+                    query_execution_ms,
+                    output_formatting_ms: 0,
+                    total_ms: 0,
+                })
+            } else {
+                None
+            };
+
+            output_semantic(cli, response, metrics.as_ref())?;
 
             let output_formatting_ms = format_start.elapsed().as_millis() as u64;
             let total_ms = total_start.elapsed().as_millis() as u64;

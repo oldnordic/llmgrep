@@ -32,6 +32,7 @@ mod implements;
 pub mod navigate;
 mod options;
 mod references;
+mod semantic;
 mod symbols;
 pub(crate) mod util;
 
@@ -52,6 +53,7 @@ pub use chunks::{search_chunks_by_span, search_chunks_by_symbol_name, CodeChunk}
 pub use calls::search_calls;
 pub use implements::search_implements;
 pub use references::search_references;
+pub use semantic::{search_semantic, SemanticSearchOptions};
 pub use symbols::search_symbols;
 
 mod stats;

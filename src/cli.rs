@@ -378,6 +378,7 @@ pub enum SearchMode {
     Labels,
     Docs,
     Facts,
+    Semantic,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -409,6 +410,9 @@ EXAMPLES:
   # Implements search (type-trait relationships)
   llmgrep --db code.db search --query "SideTables" --mode implements
   llmgrep --db code.db search --query "AmbiguityOps" --mode implements --output json
+
+  # Semantic search (natural language, requires embeddings)
+  llmgrep --db code.db search --query "parse command line arguments" --mode semantic
 
   # Auto mode (all search modes combined, requires JSON output)
   llmgrep --db code.db search --query "parse" --mode auto --output json

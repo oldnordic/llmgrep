@@ -3,7 +3,7 @@ use llmgrep::error::LlmError;
 use llmgrep::output::{
     json_response_with_partial_and_performance, CallSearchResponse, DocsSearchResponse,
     FactsSearchResponse, ImplementsSearchResponse, OutputFormat, PerformanceMetrics,
-    ReferenceSearchResponse, SearchResponse,
+    ReferenceSearchResponse, SearchResponse, SemanticSearchResponse,
 };
 use llmgrep::output_common::{format_partial_footer, format_total_header};
 
@@ -205,6 +205,43 @@ pub fn output_docs(
                 if let Some(links) = &item.wikilinks {
                     println!("  wikilinks: {}", links);
                 }
+            }
+        }
+        OutputFormat::Json | OutputFormat::Pretty => {
+            let json_response =
+                json_response_with_partial_and_performance(response, false, metrics.cloned());
+            let rendered = if matches!(cli.output, OutputFormat::Pretty) {
+                serde_json::to_string_pretty(&json_response)?
+            } else {
+                serde_json::to_string(&json_response)?
+            };
+            println!("{}", rendered);
+        }
+    }
+    Ok(())
+}
+
+pub fn output_semantic(
+    cli: &Cli,
+    response: SemanticSearchResponse,
+    metrics: Option<&PerformanceMetrics>,
+) -> Result<(), LlmError> {
+    match cli.output {
+        OutputFormat::Human => {
+            println!("{} semantic matches", response.total_count);
+            for item in &response.results {
+                let lang = item.language.as_deref().unwrap_or("?");
+                println!(
+                    "{}:{}:{} {} [{}] {} score={} distance={:.4}",
+                    item.span.file_path,
+                    item.span.start_line,
+                    item.span.start_col,
+                    item.name,
+                    item.kind,
+                    lang,
+                    item.score,
+                    item.distance
+                );
             }
         }
         OutputFormat::Json | OutputFormat::Pretty => {

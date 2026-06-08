@@ -119,7 +119,7 @@ pub struct ErrorResponse {
 ///
 /// Represents a contiguous span of source code with line/column information
 /// for display and navigation.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct Span {
     /// Unique span identifier
     pub span_id: String,
@@ -146,7 +146,7 @@ pub struct Span {
 ///
 /// Provides before/after/selected lines for displaying search results
 /// with surrounding code context.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct SpanContext {
     /// Lines before the matched span
     pub before: Vec<String>,
@@ -493,6 +493,49 @@ pub struct FactMatch {
 pub struct FactsSearchResponse {
     pub results: Vec<FactMatch>,
     pub total_count: u64,
+}
+
+/// A semantic search match from vector similarity search.
+///
+/// Represents a symbol found by natural-language semantic similarity
+/// using the HNSW vector index. Used by `--mode semantic`.
+#[derive(Serialize, Debug)]
+pub struct SemanticMatch {
+    /// Unique match identifier
+    pub match_id: String,
+    /// Source code location
+    pub span: Span,
+    /// Symbol name
+    pub name: String,
+    /// Symbol kind (e.g., "function_item", "struct_item")
+    pub kind: String,
+    /// Programming language
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    /// Canonical fully-qualified name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub canonical_fqn: Option<String>,
+    /// 32-character BLAKE3 hash symbol ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol_id: Option<String>,
+    /// Cosine distance (0 = identical, 2 = opposite)
+    pub distance: f32,
+    /// Similarity score (0-100, higher is more similar)
+    pub score: u64,
+}
+
+/// Response from a semantic search operation.
+#[derive(Serialize, Debug)]
+pub struct SemanticSearchResponse {
+    /// List of matching symbols by semantic similarity
+    pub results: Vec<SemanticMatch>,
+    /// The original natural-language query
+    pub query: String,
+    /// Total number of matches
+    pub total_count: u64,
+    /// Path filter that was applied (if any)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path_filter: Option<String>,
 }
 
 /// Combined response for searches that include symbols, references, and calls.

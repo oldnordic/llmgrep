@@ -1,6 +1,6 @@
 [package]
 name = "llmgrep"
-version = "3.7.0"
+version = "3.8.0"
 edition = "2021"
 description = "Smart grep over Magellan code maps with schema-aligned JSON output"
 license = "GPL-3.0-only"
@@ -32,6 +32,8 @@ signal-hook = "0.3"
 sqlitegraph = "3.2.5"
 tempfile = "3.10"
 thiserror = "1.0"
+toml = "0.8"
+ureq = "3"
 
 [dev-dependencies]
 rusqlite = "0.31"
