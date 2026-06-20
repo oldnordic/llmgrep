@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.2] - 2026-06-20
+
+### Fixed
+
+- **Magellan schema v18 compatibility**:
+  - llmgrep now accepts Magellan schema version 18 databases, including temporal snapshot tables added by `magellan` 4.8.x.
+  - Added regression coverage for schema-18 acceptance in the schema checker.
+
+### Changed
+
+- **Release docs refresh**:
+  - Updated README and manual examples to reflect the current SQLite `.db` workflow instead of the removed `.geo`/geometric path.
+
+## [3.8.1] - 2026-06-20
+
+### Changed
+
+- **Upgrade `sqlitegraph` dependency** to `3.3.1` to align with the new unified `sqlitegraph` SCC schema and version.
+
+## [3.8.0] - 2026-06-20
+
 ### Added
 
 - **`semantic` search mode** (`--mode semantic`) — Natural-language code search via HNSW vector similarity:

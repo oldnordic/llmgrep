@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/llmgrep)](https://crates.io/crates/llmgrep)
 [![Documentation](https://docs.rs/llmgrep/badge.svg)](https://docs.rs/llmgrep)
 
-**Version:** 3.8.0
+**Version:** 3.8.2
 
 Pattern-based code search for Magellan databases. Fast, deterministic symbol search with JSON output.
 
@@ -37,17 +37,17 @@ Pattern-based code search for Magellan databases. Fast, deterministic symbol sea
 # Install
 cargo install llmgrep
 
-# Create Geometric database (recommended)
-magellan watch --root ./src --db code.geo
+# Create SQLite database
+magellan watch --root ./src --db code.db
 
 # Search symbols
-llmgrep --db code.geo search --query "parse"
+llmgrep --db code.db search --query "parse"
 
 # Find references
-llmgrep --db code.geo search --query "MyType" --mode references
+llmgrep --db code.db search --query "MyType" --mode references
 
 # Semantic search (requires `magellan embed` first)
-llmgrep --db code.geo search --query "parse command line arguments" --mode semantic
+llmgrep --db code.db search --query "parse command line arguments" --mode semantic
 ```
 
 ## Installation
@@ -56,28 +56,20 @@ llmgrep --db code.geo search --query "parse command line arguments" --mode seman
 # Install with default features
 cargo install llmgrep
 
-# Install with geometric backend support
-cargo install llmgrep --features geometric-backend
+cargo install llmgrep
 ```
 
 ## Backends
 
 | Backend | File | Features | Status |
 |---------|------|----------|--------|
-| **Geometric** | `.geo` | Full search + chunk retrieval + path normalization | Requires `--features geometric-backend` |
 | **SQLite** | `.db` | Full search | Default (always available) |
 
-**Geometric (.geo) features:**
-- Path normalization before queries
-- Explicit ambiguity error handling
-- Code chunk retrieval (no file I/O)
-- No SQLite dependencies
-
-**Backend detection is automatic** — no flags needed. Detects by file extension (`.geo`) and header bytes.
+**Backend detection is automatic** for supported SQLite databases.
 
 ## Requirements
 
-- **[Magellan](https://github.com/oldnordic/magellan)** 3.3.3+ — Required for indexing
+- **[Magellan](https://github.com/oldnordic/magellan)** with SQLite `.db` output — schema v18 supported
 - **[sqlitegraph](https://crates.io/crates/sqlitegraph)** 3.0+ — Included automatically
 
 ## Documentation
