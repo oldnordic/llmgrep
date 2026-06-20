@@ -1,17 +1,17 @@
 # llmgrep Manual
 
-**v3.8.0** (shipped 2026-06-07)
+**v3.8.2** (shipped 2026-06-20)
 
 llmgrep is a read-only query tool for Magellan's code map. Part of the sqlitegraph toolset alongside Magellan (indexing), Mirage (CFG analysis), and Splice (precision editing).
 
 llmgrep only works in conjunction with Magellan — it does not build or modify databases. Magellan owns indexing and freshness.
 
 **Toolset:**
-- [Magellan](https://crates.io/crates/magellan) v3.3.3 — Code indexing and algorithm execution
-- [llmgrep](https://crates.io/crates/llmgrep) v3.6.0 — This tool (query only)
-- [Mirage](https://crates.io/crates/mirage-analyzer) v1.5.0 — CFG analysis (Rust)
+- [Magellan](https://crates.io/crates/magellan) v4.8.0 — Code indexing and algorithm execution
+- [llmgrep](https://crates.io/crates/llmgrep) v3.8.2 — This tool (query only)
+- [Mirage](https://crates.io/crates/mirage-analyzer) v1.8.x — CFG analysis (Rust)
 - [Splice](https://crates.io/crates/splice) — Precision code editing
-- [sqlitegraph](https://crates.io/crates/sqlitegraph) v3.0 — Graph database with 35+ algorithms
+- [sqlitegraph](https://crates.io/crates/sqlitegraph) v3.3.x — Graph database with 35+ algorithms
 
 ## Commands
 
@@ -73,7 +73,7 @@ llmgrep search --db code.db --query "error handling" --mode semantic --output js
 ### Options
 
 **Required:**
-- `--db <FILE>` — Path to Magellan SQLite database
+- `--db <FILE>` — Path to Magellan SQLite `.db` database
 - `--query <STRING>` — Search query string
 
 **Search mode:**
