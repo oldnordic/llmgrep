@@ -38,6 +38,23 @@ fn get_test_sqlite_db() -> PathBuf {
     // Create a valid minimal SQLite database using rusqlite
     // Just opening and closing creates the basic structure
     if let Ok(conn) = rusqlite::Connection::open(&temp_file) {
+        // Create magellan_meta table first (required for schema version checking)
+        let _ = conn.execute(
+            "CREATE TABLE IF NOT EXISTS magellan_meta (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                magellan_schema_version INTEGER NOT NULL,
+                sqlitegraph_schema_version INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
+            )",
+            [],
+        );
+        // Insert schema version row
+        let _ = conn.execute(
+            "INSERT INTO magellan_meta (id, magellan_schema_version, sqlitegraph_schema_version, created_at)
+             VALUES (1, 19, 3, 0)",
+            [],
+        );
+
         // Create tables matching Magellan's SQLite schema
         let _ = conn.execute(
             "CREATE TABLE IF NOT EXISTS graph_entities (
