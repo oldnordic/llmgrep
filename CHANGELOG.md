@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.9.0] - 2026-06-21
+
+### Added
+
+- **`export-symbols` command** — Export all symbols to JSON for O(1) lookups without database queries:
+  - Writes symbol map with symbol name → locations mapping
+  - Includes symbol ID, kind, name, file path for each symbol
+  - Supports `--output human|json|pretty` formats
+  - Example usage:
+  ```bash
+  llmgrep --db code.db export-symbols --file /tmp/symbolindex.json
+  ```
+  - Output format: `{"symbols": {"symbol_name": [{"id": N, "kind": "fn", "name": "...", "file_path": "..."}]}}`
+
+- **Magellan schema v19 compatibility**:
+  - Updated schema checker to support Magellan 4.9.x schema version 19
+
 ## [3.8.2] - 2026-06-20
 
 ### Fixed

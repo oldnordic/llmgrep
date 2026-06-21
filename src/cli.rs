@@ -366,6 +366,11 @@ pub enum Command {
         #[arg(long, default_value_t = 10, value_parser = ranged_usize(1, 1000))]
         limit: usize,
     },
+
+    ExportSymbols {
+        #[arg(long)]
+        file: PathBuf,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]

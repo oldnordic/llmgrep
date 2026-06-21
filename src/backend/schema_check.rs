@@ -1,6 +1,7 @@
 use rusqlite::Connection;
 
 /// The maximum Magellan schema version that llmgrep is known to support.
+/// Magellan v19 adds performance telemetry tables.
 /// Magellan v18 adds repository snapshot tables for temporal tracking.
 /// Magellan v17 adds telemetry_events table (no schema changes to existing tables).
 /// Magellan v16 adds cfg_blocks.cfg_condition column.
@@ -8,7 +9,7 @@ use rusqlite::Connection;
 /// Magellan v14 adds candidate_facts table.
 /// Magellan v13 adds source_documents table.
 /// Magellan v12 adds FTS5 full-text search index.
-pub const SUPPORTED_MAGELLAN_SCHEMA_VERSION: i64 = 18;
+pub const SUPPORTED_MAGELLAN_SCHEMA_VERSION: i64 = 19;
 
 /// Check the Magellan database schema version.
 ///
@@ -124,13 +125,13 @@ mod tests {
 
     #[test]
     fn test_check_future_version_fails() {
-        let conn = create_test_db_with_version(19);
+        let conn = create_test_db_with_version(20);
         let result = check_schema_version(&conn);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(
-            err.contains("19"),
-            "Error should mention version 19: {}",
+            err.contains("20"),
+            "Error should mention version 20: {}",
             err
         );
         assert!(

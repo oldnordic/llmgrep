@@ -20,6 +20,7 @@ pub fn command_name(cli: &Cli) -> &str {
             Command::Watch { .. } => "watch",
             Command::VectorCreate { .. } => "vector-create",
             Command::VectorSearch { .. } => "vector-search",
+            Command::ExportSymbols { .. } => "export-symbols",
         },
     }
 }
@@ -140,6 +141,10 @@ pub fn dispatch(cli: &Cli) -> Result<(), LlmError> {
                 index,
                 limit,
             } => commands::run_vector_search(query, index, *limit),
+
+            Command::ExportSymbols { file } => {
+                commands::run_export_symbols(cli, file.clone())
+            }
         },
     }
 }
