@@ -71,7 +71,7 @@ pub fn run_export_symbols(cli: &Cli, output_path: PathBuf) -> Result<(), LlmErro
 
         symbol_map
             .entry(name)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(location);
     }
 
