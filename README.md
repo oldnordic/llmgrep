@@ -24,6 +24,7 @@ Pattern-based code search for Magellan databases. Fast, deterministic symbol sea
 - **Reference lookup** — Find all callers/callees of a function
 - **Call graph traversal** — Navigate caller → callee relationships
 - **Graph navigation** — Stepable depth-aware traversal via `navigate` command
+- **Symbol export** — Export all symbols to JSON for O(1) lookups without database queries
 - **Source document search** — Query wiki pages, specs, messages by tags and wikilinks
 - **Knowledge triple search** — Query candidate facts by subject, predicate, object
 - **AST filtering** — Filter by node kind, nesting depth, complexity
@@ -48,6 +49,9 @@ llmgrep --db code.db search --query "MyType" --mode references
 
 # Semantic search (requires `magellan embed` first)
 llmgrep --db code.db search --query "parse command line arguments" --mode semantic
+
+# Export all symbols to JSON for fast lookups
+llmgrep --db code.db export-symbols --file symbolindex.json
 ```
 
 ## Installation
