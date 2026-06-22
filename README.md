@@ -92,6 +92,12 @@ cargo install llmgrep
 - ❌ Code editing (use [splice](https://github.com/oldnordic/splice))
 - ❌ CFG analysis (use [Mirage](https://github.com/oldnordic/mirage))
 
+## Acknowledgements
+
+The `blast-score` and `export-symbols` commands, and the repo-root `.magellan/`
+export convention, were inspired by
+[codeindex](https://github.com/scheidydude/codeindex) by scheidydude.
+
 ## License
 
 GPL-3.0-only. See [LICENSE](LICENSE).
