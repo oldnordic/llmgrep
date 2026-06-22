@@ -79,7 +79,7 @@ impl PerformanceMetrics {
 ///   "data": { ... }
 /// }
 /// ```
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct JsonResponse<T> {
     /// Schema version for response structure compatibility
     pub schema_version: &'static str,
@@ -107,7 +107,7 @@ pub struct JsonResponse<T> {
 /// Error response structure for JSON output.
 ///
 /// Provides structured error information with remediation hints.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct ErrorResponse {
     /// Error code (e.g., "LLM-E001", "LLM-E105")
     pub code: String,
@@ -125,7 +125,7 @@ pub struct ErrorResponse {
 ///
 /// Represents a contiguous span of source code with line/column information
 /// for display and navigation.
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Span {
     /// Unique span identifier
     pub span_id: String,
@@ -152,7 +152,7 @@ pub struct Span {
 ///
 /// Provides before/after/selected lines for displaying search results
 /// with surrounding code context.
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct SpanContext {
     /// Lines before the matched span
     pub before: Vec<String>,
@@ -168,7 +168,7 @@ pub struct SpanContext {
 ///
 /// Represents a single symbol (function, struct, enum, etc.) that matched
 /// the search criteria, with all available metadata.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct SymbolMatch {
     /// Unique match identifier
     pub match_id: String,
@@ -267,7 +267,7 @@ pub struct CoverageInfo {
 ///
 /// Represents a location where a symbol is referenced (used) in code.
 /// Used by the `--mode references` search mode.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct ReferenceMatch {
     /// Unique match identifier
     pub match_id: String,
@@ -300,7 +300,7 @@ pub struct ReferenceMatch {
 ///
 /// Represents a function call relationship between a caller and callee.
 /// Used by the `--mode calls` search mode.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct CallMatch {
     /// Unique match identifier
     pub match_id: String,
@@ -334,7 +334,7 @@ pub struct CallMatch {
 /// Response from a symbol search operation.
 ///
 /// Contains all matching symbols along with search metadata.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct SearchResponse {
     /// List of matching symbols
     pub results: Vec<SymbolMatch>,
@@ -356,7 +356,7 @@ pub struct SearchResponse {
 /// Response from a reference search operation.
 ///
 /// Contains all locations where a symbol is referenced.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct ReferenceSearchResponse {
     /// List of reference locations
     pub results: Vec<ReferenceMatch>,
@@ -372,7 +372,7 @@ pub struct ReferenceSearchResponse {
 /// Response from a call search operation.
 ///
 /// Contains all function call relationships matching the search.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct CallSearchResponse {
     /// List of call relationships
     pub results: Vec<CallMatch>,
@@ -389,7 +389,7 @@ pub struct CallSearchResponse {
 ///
 /// Represents a type implementing a trait relationship.
 /// Used by the `--mode implements` search mode.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct ImplementsMatch {
     /// Unique match identifier
     pub match_id: String,
@@ -423,7 +423,7 @@ pub struct ImplementsMatch {
 /// Response from an implements search operation.
 ///
 /// Contains all type-trait implementation relationships.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct ImplementsSearchResponse {
     /// List of implementation relationships
     pub results: Vec<ImplementsMatch>,
@@ -436,7 +436,7 @@ pub struct ImplementsSearchResponse {
     pub total_count: u64,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct DocsMatch {
     pub id: i64,
     pub path_or_uri: String,
@@ -458,7 +458,7 @@ pub struct DocsMatch {
     pub wikilinks: Option<String>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct DocsSearchResponse {
     pub results: Vec<DocsMatch>,
     pub total_count: u64,
@@ -466,7 +466,7 @@ pub struct DocsSearchResponse {
     pub path_filter: Option<String>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct FactMatch {
     pub id: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -495,7 +495,7 @@ pub struct FactMatch {
     pub reviewed_at: Option<i64>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct FactsSearchResponse {
     pub results: Vec<FactMatch>,
     pub total_count: u64,
@@ -505,7 +505,7 @@ pub struct FactsSearchResponse {
 ///
 /// Represents a symbol found by natural-language semantic similarity
 /// using the HNSW vector index. Used by `--mode semantic`.
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct SemanticMatch {
     /// Unique match identifier
     pub match_id: String,
@@ -531,7 +531,7 @@ pub struct SemanticMatch {
 }
 
 /// Response from a semantic search operation.
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct SemanticSearchResponse {
     /// List of matching symbols by semantic similarity
     pub results: Vec<SemanticMatch>,
@@ -548,7 +548,7 @@ pub struct SemanticSearchResponse {
 ///
 /// Used when `--mode combined` is specified, providing all three types of
 /// results in a single response.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct CombinedSearchResponse {
     /// The search query string
     pub query: String,

@@ -743,3 +743,24 @@ fn test_find_git_root_db_finds_git_root() {
         path
     );
 }
+
+#[test]
+fn test_truncate_response_helper() {
+    let items = vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string(), "e".to_string()];
+    let format_fn = |slice: &[String]| slice.join(" ");
+
+    let (pruned, _tokens, truncated) = crate::display::truncate_response(items.clone(), None, format_fn);
+    assert_eq!(pruned.len(), 5);
+    assert!(!truncated);
+
+    let (pruned, _tokens, truncated) = crate::display::truncate_response(items.clone(), Some(0), format_fn);
+    assert_eq!(pruned.len(), 5);
+    assert!(!truncated);
+
+    let (pruned, tokens, truncated) = crate::display::truncate_response(items.clone(), Some(1), format_fn);
+    assert_eq!(pruned.len(), 2);
+    assert_eq!(pruned, vec!["a".to_string(), "b".to_string()]);
+    assert!(truncated);
+    assert!(tokens.unwrap() <= 1);
+}
+

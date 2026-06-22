@@ -370,7 +370,7 @@ pub fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 None
             };
 
-            output_symbols(cli, response, partial, scc_count, metrics.as_ref())?;
+            output_symbols(cli, response, partial, scc_count, metrics.as_ref(), params.tokens)?;
 
             let output_formatting_ms = format_start.elapsed().as_millis() as u64;
             let total_ms = total_start.elapsed().as_millis() as u64;
@@ -431,7 +431,7 @@ pub fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 None
             };
 
-            output_references(cli, response, partial, metrics.as_ref())?;
+            output_references(cli, response, partial, metrics.as_ref(), params.tokens)?;
 
             let output_formatting_ms = format_start.elapsed().as_millis() as u64;
             let total_ms = total_start.elapsed().as_millis() as u64;
@@ -492,7 +492,7 @@ pub fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 None
             };
 
-            output_calls(cli, response, partial, metrics.as_ref())?;
+            output_calls(cli, response, partial, metrics.as_ref(), params.tokens)?;
 
             let output_formatting_ms = format_start.elapsed().as_millis() as u64;
             let total_ms = total_start.elapsed().as_millis() as u64;
@@ -696,7 +696,7 @@ pub fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 None
             };
 
-            output_symbols(cli, response, partial, 0, metrics.as_ref())?;
+            output_symbols(cli, response, partial, 0, metrics.as_ref(), params.tokens)?;
 
             let output_formatting_ms = format_start.elapsed().as_millis() as u64;
             let total_ms = total_start.elapsed().as_millis() as u64;
@@ -757,7 +757,7 @@ pub fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 None
             };
 
-            output_implements(cli, response, partial, metrics.as_ref())?;
+            output_implements(cli, response, partial, metrics.as_ref(), params.tokens)?;
 
             let output_formatting_ms = format_start.elapsed().as_millis() as u64;
             let total_ms = total_start.elapsed().as_millis() as u64;
@@ -797,7 +797,7 @@ pub fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 None
             };
 
-            output_docs(cli, response, metrics.as_ref())?;
+            output_docs(cli, response, metrics.as_ref(), params.tokens)?;
 
             let output_formatting_ms = format_start.elapsed().as_millis() as u64;
             let total_ms = total_start.elapsed().as_millis() as u64;
@@ -837,7 +837,7 @@ pub fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 None
             };
 
-            output_facts(cli, response, metrics.as_ref())?;
+            output_facts(cli, response, metrics.as_ref(), params.tokens)?;
 
             let output_formatting_ms = format_start.elapsed().as_millis() as u64;
             let total_ms = total_start.elapsed().as_millis() as u64;
@@ -874,7 +874,7 @@ pub fn run_search(cli: &Cli, params: &SearchParams) -> Result<(), LlmError> {
                 None
             };
 
-            output_semantic(cli, response, metrics.as_ref())?;
+            output_semantic(cli, response, metrics.as_ref(), params.tokens)?;
 
             let output_formatting_ms = format_start.elapsed().as_millis() as u64;
             let total_ms = total_start.elapsed().as_millis() as u64;

@@ -255,7 +255,6 @@ pub(crate) fn match_id(file_path: &str, byte_start: u64, byte_end: u64, name: &s
 
 /// Node data for symbols from JSON
 #[derive(Debug, serde::Deserialize)]
-#[allow(dead_code)]
 pub(crate) struct SymbolNodeData {
     #[serde(default)]
     pub(crate) symbol_id: Option<String>,
@@ -281,7 +280,6 @@ pub(crate) struct SymbolNodeData {
 
 /// Node data for references from JSON
 #[derive(Debug, serde::Deserialize)]
-#[allow(dead_code)]
 pub(crate) struct ReferenceNodeData {
     pub(crate) file: String,
     pub(crate) byte_start: u64,
@@ -294,7 +292,6 @@ pub(crate) struct ReferenceNodeData {
 
 /// Node data for calls from JSON
 #[derive(Debug, serde::Deserialize)]
-#[allow(dead_code)]
 pub(crate) struct CallNodeData {
     pub(crate) file: String,
     pub(crate) caller: String,
@@ -310,3 +307,4 @@ pub(crate) struct CallNodeData {
     pub(crate) end_line: u64,
     pub(crate) end_col: u64,
 }
+
