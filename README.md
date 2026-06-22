@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/llmgrep)](https://crates.io/crates/llmgrep)
 [![Documentation](https://docs.rs/llmgrep/badge.svg)](https://docs.rs/llmgrep)
 
-**Version:** 3.8.2
+**Version:** 3.10.0
 
 Pattern-based code search for Magellan databases. Fast, deterministic symbol search with JSON output.
 

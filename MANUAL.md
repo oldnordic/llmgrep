@@ -133,6 +133,7 @@ llmgrep search --db code.db --query "error handling" --mode semantic --output js
 
 **Output:**
 - `--output <FORMAT>` — Output format: `human` (default), `json`, `pretty`
+- `--tokens <N>` — Limit output to ~N tokens (chars/4 heuristic). Preserves symbol names, truncates context first. `0` or absent = no limit. JSON includes `tokens_estimated` and `truncated` metadata fields.
 
 **Content inclusion:**
 - `--with-context` — Include context lines in output

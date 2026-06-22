@@ -57,6 +57,7 @@ pub struct SearchParams {
     pub object: Option<String>,
     pub fact_status_filter: Option<String>,
     pub subject_type: Option<String>,
+    pub tokens: Option<usize>,
 }
 
 fn ranged_usize(min: i64, max: i64) -> impl TypedValueParser<Value = usize> {
@@ -247,6 +248,9 @@ pub enum Command {
 
         #[arg(long, name = "subject-type")]
         subject_type: Option<String>,
+
+        #[arg(long)]
+        tokens: Option<usize>,
     },
 
     #[command(after_help = AST_EXAMPLES)]

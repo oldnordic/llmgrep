@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.0] - 2026-06-22
+
+### Added
+
+- **Token budget feature** (`--tokens N` flag):
+  - Added `--tokens N` global flag to all search commands
+  - `--tokens 0` or absent flag = no limit (backward compatible default)
+  - Token estimation using `chars / 4` heuristic
+  - Domain-specific truncation: preserve symbol names and metadata
+  - Applied to all output functions: symbols, references, calls, implements, docs, semantic, facts
+  - Both Human and JSON/Pretty output modes supported
+  - JSON metadata: `tokens_estimated` and `truncated` fields in JsonResponse
+  - Implementation in `src/cli.rs` and `src/display.rs`
+  - Helper function: `apply_token_budget()` for token-aware output truncation
+
 ## [3.9.0] - 2026-06-21
 
 ### Added

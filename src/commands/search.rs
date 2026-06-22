@@ -73,6 +73,7 @@ pub fn dispatch_search(cli: &Cli, cmd: &Command) -> Result<(), LlmError> {
             object,
             status,
             subject_type,
+            tokens,
         } => SearchParams {
             query: query.clone(),
             mode: *mode,
@@ -130,6 +131,7 @@ pub fn dispatch_search(cli: &Cli, cmd: &Command) -> Result<(), LlmError> {
             object: object.clone(),
             fact_status_filter: status.clone(),
             subject_type: subject_type.clone(),
+            tokens: *tokens,
         },
         _ => unreachable!(),
     };

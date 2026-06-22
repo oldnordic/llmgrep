@@ -94,6 +94,12 @@ pub struct JsonResponse<T> {
     /// Optional performance metrics (only included when requested)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub performance: Option<PerformanceMetrics>,
+    /// Estimated token count of the response (chars/4 heuristic)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tokens_estimated: Option<usize>,
+    /// Whether the output was truncated due to token budget
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub truncated: Option<bool>,
     /// The actual response data
     pub data: T,
 }
@@ -619,6 +625,8 @@ pub fn json_response_with_partial_and_performance<T>(
         timestamp: Utc::now().to_rfc3339(),
         partial,
         performance,
+        tokens_estimated: None,
+        truncated: None,
         data,
     }
 }
