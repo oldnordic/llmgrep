@@ -29,8 +29,11 @@ fn get_test_sqlite_db() -> PathBuf {
     }
 
     // Fallback: create a minimal SQLite database file
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static DB_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let counter = DB_COUNTER.fetch_add(1, Ordering::SeqCst);
     let temp_file =
-        std::env::temp_dir().join(format!("llmgrep_test_sqlite_{}.db", std::process::id()));
+        std::env::temp_dir().join(format!("llmgrep_test_sqlite_{}_{}.db", std::process::id(), counter));
 
     // Remove any existing test database
     let _ = std::fs::remove_file(&temp_file);
